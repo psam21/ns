@@ -1,3 +1,6 @@
-blossom/*
-!blossom/config.yml
+blossom/node_modules/
+blossom/data/
+blossom/.env
+blossom/build/
+blossom/dist/
 relay/bin/
