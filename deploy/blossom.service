@@ -1,0 +1,23 @@
+[Unit]
+Description=Blossom Media Server
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/blossom
+EnvironmentFile=/opt/blossom/.env
+ExecStart=/usr/bin/node /opt/blossom/build/index.js
+Restart=always
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/blossom/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
