@@ -1,0 +1,72 @@
+# Blossom Server Configuration for nostr.ltd
+# Credentials are injected via environment variables from /opt/blossom/.env
+
+publicDomain: "https://blossom.nostr.ltd"
+
+databasePath: /opt/blossom/data/sqlite.db
+
+dashboard:
+  enabled: true
+  username: admin
+  password: "${BLOSSOM_ADMIN_PASSWORD}"
+
+discovery:
+  nostr:
+    enabled: true
+    relays:
+      - wss://www.nostr.ltd
+  upstream:
+    enabled: false
+    domains: []
+
+storage:
+  backend: s3
+  removeWhenNoOwners: true
+
+  local:
+    dir: /opt/blossom/data/blobs
+
+  s3:
+    endpoint: s3.ap-south-1.amazonaws.com
+    port: 443
+    bucket: nostr-ltd-blossom
+    accessKey: "${S3_ACCESS_KEY}"
+    secretKey: "${S3_SECRET_KEY}"
+    useSSL: true
+    region: ap-south-1
+
+  rules: []
+
+upload:
+  enabled: true
+  requireAuth: true
+  requirePubkeyInRule: false
+
+media:
+  enabled: true
+  requireAuth: true
+  requirePubkeyInRule: false
+  image:
+    quality: 90
+    progressive: true
+    maxWidth: 1920
+    maxHeight: 1080
+    outputFormat: "webp"
+    maintainAspectRatio: true
+    keepExif: false
+    fps: 30
+  video:
+    quality: 90
+    maxHeight: 1080
+    maxFps: 30
+    format: "mp4"
+    audioCodec: "aac"
+    videoCodec: "libx264"
+
+list:
+  requireAuth: false
+  allowListOthers: true
+
+tor:
+  enabled: false
+  proxy: ""
