@@ -21,6 +21,7 @@ ReadWritePaths=/var/log/relay /opt/relay
 
 # Environment
 Environment=HOME=/opt/relay
+EnvironmentFile=/opt/relay/.env
 
 [Install]
 WantedBy=multi-user.target
