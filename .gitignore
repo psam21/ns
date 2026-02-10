@@ -1,4 +1,2 @@
-blossom/
-!blossom/config.yml
-blossom/
+blossom/*
 !blossom/config.yml
