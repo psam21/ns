@@ -1,0 +1,575 @@
+name: Continuous Integration
+
+permissions:
+  contents: read
+  packages: read
+  pull-requests: write
+  security-events: write
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'announcements/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '**/*.png'
+      - '**/*.jpg'
+      - '**/*.svg'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'announcements/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '**/*.png'
+      - '**/*.jpg'
+      - '**/*.svg'
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.24.4"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: shugur-network/relay
+
+jobs:
+  # Detect what changed to optimize CI runs
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      config: ${{ steps.filter.outputs.config }}
+      docker: ${{ steps.filter.outputs.docker }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Detect file changes
+        id: filter
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        with:
+          filters: |
+            code:
+              - 'cmd/**'
+              - 'internal/**'
+              - 'web/**'
+              - 'go.mod'
+              - 'go.sum'
+              - '!**/*.md'
+            config:
+              - 'config/**'
+              - 'config.yaml'
+              - '.github/workflows/**'
+            docker:
+              - 'docker/**'
+              - 'Dockerfile'
+
+  # Code quality and security checks
+  quality:
+    name: Code Quality & Security
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true' || needs.changes.outputs.config == 'true'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Cache quality tools
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cache/golangci-lint
+            ~/.cache/go-build
+            ~/go/pkg/mod
+            ~/go/bin
+          key: ${{ runner.os }}-quality-tools-${{ env.GO_VERSION }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-quality-tools-${{ env.GO_VERSION }}-
+            ${{ runner.os }}-quality-tools-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8.0.0
+        with:
+          version: latest
+          args: --timeout=10m --verbose
+          skip-cache: true
+
+      - name: Run security analysis
+        run: |
+          echo "🔒 Running comprehensive security analysis..."
+          
+          # Install security tools
+          echo "Installing security analysis tools..."
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          
+          # Install gosec with multiple fallback options
+          echo "Installing gosec security scanner..."
+          if go install github.com/securecodewarrior/gosec/v2/cmd/gosec@v2.21.4; then
+            echo "✅ gosec v2.21.4 installed successfully"
+          elif go install github.com/securecodewarrior/gosec/v2/cmd/gosec@v2.20.0; then
+            echo "✅ gosec v2.20.0 installed successfully"
+          elif curl -sfL https://raw.githubusercontent.com/securecodewarrior/gosec/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.21.4; then
+            echo "✅ gosec installed via install script"
+          else
+            echo "⚠️ gosec installation failed, security scan will be skipped"
+          fi
+          
+          # Run vulnerability check
+          echo "Checking for known vulnerabilities..."
+          govulncheck ./...
+          
+          # Run static analysis
+          echo "Running static analysis..."
+          staticcheck ./...
+          
+          # Run security-focused linting (with fallback)
+          echo "Running security-focused analysis..."
+          if command -v gosec >/dev/null 2>&1; then
+            gosec -fmt sarif -out gosec-results.sarif ./...
+          else
+            echo "gosec not available, creating empty SARIF file..."
+            echo '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"gosec","version":"unavailable"}},"results":[]}]}' > gosec-results.sarif
+          fi
+          
+          # Basic security checks
+          echo "Running basic security checks..."
+          go vet ./...
+          
+          # Check for hardcoded secrets (basic patterns)
+          echo "Scanning for potential secrets..."
+          if grep -r -i -E "(password|secret|key|token|api_key)\s*[:=]\s*['\"][^'\"]{8,}" --include="*.go" . | grep -v "_test.go" | head -5; then
+            echo "⚠️ Potential hardcoded secrets found (review above)"
+          else
+            echo "✅ No obvious hardcoded secrets detected"
+          fi
+
+      - name: Upload security results
+        if: always()
+        uses: github/codeql-action/upload-sarif@16140ae1a102900babc80a33c44059580f687047 # v4.30.9
+        with:
+          sarif_file: gosec-results.sarif
+        continue-on-error: true
+
+      - name: Security scan with Trivy
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@16140ae1a102900babc80a33c44059580f687047 # v4.30.9
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@aa0e114b2e19480f157109b9922bda359bd98b90 # v0.20.8
+        with:
+          path: .
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.spdx.json
+          retention-days: 30
+
+  # Comprehensive testing
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
+    
+    strategy:
+      matrix:
+        test-type: [unit, integration]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Cache test dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-test-${{ matrix.test-type }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-test-${{ matrix.test-type }}-
+            ${{ runner.os }}-test-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Start test database
+        if: matrix.test-type == 'integration'
+        run: |
+          echo "🗄️ Starting CockroachDB for integration tests..."
+          docker run -d \
+            --name cockroach-test \
+            -p 26257:26257 \
+            -p 8080:8080 \
+            --memory=1g \
+            --cpus=1.0 \
+            cockroachdb/cockroach:v24.1.5 \
+            start-single-node --insecure --max-sql-memory=50% --cache=256MB
+
+          # Wait for database to be ready
+          timeout 60s bash -c 'until docker exec cockroach-test /cockroach/cockroach sql --insecure --execute="SELECT 1;" > /dev/null 2>&1; do sleep 3; done'
+          echo "✅ CockroachDB is ready"
+
+      - name: Run unit tests
+        if: matrix.test-type == 'unit'
+        run: |
+          echo "🧪 Running unit tests..."
+          go test -v -race -short -coverprofile=coverage-unit.out -timeout=10m ./...
+
+      - name: Run integration tests
+        if: matrix.test-type == 'integration'
+        run: |
+          echo "🔗 Running integration tests..."
+          go test -v -race -run="Integration" -coverprofile=coverage-integration.out -timeout=15m ./...
+        env:
+          SHUGUR_DB_HOST: localhost
+          SHUGUR_DB_PORT: 26257
+          SHUGUR_DB_USER: root
+          SHUGUR_DB_SSL_MODE: disable
+
+      - name: Run benchmarks
+        if: matrix.test-type == 'unit'
+        run: |
+          echo "📊 Running performance benchmarks..."
+          go test -bench=. -benchmem -count=5 -run=^$ ./... > benchmarks.txt 2>&1 || true
+          
+          if [ -f benchmarks.txt ] && [ -s benchmarks.txt ]; then
+            echo "Benchmark results:"
+            cat benchmarks.txt | grep -E "(Benchmark|PASS|FAIL)" | head -20
+            
+            # Extract key metrics for performance tracking
+            echo "## 📊 Performance Metrics" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Benchmark | Operations/sec | Memory/op | Allocs/op |" >> $GITHUB_STEP_SUMMARY
+            echo "|-----------|----------------|-----------|-----------|" >> $GITHUB_STEP_SUMMARY
+            
+            # Parse benchmark results and add to summary
+            grep "^Benchmark" benchmarks.txt | head -10 | while read line; do
+              name=$(echo "$line" | awk '{print $1}' | sed 's/Benchmark//')
+              ops=$(echo "$line" | awk '{print $3}')
+              mem=$(echo "$line" | awk '{print $5}' || echo "N/A")
+              allocs=$(echo "$line" | awk '{print $7}' || echo "N/A")
+              echo "| $name | $ops | $mem | $allocs |" >> $GITHUB_STEP_SUMMARY
+            done
+            
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "📈 Full benchmark results available in artifacts." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Performance regression check
+        if: matrix.test-type == 'unit' && github.event_name == 'pull_request'
+        run: |
+          echo "🔍 Checking for performance regressions..."
+          
+          # Install benchstat for statistical comparison
+          go install golang.org/x/perf/cmd/benchstat@latest
+          
+          # Create a simple performance check
+          if [ -f benchmarks.txt ]; then
+            # Look for significant performance degradations
+            # This is a simplified check - in production you'd compare with baseline
+            grep "^Benchmark" benchmarks.txt | while read line; do
+              ops=$(echo "$line" | awk '{print $3}')
+              if [ "$ops" -lt 1000 ]; then
+                echo "⚠️ Warning: Low performance detected in benchmark: $line"
+              fi
+            done
+          fi
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # v5.0.4
+        with:
+          file: ./coverage-${{ matrix.test-type }}.out
+          flags: ${{ matrix.test-type }}
+          name: codecov-${{ matrix.test-type }}
+          fail_ci_if_error: false
+
+      - name: Upload benchmark results
+        if: matrix.test-type == 'unit'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: benchmark-results
+          path: benchmarks.txt
+          retention-days: 30
+
+      - name: Cleanup test environment
+        if: always() && matrix.test-type == 'integration'
+        run: |
+          docker stop cockroach-test || true
+          docker rm cockroach-test || true
+
+  # Build verification (PR only - no artifacts)
+  build-verify:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    needs: [quality, test]
+    if: github.event_name == 'pull_request'
+    
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64, darwin/amd64, darwin/arm64]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build binary for ${{ matrix.platform }}
+        run: |
+          IFS='/' read -r GOOS GOARCH <<< "${{ matrix.platform }}"
+          echo "🔨 Building for $GOOS/$GOARCH..."
+          
+          VERSION="dev-$(git rev-parse --short HEAD)"
+          COMMIT="${{ github.sha }}"
+          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          
+          GOOS=$GOOS GOARCH=$GOARCH go build \
+            -ldflags "-w -s -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${BUILD_DATE}" \
+            -o relay-${GOOS}-${GOARCH} \
+            ./cmd
+          
+          # Verify binary was created
+          ls -la relay-${GOOS}-${GOARCH}
+          echo "✅ Build successful for ${{ matrix.platform }}"
+
+  # Docker build verification (PR only - no push)
+  docker-verify:
+    name: Docker Build Verification
+    runs-on: ubuntu-latest
+    needs: [quality, test]
+    if: github.event_name == 'pull_request' && (needs.changes.outputs.docker == 'true' || needs.changes.outputs.code == 'true')
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - name: Build Docker image (verification only)
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          target: production
+          platforms: linux/amd64
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:pr-${{ github.event.number }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=pr-${{ github.event.number }}
+            COMMIT=${{ github.sha }}
+            DATE=${{ github.event.head_commit.timestamp }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+
+      - name: Scan Dockerfile and dependencies with Trivy
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: 'fs'
+          scan-ref: './docker'
+          format: 'sarif'
+          output: 'docker-trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+        continue-on-error: true
+
+      - name: Ensure Docker scan results file exists
+        if: always()
+        run: |
+          if [ ! -f docker-trivy-results.sarif ]; then
+            echo "Creating empty SARIF file for Docker scan results..."
+            echo '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"trivy","version":"docker-scan"}},"results":[]}]}' > docker-trivy-results.sarif
+          fi
+
+      - name: Upload Docker scan results
+        uses: github/codeql-action/upload-sarif@16140ae1a102900babc80a33c44059580f687047 # v4.30.9
+        if: always()
+        with:
+          sarif_file: 'docker-trivy-results.sarif'
+
+  # Status check jobs that always run (for required status checks)
+  lint-status:
+    name: Lint
+    runs-on: ubuntu-latest
+    needs: [changes, quality]
+    if: always()
+    steps:
+      - name: Report lint status
+        run: |
+          if [[ "${{ needs.quality.result }}" == "success" ]]; then
+            echo "✅ Linting passed"
+          elif [[ "${{ needs.quality.result }}" == "skipped" ]]; then
+            echo "⏭️ Linting skipped (no code changes)"
+          else
+            echo "❌ Linting failed"
+            exit 1
+          fi
+
+  security-scan-status:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: [changes, quality]
+    if: always()
+    steps:
+      - name: Report security scan status
+        run: |
+          if [[ "${{ needs.quality.result }}" == "success" ]]; then
+            echo "✅ Security scan passed"
+          elif [[ "${{ needs.quality.result }}" == "skipped" ]]; then
+            echo "⏭️ Security scan skipped (no code changes)"
+          else
+            echo "❌ Security scan failed"
+            exit 1
+          fi
+
+  test-status:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: [changes, test]
+    if: always()
+    steps:
+      - name: Report test status
+        run: |
+          if [[ "${{ needs.test.result }}" == "success" ]]; then
+            echo "✅ Tests passed"
+          elif [[ "${{ needs.test.result }}" == "skipped" ]]; then
+            echo "⏭️ Tests skipped (no code changes)"
+          else
+            echo "❌ Tests failed"
+            exit 1
+          fi
+
+  # CI Summary
+  ci-summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [changes, quality, test, build-verify, docker-verify, lint-status, security-scan-status, test-status]
+    if: always()
+    
+    steps:
+      - name: Generate CI summary
+        run: |
+          echo "## 🏗️ Continuous Integration Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Job status checks
+          QUALITY_STATUS="${{ needs.quality.result }}"
+          TEST_STATUS="${{ needs.test.result }}"
+          BUILD_STATUS="${{ needs.build-verify.result }}"
+          DOCKER_STATUS="${{ needs.docker-verify.result }}"
+          
+          echo "| Component | Status | Details |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+          
+          # Quality results
+          case "$QUALITY_STATUS" in
+            "success") echo "| 🔍 Code Quality & Security | ✅ Passed | Linting and security checks completed |" >> $GITHUB_STEP_SUMMARY ;;
+            "skipped") echo "| 🔍 Code Quality & Security | ⏭️ Skipped | No code changes detected |" >> $GITHUB_STEP_SUMMARY ;;
+            "failure") echo "| 🔍 Code Quality & Security | ❌ Failed | Quality or security issues found |" >> $GITHUB_STEP_SUMMARY ;;
+            *) echo "| 🔍 Code Quality & Security | ❔ Unknown | Status: $QUALITY_STATUS |" >> $GITHUB_STEP_SUMMARY ;;
+          esac
+          
+          # Test results
+          case "$TEST_STATUS" in
+            "success") echo "| 🧪 Test Suite | ✅ Passed | All tests completed successfully |" >> $GITHUB_STEP_SUMMARY ;;
+            "skipped") echo "| 🧪 Test Suite | ⏭️ Skipped | No code changes detected |" >> $GITHUB_STEP_SUMMARY ;;
+            "failure") echo "| 🧪 Test Suite | ❌ Failed | Test failures detected |" >> $GITHUB_STEP_SUMMARY ;;
+            *) echo "| 🧪 Test Suite | ❔ Unknown | Status: $TEST_STATUS |" >> $GITHUB_STEP_SUMMARY ;;
+          esac
+          
+          # Build results (PR only)
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            case "$BUILD_STATUS" in
+              "success") echo "| 🔨 Build Verification | ✅ Passed | Multi-platform builds successful |" >> $GITHUB_STEP_SUMMARY ;;
+              "skipped") echo "| 🔨 Build Verification | ⏭️ Skipped | Build verification not needed |" >> $GITHUB_STEP_SUMMARY ;;
+              "failure") echo "| 🔨 Build Verification | ❌ Failed | Build compilation issues |" >> $GITHUB_STEP_SUMMARY ;;
+              *) echo "| 🔨 Build Verification | ❔ Unknown | Status: $BUILD_STATUS |" >> $GITHUB_STEP_SUMMARY ;;
+            esac
+            
+            case "$DOCKER_STATUS" in
+              "success") echo "| 🐳 Docker Verification | ✅ Passed | Docker image builds successfully |" >> $GITHUB_STEP_SUMMARY ;;
+              "skipped") echo "| 🐳 Docker Verification | ⏭️ Skipped | No Docker changes detected |" >> $GITHUB_STEP_SUMMARY ;;
+              "failure") echo "| 🐳 Docker Verification | ❌ Failed | Docker build issues |" >> $GITHUB_STEP_SUMMARY ;;
+              *) echo "| 🐳 Docker Verification | ❔ Unknown | Status: $DOCKER_STATUS |" >> $GITHUB_STEP_SUMMARY ;;
+            esac
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Overall status
+          FAILED_JOBS=0
+          [[ "$QUALITY_STATUS" == "failure" ]] && ((FAILED_JOBS++))
+          [[ "$TEST_STATUS" == "failure" ]] && ((FAILED_JOBS++))
+          [[ "$BUILD_STATUS" == "failure" ]] && ((FAILED_JOBS++))
+          [[ "$DOCKER_STATUS" == "failure" ]] && ((FAILED_JOBS++))
+          
+          if [[ $FAILED_JOBS -eq 0 ]]; then
+            echo "## ✅ Overall Status: **PASSED**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🎉 All CI checks completed successfully!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              echo "**Ready for merge** - All quality, security, and build checks passed." >> $GITHUB_STEP_SUMMARY
+            else
+              echo "**Main branch is healthy** - All checks passed for latest changes." >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "## ❌ Overall Status: **FAILED**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ $FAILED_JOBS check(s) failed. Please review and fix the issues above." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi

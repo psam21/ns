@@ -1,0 +1,32 @@
+package application
+
+import (
+	"github.com/Shugur-Network/relay/internal/config"
+	"github.com/Shugur-Network/relay/internal/domain"
+	"github.com/Shugur-Network/relay/internal/storage"
+)
+
+// DB returns the node's database instance.
+func (n *Node) DB() *storage.DB {
+	return n.db
+}
+
+// Config returns the node's configuration.
+func (n *Node) Config() *config.Config {
+	return n.config
+}
+
+// GetValidator returns the node's plugin validator.
+func (n *Node) GetValidator() domain.EventValidator {
+	return n.Validator
+}
+
+// GetEventProcessor returns the node's event processor.
+func (n *Node) GetEventProcessor() *storage.EventProcessor {
+	return n.EventProcessor
+}
+
+// GetEventDispatcher returns the node's event dispatcher.
+func (n *Node) GetEventDispatcher() *storage.EventDispatcher {
+	return n.EventDispatcher
+}
