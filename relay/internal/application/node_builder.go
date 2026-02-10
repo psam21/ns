@@ -189,7 +189,26 @@ func allExist(paths ...string) bool {
 	return true
 }
 
-// BuildDB initializes the database connection with support for both standalone and distributed modes.
+// replaceDBNameInURL replaces the database name in a PostgreSQL connection URL.
+func replaceDBNameInURL(connURL string, newDB string) string {
+	schemeEnd := strings.Index(connURL, "://")
+	if schemeEnd == -1 {
+		return connURL
+	}
+	rest := connURL[schemeEnd+3:]
+	slashIdx := strings.Index(rest, "/")
+	if slashIdx == -1 {
+		return connURL + "/" + newDB
+	}
+	afterSlash := rest[slashIdx+1:]
+	qIdx := strings.Index(afterSlash, "?")
+	if qIdx == -1 {
+		return connURL[:schemeEnd+3+slashIdx+1] + newDB
+	}
+	return connURL[:schemeEnd+3+slashIdx+1] + newDB + afterSlash[qIdx:]
+}
+
+// BuildDB initializes the database connection with support for standalone, distributed, and cloud modes.
 func (b *NodeBuilder) BuildDB() error {
 	const (
 		caPath    = "./certs/ca.crt"
@@ -200,65 +219,71 @@ func (b *NodeBuilder) BuildDB() error {
 		defaultDB = "defaultdb"
 	)
 
-	host := b.config.Database.Server
-	port := b.config.Database.Port
 	dbName := constants.DatabaseName
+	var defaultDbURI, targetDbURI string
 
-	hasCA := fileExists(caPath)
-	hasRelay := allExist(relayCert, relayKey)
-	hasRoot := allExist(rootCert, rootKey)
-	secure := hasCA && (hasRelay || hasRoot)
+	// Cloud mode: full connection URL provided (e.g. CockroachDB Cloud)
+	if b.config.Database.URL != "" {
+		logger.Info("Building database connection (cloud mode via URL)")
 
-	var defaultDbURI, targetDbURI, targetUser string
+		// Use the URL as-is for the default DB connection to create the target DB
+		defaultDbURI = b.config.Database.URL
 
-	if secure {
-		// Use root user for all cases to avoid permission issues with distributed cluster metadata access
-		targetUser = "root"
-
-		if !hasRoot {
-			logger.Error("Root client certs required but not found")
-			return fmt.Errorf("root client certificates not found at %s or %s", rootCert, rootKey)
-		}
-
-		logger.Info("Building distributed database connection (secure mode, verify-full)",
-			zap.String("server", host),
-			zap.Int("port", port),
-			zap.Bool("relay_client_certs", hasRelay),
-			zap.Bool("root_client_certs", hasRoot))
-
-		// Only attempt DB creation if root client certs are available
-		if hasRoot {
-			defaultDbURI = fmt.Sprintf(
-				"postgres://%s@%s:%d/%s?sslmode=verify-full&sslrootcert=%s&sslcert=%s&sslkey=%s",
-				"root", host, port, defaultDB, caPath, rootCert, rootKey,
-			)
-		} else {
-			logger.Info("Root client certs not present; skipping default DB provisioning step (expecting external provisioning).")
-		}
-
-		targetDbURI = fmt.Sprintf(
-			"postgres://%s@%s:%d/%s?sslmode=verify-full&sslrootcert=%s&sslcert=%s&sslkey=%s",
-			targetUser, host, port, dbName, caPath, rootCert, rootKey,
-		)
+		// Build target DB URI by replacing the database name in the URL
+		targetDbURI = replaceDBNameInURL(b.config.Database.URL, dbName)
 
 	} else {
-		// Insecure/dev mode
-		targetUser = "root"
-		logger.Info("Building database connection (insecure mode)",
-			zap.String("server", host),
-			zap.Int("port", port),
-			zap.Bool("certs_found", false))
+		// Self-hosted mode: build URL from Server + Port
+		host := b.config.Database.Server
+		port := b.config.Database.Port
 
-		defaultDbURI = fmt.Sprintf("postgres://%s@%s:%d/%s?sslmode=disable", "root", host, port, defaultDB)
-		targetDbURI = fmt.Sprintf("postgres://%s@%s:%d/%s?sslmode=disable", "root", host, port, dbName)
+		hasCA := fileExists(caPath)
+		hasRelay := allExist(relayCert, relayKey)
+		hasRoot := allExist(rootCert, rootKey)
+		secure := hasCA && (hasRelay || hasRoot)
+
+		if secure {
+			if !hasRoot {
+				logger.Error("Root client certs required but not found")
+				return fmt.Errorf("root client certificates not found at %s or %s", rootCert, rootKey)
+			}
+
+			logger.Info("Building distributed database connection (secure mode, verify-full)",
+				zap.String("server", host),
+				zap.Int("port", port),
+				zap.Bool("relay_client_certs", hasRelay),
+				zap.Bool("root_client_certs", hasRoot))
+
+			if hasRoot {
+				defaultDbURI = fmt.Sprintf(
+					"postgres://%s@%s:%d/%s?sslmode=verify-full&sslrootcert=%s&sslcert=%s&sslkey=%s",
+					"root", host, port, defaultDB, caPath, rootCert, rootKey,
+				)
+			} else {
+				logger.Info("Root client certs not present; skipping default DB provisioning step.")
+			}
+
+			targetDbURI = fmt.Sprintf(
+				"postgres://%s@%s:%d/%s?sslmode=verify-full&sslrootcert=%s&sslcert=%s&sslkey=%s",
+				"root", host, port, dbName, caPath, rootCert, rootKey,
+			)
+
+		} else {
+			logger.Info("Building database connection (insecure mode)",
+				zap.String("server", host),
+				zap.Int("port", port),
+				zap.Bool("certs_found", false))
+
+			defaultDbURI = fmt.Sprintf("postgres://%s@%s:%d/%s?sslmode=disable", "root", host, port, defaultDB)
+			targetDbURI = fmt.Sprintf("postgres://%s@%s:%d/%s?sslmode=disable", "root", host, port, dbName)
+		}
 	}
 
 	// Optionally connect to default DB to create the target DB (only when defaultDbURI is set).
 	if defaultDbURI != "" {
-		logger.Info("Connecting to default database to check/create target database...", zap.String("as_user", "root"))
+		logger.Info("Connecting to default database to check/create target database...")
 		defaultConn, err := storage.InitDB(b.ctx, defaultDbURI, b.config.Relay.ThrottlingConfig.MaxConnections)
 		if err != nil {
-			// Don’t hard fail; installer may have already provisioned the DB
 			logger.Warn("Root connection to default database failed; skipping create step (assuming provisioned).", zap.Error(err))
 		} else {
 			if err := defaultConn.CreateDatabaseIfNotExists(b.ctx, dbName); err != nil {
@@ -272,8 +297,7 @@ func (b *NodeBuilder) BuildDB() error {
 
 	// Connect to the target database
 	logger.Info("Connecting to target database...",
-		zap.String("db", dbName),
-		zap.String("as_user", targetUser))
+		zap.String("db", dbName))
 	dbConn, err := storage.InitDB(b.ctx, targetDbURI, b.config.Relay.ThrottlingConfig.MaxConnections)
 	if err != nil {
 		b.cancel()
@@ -311,7 +335,7 @@ func (b *NodeBuilder) BuildDB() error {
 	// Set the event dispatcher reference in the database for immediate local broadcasting
 	b.database.SetEventDispatcher(b.eventDispatcher)
 
-	logger.Info("✅ Event dispatcher initialized")
+	logger.Info("Event dispatcher initialized")
 
 	return nil
 }

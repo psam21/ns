@@ -1,0 +1,3 @@
+nostr.ltd {
+    reverse_proxy localhost:8080
+}

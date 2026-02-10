@@ -221,9 +221,14 @@ func performCrossFieldValidation(sl validator.StructLevel, cfg Config) {
 		sl.ReportError(cfg.Relay.EventCacheSize, "EventCacheSize", "EventCacheSize", "cache_size_too_small", "")
 	}
 	
-	// Validate that database port is not the same as metrics port
-	if cfg.Database.Port == cfg.Metrics.Port {
+	// Validate that database port is not the same as metrics port (only when not using URL)
+	if cfg.Database.URL == "" && cfg.Database.Port == cfg.Metrics.Port {
 		sl.ReportError(cfg.Database.Port, "Port", "Port", "port_conflict", "")
+	}
+
+	// Validate that either URL or Server+Port is configured
+	if cfg.Database.URL == "" && cfg.Database.Server == "" {
+		sl.ReportError(cfg.Database.Server, "Server", "Server", "db_connection_required", "")
 	}
 	
 	// Validate that public URL scheme matches WebSocket address

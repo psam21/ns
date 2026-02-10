@@ -40,6 +40,7 @@ RELAY:
       MAX_REQUESTS_PER_SECOND: 100 # Maximum requests per second
       BURST_SIZE: 20             # Rate limit burst size
       PROGRESSIVE_BAN: true      # Enable progressive ban duration
+      BAN_DURATION: 5m           # Ban duration for rate limit violations
       MAX_BAN_DURATION: 24h      # Maximum ban duration
 
 RELAY_POLICY:
@@ -49,8 +50,9 @@ RELAY_POLICY:
     PUBKEYS: []                  # List of pubkeys to whitelist (hex format)
 
 DATABASE:
-  SERVER: "localhost"            # Database server hostname
-  PORT: 26257                    # Database port
+  URL: ""                        # Full connection URL (for CockroachDB Cloud). When set, SERVER and PORT are ignored.
+  SERVER: "localhost"            # Database server hostname (used when URL is empty)
+  PORT: 26257                    # Database port (used when URL is empty)
 
 CAPSULES:
   ENABLED: true                  # Enable time capsules feature

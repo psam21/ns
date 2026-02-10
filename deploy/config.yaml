@@ -1,0 +1,55 @@
+# Production Configuration for nostr.ltd Relay
+# Running on AWS EC2 t4g.small (2 vCPU ARM, 2 GB RAM)
+# Database: CockroachDB Cloud Serverless
+
+LOGGING:
+  LEVEL: info
+  FILE: /var/log/relay/relay.log
+  FORMAT: json
+  MAX_SIZE: 50
+  MAX_BACKUPS: 5
+  MAX_AGE: 7
+
+METRICS:
+  ENABLED: true
+  PORT: 2112
+
+RELAY:
+  NAME: "nostr.ltd"
+  DESCRIPTION: "Nostr relay powered by Shugur Network"
+  CONTACT: "admin@nostr.ltd"
+  PUBLIC_KEY: ""
+  ICON: ""
+  BANNER: ""
+  WS_ADDR: ":8080"
+  PUBLIC_URL: "wss://nostr.ltd"
+  EVENT_CACHE_SIZE: 5000
+  SEND_BUFFER_SIZE: 4096
+  WRITE_TIMEOUT: 60s
+  IDLE_TIMEOUT: 300s
+  THROTTLING:
+    MAX_CONTENT_LENGTH: 2048
+    MAX_CONNECTIONS: 500
+    BAN_THRESHOLD: 5
+    BAN_DURATION: 10
+    RATE_LIMIT:
+      ENABLED: true
+      MAX_EVENTS_PER_SECOND: 30
+      MAX_REQUESTS_PER_SECOND: 60
+      BURST_SIZE: 15
+      PROGRESSIVE_BAN: true
+      BAN_DURATION: 5m
+      MAX_BAN_DURATION: 24h
+
+RELAY_POLICY:
+  BLACKLIST:
+    PUBKEYS: []
+  WHITELIST:
+    PUBKEYS: []
+
+DATABASE:
+  URL: "***DATABASE_URL_REDACTED***"
+
+CAPSULES:
+  ENABLED: true
+  MAX_WITNESSES: 9
