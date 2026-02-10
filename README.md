@@ -65,7 +65,7 @@ NIP-01, 02, 03, 04, 09, 11, 15, 16, 17, 20, 22, 23, 24, 25, 28, 33, 40, 44, 45, 
 | `/mirror` | PUT | Mirror blob from URL |
 | `/media` | PUT | Upload + optimize media |
 
-Files are stored in S3 and authenticated via kind `24242` Nostr events.
+Files are stored in S3 with no expiration (perpetual) and authenticated via kind `24242` Nostr events. Deletes are hard deletes — blobs are purged from S3 when no owners remain.
 
 ## Repository Structure
 
@@ -76,8 +76,11 @@ Files are stored in S3 and authenticated via kind `24242` Nostr events.
 │   ├── blossom.service        # Blossom systemd unit
 │   ├── Caddyfile              # Caddy reverse proxy config
 │   └── test_relay.sh          # Relay test suite
-├── blossom/
-│   └── config.yml             # Blossom config (S3 backend, credentials via env vars)
+├── blossom/                   # Vendored fork of hzrd149/blossom-server
+│   ├── config.yml             # Production config (S3 backend, credentials via env vars)
+│   ├── src/                   # Server source (TypeScript)
+│   ├── admin/                 # Admin dashboard (React)
+│   └── public/                # Upload UI
 └── relay/                     # Shugur Relay source (patched for CockroachDB Cloud)
 ```
 
@@ -118,4 +121,5 @@ sudo systemctl start blossom
 - All credentials injected via `EnvironmentFile=` in systemd (never in config files or git)
 - S3 access via dedicated IAM user with least-privilege policy
 - TLS termination at Caddy layer
+- systemd hardening: `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=true`
 - systemd hardening: `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=true`
