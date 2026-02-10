@@ -1,13 +1,14 @@
 # nostr.ltd
 
-Nostr relay deployment for **nostr.ltd**, powered by [Shugur Relay](https://github.com/Shugur-Network/relay).
+Nostr relay and media server deployment for **nostr.ltd**, powered by [Shugur Relay](https://github.com/Shugur-Network/relay) and [Blossom](https://github.com/hzrd149/blossom-server).
 
-## Live Relay
+## Live Services
 
-| | |
+| Service | URL |
 |---|---|
-| **WebSocket** | `wss://www.nostr.ltd` |
-| **Dashboard** | [https://www.nostr.ltd](https://www.nostr.ltd) |
+| **Relay (WebSocket)** | `wss://www.nostr.ltd` |
+| **Relay Dashboard** | [https://www.nostr.ltd](https://www.nostr.ltd) |
+| **Blossom Media Server** | `https://blossom.nostr.ltd` |
 | **NIP-11 Info** | `curl -H "Accept: application/nostr+json" https://www.nostr.ltd` |
 
 ## Architecture
@@ -15,29 +16,33 @@ Nostr relay deployment for **nostr.ltd**, powered by [Shugur Relay](https://gith
 ```
 Nostr Clients (Damus, Amethyst, Primal, etc.)
         │
-        ▼ wss://
-┌─────────────────┐
-│   Caddy (TLS)   │  ← Auto Let's Encrypt certificates
-│   Port 80/443   │
-└────────┬────────┘
-         │ reverse_proxy
-         ▼
-┌─────────────────┐
-│  Shugur Relay   │  ← Go binary, WebSocket server
-│   Port 8080     │
-└────────┬────────┘
-         │ PostgreSQL wire protocol
-         ▼
-┌─────────────────┐
-│ CockroachDB     │  ← Managed serverless (CockroachDB Cloud)
-│ Cloud           │
-└─────────────────┘
+        ├─── wss:// ──────────────────┐
+        │                             │
+        ├─── https:// (media) ───┐    │
+        ▼                        ▼    ▼
+┌─────────────────────────────────────────┐
+│              Caddy (TLS)                │  ← Auto Let's Encrypt
+│              Port 80/443                │
+└────┬───────────────────────────┬────────┘
+     │ blossom.nostr.ltd         │ nostr.ltd / www.nostr.ltd
+     ▼                           ▼
+┌──────────────┐          ┌─────────────────┐
+│   Blossom    │          │  Shugur Relay   │
+│  Port 3000   │          │   Port 8080     │
+└──────┬───────┘          └────────┬────────┘
+       │                           │
+       ▼                           ▼
+┌──────────────┐          ┌─────────────────┐
+│  AWS S3      │          │ CockroachDB     │
+│  (blobs)     │          │ Cloud           │
+└──────────────┘          └─────────────────┘
 ```
 
 ## Infrastructure
 
 - **Compute:** AWS EC2 t4g.small (ARM Graviton, 2 vCPU, 2 GB RAM) — ap-south-1 (Mumbai)
 - **Database:** CockroachDB Cloud Serverless (free tier)
+- **Blob Storage:** AWS S3 (`nostr-ltd-blossom` bucket, ap-south-1)
 - **TLS:** Caddy with automatic Let's Encrypt
 - **Domain:** nostr.ltd (BigRock registrar)
 
@@ -45,15 +50,34 @@ Nostr Clients (Damus, Amethyst, Primal, etc.)
 
 NIP-01, 02, 03, 04, 09, 11, 15, 16, 17, 20, 22, 23, 24, 25, 28, 33, 40, 44, 45, 47, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 65, 72, 78
 
+## Blossom Media Server
+
+[Blossom](https://github.com/hzrd149/blossom) (Blobs Stored Simply on Mediaservers) provides content-addressable file storage with Nostr authentication.
+
+**Supported BUDs:** BUD-01, BUD-02, BUD-04, BUD-05, BUD-06, BUD-08
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/<sha256>` | GET | Retrieve blob by hash |
+| `/<sha256>` | HEAD | Check if blob exists |
+| `/upload` | PUT | Upload blob (auth required) |
+| `/<sha256>` | DELETE | Delete blob (auth required) |
+| `/mirror` | PUT | Mirror blob from URL |
+| `/media` | PUT | Upload + optimize media |
+
+Files are stored in S3 and authenticated via kind `24242` Nostr events.
+
 ## Repository Structure
 
 ```
-├── SHUGUR_RELAY_ANALYSIS.md   # Deep code analysis of Shugur Relay
 ├── deploy/
-│   ├── config.yaml            # Production config (credentials via env vars)
-│   ├── relay.service          # systemd unit file
+│   ├── config.yaml            # Relay production config (credentials via env vars)
+│   ├── relay.service          # Relay systemd unit
+│   ├── blossom.service        # Blossom systemd unit
 │   ├── Caddyfile              # Caddy reverse proxy config
 │   └── test_relay.sh          # Relay test suite
+├── blossom/
+│   └── config.yml             # Blossom config (S3 backend, credentials via env vars)
 └── relay/                     # Shugur Relay source (patched for CockroachDB Cloud)
 ```
 
@@ -68,19 +92,30 @@ The relay source includes patches for CockroachDB Cloud support:
 
 ## Deployment
 
+### Relay
+
 ```bash
 # Build for ARM64
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bin/relay-arm64 ./cmd
 
 # On server: credentials are in /opt/relay/.env (never in git)
-# SHUGUR_DATABASE_URL=postgresql://user:pass@host:26257/defaultdb?sslmode=verify-full
-
-# Start
 sudo systemctl start relay
+```
+
+### Blossom
+
+```bash
+# Build TypeScript + admin dashboard
+pnpm install && npx tsc && npx vite build
+
+# Deploy to /opt/blossom/ on server
+# Credentials are in /opt/blossom/.env (S3_ACCESS_KEY, S3_SECRET_KEY, etc.)
+sudo systemctl start blossom
 ```
 
 ## Security
 
-- Database credentials injected via `EnvironmentFile=` in systemd (not in config files)
+- All credentials injected via `EnvironmentFile=` in systemd (never in config files or git)
+- S3 access via dedicated IAM user with least-privilege policy
 - TLS termination at Caddy layer
 - systemd hardening: `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=true`
