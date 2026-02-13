@@ -1,7 +1,7 @@
 # Shugur Relay — Pending NIP Items
 
 **Updated:** 2026-02-13  
-**Current NIP count:** 59 (52 numeric + 7 string)
+**Current NIP count:** 60 (53 numeric + 7 string)
 
 ---
 
@@ -44,9 +44,10 @@ Added kinds 16, 34236, 1244, 30403, 10063. Added NIP-18 and NIP-B7 to supported 
 
 ### 🟡 MEDIUM PRIORITY
 
-#### NIP-13 — Proof of Work
-- Spam deterrence via `nonce` tag validation and leading zero bit checks
-- Optional configurable difficulty requirement
+#### ~~NIP-13 — Proof of Work~~ ✅ DONE
+- Validates `nonce` tag committed difficulty, counts leading zero bits
+- Configurable `MIN_POW_DIFFICULTY` in config (default 0 = no requirement)
+- Advertised in NIP-11 `min_pow_difficulty` field
 
 #### NIP-29 — Relay-based Groups
 - Full relay-managed group system (complex)

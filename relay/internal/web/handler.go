@@ -134,6 +134,7 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 				"03": "OpenTimestamps",
 				"09": "Event Deletion",
 				"11": "Relay Info",
+				"13": "Proof of Work",
 				"15": "Marketplace",
 				"17": "Private DMs",
 				"18": "Reposts",

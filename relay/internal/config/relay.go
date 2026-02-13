@@ -17,7 +17,8 @@ type RelayConfig struct {
 	IdleTimeout      time.Duration    `mapstructure:"IDLE_TIMEOUT"      json:"idle_timeout"      validate:"required,reasonable_duration"`
 	WriteTimeout     time.Duration    `mapstructure:"WRITE_TIMEOUT"     json:"write_timeout"     validate:"required,timeout_duration"`
 	SendBufferSize   int              `mapstructure:"SEND_BUFFER_SIZE"  json:"send_buffer_size"  validate:"required,buffer_size"`
-	EventCacheSize   int              `mapstructure:"EVENT_CACHE_SIZE"  json:"event_cache_size"  validate:"required,min=100,max=1000000"`
+	EventCacheSize   int              `mapstructure:"EVENT_CACHE_SIZE"   json:"event_cache_size"  validate:"required,min=100,max=1000000"`
+	MinPowDifficulty int              `mapstructure:"MIN_POW_DIFFICULTY" json:"min_pow_difficulty" validate:"min=0,max=64"`
 	ThrottlingConfig ThrottlingConfig `mapstructure:"THROTTLING"        json:"throttling"        validate:"required"`
 }
 

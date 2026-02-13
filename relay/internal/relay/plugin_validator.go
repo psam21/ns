@@ -347,6 +347,11 @@ func (pv *PluginValidator) ValidateEvent(ctx context.Context, event nostr.Event)
 		}
 	}
 
+	// 6b. NIP-13: Proof of Work validation
+	if err := nips.ValidatePoW(event, pv.config.Relay.MinPowDifficulty); err != nil {
+		return false, err.Error()
+	}
+
 	// 6. Content length check
 	if len(event.Content) > pv.limits.MaxContentLength {
 		return false, fmt.Sprintf("content exceeds maximum length of %d bytes", pv.limits.MaxContentLength)

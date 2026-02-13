@@ -29,6 +29,7 @@ var DefaultSupportedNIPs = []interface{}{
 	3,  // NIP-03: OpenTimestamps Attestations for Events
 	9,  // NIP-09: Event Deletion Request
 	11, // NIP-11: Relay Information Document
+	13, // NIP-13: Proof of Work
 	15, // NIP-15: Nostr Marketplace (for resilient marketplaces)
 	17, // NIP-17: Private Direct Messages
 	18, // NIP-18: Reposts
@@ -227,7 +228,7 @@ func DefaultRelayMetadata(cfg *config.Config) nip11.RelayInformationDocument {
 			MaxSubidLength:   MaxSubIDLength,   // Use constant (configurable via config if needed)
 			MaxEventTags:     MaxEventTags,     // Use constant (configurable via config if needed)
 			MaxContentLength: maxContentLength, // Use actual configured content length
-			MinPowDifficulty: MinPowDifficulty, // Use constant (configurable via config if needed)
+			MinPowDifficulty: cfg.Relay.MinPowDifficulty, // Use configured PoW difficulty (NIP-13)
 			AuthRequired:     AuthRequired,     // Use constant (configurable via config if needed)
 			PaymentRequired:  PaymentRequired,  // Use constant (configurable via config if needed)
 			RestrictedWrites: RestrictedWrites, // Use constant (configurable via config if needed)

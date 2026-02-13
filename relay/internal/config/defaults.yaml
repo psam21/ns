@@ -28,6 +28,7 @@ RELAY:
   WS_ADDR: ":8080"              # WebSocket listening address
   PUBLIC_URL: "wss://relay.shugur.net" # Public URL (optional)
   EVENT_CACHE_SIZE: 10000        # Event cache size
+  MIN_POW_DIFFICULTY: 0          # Minimum PoW difficulty (NIP-13, 0 = no requirement)
   SEND_BUFFER_SIZE: 8192         # WebSocket send buffer size
   WRITE_TIMEOUT: 60s             # WebSocket write timeout
   IDLE_TIMEOUT: 300s             # Connection idle timeout
