@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -35,7 +36,7 @@ type DashboardData struct {
 	CustomNIPs    []constants.CustomNIP         `json:"custom_nips"`
 	Limitation    *LimitationData               `json:"limitation"`
 	Stats         *StatsData                    `json:"stats"`
-	Uptime        string                        `json:"uptime"`
+	LiveSince     string                        `json:"live_since"`
 	Cluster       *storage.CockroachClusterInfo `json:"cluster"`
 }
 
@@ -71,6 +72,7 @@ type Handler struct {
 	config    *config.Config
 	logger    *zap.Logger
 	startTime time.Time
+	liveSince time.Time
 	db        interface {
 		GetTotalEventCount(ctx context.Context) (int64, error)
 		GetCockroachClusterInfo(ctx context.Context) (*storage.CockroachClusterInfo, error)
@@ -84,6 +86,7 @@ func NewHandler(cfg *config.Config, logger *zap.Logger, node interface{}) *Handl
 		config:    cfg,
 		logger:    logger,
 		startTime: time.Now(),
+		liveSince: loadFirstBootTime(),
 	}
 
 	// Set database interface if node provides it
@@ -201,15 +204,15 @@ func (h *Handler) HandleStatsAPI(w http.ResponseWriter, r *http.Request) {
 
 	// Get current stats
 	stats := h.getStatsData()
-	uptime := h.formatUptime(time.Since(h.startTime))
+	liveSince := h.liveSince.Format("Jan 2, 2006")
 
 	// Create response structure
 	response := struct {
-		Stats  *StatsData `json:"stats"`
-		Uptime string     `json:"uptime"`
+		Stats     *StatsData `json:"stats"`
+		LiveSince string     `json:"live_since"`
 	}{
-		Stats:  stats,
-		Uptime: uptime,
+		Stats:     stats,
+		LiveSince: liveSince,
 	}
 
 	// Encode and send response
@@ -336,9 +339,9 @@ func (h *Handler) getDashboardData(host string) *DashboardData {
 			AuthRequired:     metadata.Limitation.AuthRequired,
 			PaymentRequired:  metadata.Limitation.PaymentRequired,
 		},
-		Stats:   h.getStatsData(),
-		Uptime:  h.formatUptime(time.Since(h.startTime)),
-		Cluster: clusterInfo,
+		Stats:     h.getStatsData(),
+		LiveSince: h.liveSince.Format("Jan 2, 2006"),
+		Cluster:   clusterInfo,
 	}
 }
 
@@ -520,6 +523,20 @@ func (h *Handler) formatUptime(duration time.Duration) string {
 	} else {
 		return fmt.Sprintf("%dm", minutes)
 	}
+}
+
+// loadFirstBootTime reads or creates the .first_boot timestamp file
+func loadFirstBootTime() time.Time {
+	const path = ".first_boot"
+	data, err := os.ReadFile(path)
+	if err == nil {
+		if t, err := time.Parse(time.RFC3339, strings.TrimSpace(string(data))); err == nil {
+			return t
+		}
+	}
+	now := time.Now().UTC()
+	_ = os.WriteFile(path, []byte(now.Format(time.RFC3339)), 0644)
+	return now
 }
 
 // getMemoryUsage returns current memory usage statistics

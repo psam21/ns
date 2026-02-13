@@ -36,24 +36,20 @@
       <!-- Stats -->
       <section class="stats">
         <div class="stat">
-          <span class="stat-val" id="active-connections">{{.Stats.ActiveConnections}}</span>
+          <span class="stat-val" id="total-connections">{{.Stats.TotalConnections}}</span>
           <span class="stat-lbl">connections</span>
-        </div>
-        <div class="stat">
-          <span class="stat-val" id="events-stored">{{.Stats.EventsStored}}</span>
-          <span class="stat-lbl">events</span>
         </div>
         <div class="stat">
           <span class="stat-val" id="messages-processed">{{.Stats.MessagesProcessed}}</span>
           <span class="stat-lbl">requests</span>
         </div>
         <div class="stat">
-          <span class="stat-val" id="total-connections">{{.Stats.TotalConnections}}</span>
-          <span class="stat-lbl">total conn</span>
+          <span class="stat-val" id="events-stored">{{.Stats.EventsStored}}</span>
+          <span class="stat-lbl">events</span>
         </div>
         <div class="stat">
-          <span class="stat-val" id="uptime">{{.Uptime}}</span>
-          <span class="stat-lbl">uptime</span>
+          <span class="stat-val" id="live-since">{{.LiveSince}}</span>
+          <span class="stat-lbl">live since</span>
         </div>
       </section>
 

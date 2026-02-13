@@ -102,15 +102,14 @@ class RelayDashboard {
       
       // Update all the stats with real data
       if (data.stats) {
-        this.updateStatElement('active-connections', data.stats.active_connections);
         this.updateStatElement('total-connections', data.stats.total_connections);
         this.updateStatElement('messages-processed', data.stats.messages_processed);
         this.updateStatElement('events-stored', data.stats.events_stored);
       }
-      
-      // Update uptime
-      if (data.uptime) {
-        this.updateStatElement('uptime', data.uptime);
+
+      // Update live since
+      if (data.live_since) {
+        this.updateStatElement('live-since', data.live_since);
       }
       
       // Update online indicator
