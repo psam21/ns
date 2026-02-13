@@ -64,6 +64,20 @@ func (ep *EventProcessor) QueueDeletion(evt nostr.Event) bool {
 	}
 }
 
+// QueueVanish handles NIP-62 vanish requests.
+// Deletes all events from the pubkey and prevents re-broadcast.
+func (ep *EventProcessor) QueueVanish(evt nostr.Event) bool {
+	select {
+	case ep.eventChan <- evt:
+		return true
+	default:
+		logger.Warn("Vanish queue full, dropping event",
+			zap.String("event_id", evt.ID),
+			zap.String("pubkey", evt.PubKey))
+		return false
+	}
+}
+
 // QueueEvent adds an event to processing queue with non-blocking behavior
 func (ep *EventProcessor) QueueEvent(evt nostr.Event) bool {
 	// Check bloom filter first to avoid processing duplicates
@@ -114,6 +128,8 @@ func (ep *EventProcessor) processEvents(ctx context.Context) {
 						zap.String("event_id", evt.ID),
 						zap.Int("kind", evt.Kind))
 					err = nil // No error, just don't store
+				case nips.IsVanishEvent(evt):
+					err = ep.db.persistVanish(ctx, evt)
 				case nips.IsDeletionEvent(evt):
 					err = ep.db.persistDeletion(ctx, evt)
 				case nips.IsReplaceable(evt.Kind):

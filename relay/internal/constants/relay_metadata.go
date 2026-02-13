@@ -48,6 +48,7 @@ var DefaultSupportedNIPs = []interface{}{
 	37, // NIP-37: Draft Wraps
 	38, // NIP-38: User Statuses
 	40, // NIP-40: Expiration Timestamp
+	42, // NIP-42: Authentication of clients to relays
 	44, // NIP-44: Encrypted Payloads (Versioned)
 	45, // NIP-45: Counting Events
 	47, // NIP-47: Nostr Wallet Connect (NWC)
@@ -65,6 +66,7 @@ var DefaultSupportedNIPs = []interface{}{
 	62, // NIP-62: Request to Vanish
 	65, // NIP-65: Relay List Metadata
 	69, // NIP-69: Peer-to-peer Order Events
+	70, // NIP-70: Protected Events
 	71, // NIP-71: Video Events
 	72, // NIP-72: Moderated Communities
 	75, // NIP-75: Zap Goals

@@ -18,6 +18,7 @@ import (
 	"github.com/Shugur-Network/relay/internal/errors"
 	"github.com/Shugur-Network/relay/internal/logger"
 	"github.com/Shugur-Network/relay/internal/metrics"
+	"github.com/Shugur-Network/relay/internal/relay/nips"
 	"github.com/gorilla/websocket"
 	nostr "github.com/nbd-wtf/go-nostr"
 	"go.uber.org/zap"
@@ -243,6 +244,12 @@ type WsConnection struct {
 	eventChan   chan *nostr.Event
 	eventCtx    context.Context
 	eventCancel context.CancelFunc
+
+	// NIP-42 AUTH
+	authChallenge  string
+	authedPubkeys  map[string]bool
+	authMu         sync.RWMutex
+	relayURL       string
 }
 
 // Ensure WsConnection implements domain.WebSocketConnection
@@ -281,6 +288,17 @@ func NewWsConnection(
 		clientID:    generateClientID(),
 		eventCtx:    eventCtx,
 		eventCancel: eventCancel,
+		// NIP-42 AUTH
+		authedPubkeys: make(map[string]bool),
+		relayURL:      cfg.PublicURL,
+	}
+
+	// Generate NIP-42 auth challenge
+	challenge, err := nips.GenerateAuthChallenge()
+	if err != nil {
+		logger.Error("Failed to generate auth challenge", zap.Error(err))
+	} else {
+		conn.authChallenge = challenge
 	}
 
 	// Register with event dispatcher for real-time notifications
@@ -448,6 +466,15 @@ func (c *WsConnection) HandleMessages(ctx context.Context, cfg config.RelayConfi
 		zap.String("websocket_remote_addr", c.ws.RemoteAddr().String()),
 		zap.String("client_id", c.clientID))
 
+	// Send NIP-42 AUTH challenge
+	if c.authChallenge != "" {
+		authMsg, _ := json.Marshal([]interface{}{"AUTH", c.authChallenge})
+		c.SendMessage(authMsg)
+		logger.Debug("Sent NIP-42 AUTH challenge",
+			zap.String("client", c.RemoteAddr()),
+			zap.String("challenge", c.authChallenge[:16]+"..."))
+	}
+
 	// Check if client is banned
 	banListMutex.Lock()
 	banExpiry, banned := clientBanList[clientIP]
@@ -595,6 +622,8 @@ func (c *WsConnection) HandleMessages(ctx context.Context, cfg config.RelayConfi
 			c.handleCountRequest(ctx, arr)
 		case "CLOSE":
 			c.handleClose(arr)
+		case "AUTH":
+			c.handleAuth(arr)
 		default:
 			c.sendNotice("invalid: unknown command '" + cmdType + "'")
 		}
@@ -914,6 +943,14 @@ func (c *WsConnection) handleEvent(ctx context.Context, arr []interface{}) {
 		return
 	}
 
+	// NIP-70: Reject protected events unless the author is authenticated on this connection
+	if nips.IsProtectedEvent(&evt) {
+		if !c.isAuthenticated(evt.PubKey) {
+			c.sendOK(evt.ID, false, "auth-required: this event may only be published by its author")
+			return
+		}
+	}
+
 	// Queue the event for processing
 	if ok := c.node.GetEventProcessor().QueueEvent(evt); !ok {
 		c.sendOK(evt.ID, false, "server busy, try again")
@@ -937,4 +974,55 @@ func (c *WsConnection) QueryEvents(ctx context.Context, f nostr.Filter) ([]nostr
 		return nil, err
 	}
 	return results, nil
+}
+
+// handleAuth processes AUTH commands (NIP-42)
+func (c *WsConnection) handleAuth(arr []interface{}) {
+	if len(arr) < 2 {
+		c.sendNotice("invalid: AUTH message requires an event")
+		return
+	}
+
+	// Marshal the event data back to JSON
+	eventData, err := json.Marshal(arr[1])
+	if err != nil {
+		c.sendNotice("invalid: malformed AUTH event")
+		return
+	}
+
+	var evt nostr.Event
+	if err := json.Unmarshal(eventData, &evt); err != nil {
+		c.sendNotice("invalid: malformed AUTH event: " + err.Error())
+		return
+	}
+
+	if c.authChallenge == "" {
+		c.sendOK(evt.ID, false, "error: no auth challenge was issued")
+		return
+	}
+
+	// Validate the AUTH event using NIP-42
+	pubkey, ok := nips.ValidateAuthEvent(&evt, c.authChallenge, c.relayURL)
+	if !ok {
+		c.sendOK(evt.ID, false, "error: auth event validation failed")
+		return
+	}
+
+	// Mark this pubkey as authenticated on this connection
+	c.authMu.Lock()
+	c.authedPubkeys[pubkey] = true
+	c.authMu.Unlock()
+
+	logger.Info("NIP-42: Client authenticated successfully",
+		zap.String("pubkey", pubkey),
+		zap.String("client", c.RemoteAddr()))
+
+	c.sendOK(evt.ID, true, "")
+}
+
+// isAuthenticated checks if a pubkey has been authenticated on this connection via NIP-42
+func (c *WsConnection) isAuthenticated(pubkey string) bool {
+	c.authMu.RLock()
+	defer c.authMu.RUnlock()
+	return c.authedPubkeys[pubkey]
 }

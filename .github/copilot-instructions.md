@@ -100,6 +100,8 @@ git add -A && git commit -m "description" && git push
 
 | File | NIPs |
 |------|------|
+| `relay/internal/relay/nips/nip42.go` | NIP-42: AUTH challenge/validate, NIP-70: IsProtectedEvent |
+| `relay/internal/relay/nips/nip62.go` | NIP-62: Request to Vanish validation |
 | `relay/internal/relay/nips/nip_ee.go` | NIP-EE: MLS E2EE validators (kinds 443, 444, 445, 10051) |
 | `relay/internal/relay/nips/nip45.go` | NIP-45: COUNT request handling |
 
@@ -138,15 +140,13 @@ git add -A && git commit -m "description" && git push
 - The `temp/` directory is gitignored (used for scratch work like cloning NIP specs)
 - Contact: `epochshield@proton.me`
 
-## Current NIP Support (59 NIPs)
+## Current NIP Support (62 NIPs)
 
-01, 02, 03, 04, 09, 11, 15, 16, 17, 20, 22, 23, 24, 25, 28, 29, 30, 32, 33, 34, 35, 37, 38, 40, 44, 45, 47, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 65, 69, 71, 72, 75, 78, 84, 85, 87, 88, 89, 90, 94, 99, 7D, A0, A4, B0, C0, C7, EE
+01, 02, 03, 04, 09, 11, 15, 16, 17, 20, 22, 23, 24, 25, 28, 29, 30, 32, 33, 34, 35, 37, 38, 40, 42, 44, 45, 47, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 65, 69, 70, 71, 72, 75, 78, 84, 85, 87, 88, 89, 90, 94, 99, 7D, A0, A4, B0, C0, C7, EE
 
 Plus custom NIPs: XX (Time Capsules), YY (Nostr Web Pages)
 
 ## Future Work (requires deeper protocol implementation)
 
-- **NIP-42** (AUTH) — WebSocket challenge/response, prerequisite for NIP-70 and NIP-29 full support
-- **NIP-70** (Protected Events) — `-` tag handling, requires NIP-42
 - **NIP-77** (Negentropy Syncing) — efficient relay sync protocol
 - **NIP-86** (Relay Management API) — standardized admin endpoints

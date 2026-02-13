@@ -496,14 +496,18 @@ func (db *DB) InsertAddressableEvent(ctx context.Context, evt nostr.Event) error
 }
 
 func (db *DB) persistDeletion(ctx context.Context, del nostr.Event) error {
-	var ids []string
+	var eIDs []string
+	var aTags []nostr.Tag
 	for _, t := range del.Tags {
 		if len(t) >= 2 && t[0] == "e" {
-			ids = append(ids, t[1])
+			eIDs = append(eIDs, t[1])
+		}
+		if len(t) >= 2 && t[0] == "a" {
+			aTags = append(aTags, t)
 		}
 	}
-	if len(ids) == 0 {
-		return errors.New("deletion event without e‑tags")
+	if len(eIDs) == 0 && len(aTags) == 0 {
+		return errors.New("deletion event without e or a tags")
 	}
 
 	tx, err := db.Pool.Begin(ctx)
@@ -516,15 +520,42 @@ func (db *DB) persistDeletion(ctx context.Context, del nostr.Event) error {
 		}
 	}()
 
-	// 1) delete only events OWNED by the deleter
-	_, err = tx.Exec(ctx,
-		`DELETE FROM events WHERE id = ANY($1) AND pubkey = $2`,
-		ids, del.PubKey)
-	if err != nil {
-		return err
+	// 1) delete events by "e" tag (referenced by event ID) — only if owned by deleter
+	if len(eIDs) > 0 {
+		_, err = tx.Exec(ctx,
+			`DELETE FROM events WHERE id = ANY($1) AND pubkey = $2`,
+			eIDs, del.PubKey)
+		if err != nil {
+			return err
+		}
 	}
 
-	// 2) insert the deletion event itself
+	// 2) delete events by "a" tag (addressable events) — NIP-09 spec
+	//    format: <kind>:<pubkey>:<d-identifier>
+	//    only delete versions up to the deletion request's created_at
+	for _, tag := range aTags {
+		parts := strings.SplitN(tag[1], ":", 3)
+		if len(parts) != 3 {
+			continue
+		}
+		// Only delete if the pubkey in the "a" tag matches the deleter
+		if parts[1] != del.PubKey {
+			continue
+		}
+		_, err = tx.Exec(ctx,
+			`DELETE FROM events WHERE kind = $1 AND pubkey = $2
+			 AND tags @> $3::jsonb AND created_at <= $4`,
+			parts[0], del.PubKey,
+			fmt.Sprintf(`[["d","%s"]]`, parts[2]),
+			del.CreatedAt.Time().Unix())
+		if err != nil {
+			logger.Warn("NIP-09: Failed to delete addressable event",
+				zap.String("a_tag", tag[1]),
+				zap.Error(err))
+		}
+	}
+
+	// 3) insert the deletion event itself
 	_, err = tx.Exec(ctx,
 		`INSERT INTO events (id,pubkey,created_at,kind,tags,content,sig)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7)`,
@@ -540,6 +571,85 @@ func (db *DB) persistDeletion(ctx context.Context, del nostr.Event) error {
 
 	db.Bloom.AddString(del.ID)
 	return nil
+}
+
+// persistVanish deletes ALL events from a pubkey (NIP-62 Request to Vanish).
+// Also deletes gift-wrapped events (kind 1059) addressed to this pubkey.
+// Stores the vanish request itself and adds pubkey to vanished set.
+func (db *DB) persistVanish(ctx context.Context, evt nostr.Event) error {
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+			db.recordError(fmt.Errorf("rollback failed: %w", rollbackErr))
+		}
+	}()
+
+	// 1) Delete ALL events from this pubkey up to the vanish request's created_at
+	result, err := tx.Exec(ctx,
+		`DELETE FROM events WHERE pubkey = $1 AND created_at <= $2`,
+		evt.PubKey, evt.CreatedAt.Time().Unix())
+	if err != nil {
+		return fmt.Errorf("failed to delete events for vanish: %w", err)
+	}
+	deletedCount := result.RowsAffected()
+
+	// 2) Delete gift-wrapped events (kind 1059) that p-tagged this pubkey
+	giftResult, err := tx.Exec(ctx,
+		`DELETE FROM events WHERE kind = 1059 AND tags @> $1::jsonb`,
+		fmt.Sprintf(`[["p","%s"]]`, evt.PubKey))
+	if err != nil {
+		logger.Warn("NIP-62: Failed to delete gift-wrapped events",
+			zap.String("pubkey", evt.PubKey),
+			zap.Error(err))
+		// Non-fatal: continue with vanish
+	} else {
+		giftDeleted := giftResult.RowsAffected()
+		if giftDeleted > 0 {
+			logger.Info("NIP-62: Deleted gift-wrapped events",
+				zap.String("pubkey", evt.PubKey),
+				zap.Int64("count", giftDeleted))
+		}
+	}
+
+	// 3) Store the vanish request itself for bookkeeping
+	_, err = tx.Exec(ctx,
+		`INSERT INTO events (id,pubkey,created_at,kind,tags,content,sig)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+		evt.ID, evt.PubKey, evt.CreatedAt.Time().Unix(),
+		evt.Kind, evt.Tags, evt.Content, evt.Sig)
+	if err != nil {
+		return fmt.Errorf("failed to store vanish request: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	logger.Info("NIP-62: Vanish request processed",
+		zap.String("pubkey", evt.PubKey),
+		zap.Int64("events_deleted", deletedCount))
+
+	db.Bloom.AddString(evt.ID)
+	return nil
+}
+
+// IsVanishedPubkey checks if a pubkey has previously issued a vanish request.
+// Events from vanished pubkeys should be rejected to prevent re-broadcast.
+func (db *DB) IsVanishedPubkey(ctx context.Context, pubkey string) (bool, error) {
+	if !db.isConnected() {
+		return false, fmt.Errorf("database is not connected")
+	}
+	var count int64
+	err := db.Pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM events WHERE kind = 62 AND pubkey = $1`,
+		pubkey).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 // GetTotalEventCount returns the total number of events stored in the database
