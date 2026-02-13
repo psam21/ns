@@ -1,7 +1,7 @@
 # Shugur Relay — Pending NIP Items
 
 **Updated:** 2026-02-13  
-**Current NIP count:** 57 (51 numeric + 6 string)
+**Current NIP count:** 59 (52 numeric + 7 string)
 
 ---
 
@@ -25,15 +25,9 @@
 
 ---
 
-## Missing Kinds for Already-Claimed NIPs
+## ~~Missing Kinds for Already-Claimed NIPs~~ ✅ DONE
 
-| NIP | Missing Kind | Description |
-|-----|-------------|-------------|
-| NIP-18 | `16` | Generic repost (for non-kind-1 events) |
-| NIP-71 | `22`, `34236` | Short video event, addressable short video |
-| NIP-A0 | `1244` | Voice reply |
-| NIP-99 | `30403` | Draft classified listing |
-| NIP-B7 | `10063` | Blossom server list (relevant since this project IS a Blossom setup) |
+Added kinds 16, 34236, 1244, 30403, 10063. Added NIP-18 and NIP-B7 to supported list.
 
 ---
 
