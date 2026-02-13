@@ -26,6 +26,7 @@ This monorepo contains two main components:
 | Relay port (internal) | `8080` |
 | Metrics port | `2112` |
 | Caddy | Reverse proxies HTTPS → localhost:8080 |
+| NIP specs (local) | `temp/nips/` — full clone of nostr-protocol/nips repo. **Always read NIP specs from here first** instead of fetching from the web. |
 
 ## Build & Deploy Workflow
 
