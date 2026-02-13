@@ -38,9 +38,9 @@ a:hover { text-decoration: underline; }
 
 /* ── Container ──────────────────────────────────────────── */
 .container {
-  max-width: 720px;
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 3rem 1.5rem 2rem;
+  padding: 3rem 2rem 2rem;
 }
 
 /* ── Hero ───────────────────────────────────────────────── */
@@ -214,31 +214,57 @@ a:hover { text-decoration: underline; }
 }
 
 /* ── NIPs ───────────────────────────────────────────────── */
-.nips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+.nip-count {
+  font-weight: 400;
+  color: var(--text-dim);
+  font-size: 0.7rem;
 }
 
-.nip {
-  font-family: var(--mono);
-  font-size: 0.78rem;
-  font-weight: 500;
-  padding: 0.3rem 0.6rem;
-  border-radius: 0.3rem;
+.nips-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 0.35rem;
+}
+
+.nip-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 0.35rem;
   background: var(--bg-raised);
   border: 1px solid var(--border);
-  color: var(--text-dim);
-  transition: all .15s;
   text-decoration: none;
+  transition: all .15s;
+  overflow: hidden;
 }
 
-.nip:hover {
-  color: var(--accent);
+.nip-item:hover {
   border-color: var(--accent);
   background: var(--accent-dim);
   text-decoration: none;
   box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.nip-num {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  min-width: 1.8rem;
+  flex-shrink: 0;
+}
+
+.nip-desc {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nip-item:hover .nip-desc {
+  color: var(--text);
 }
 
 /* ── Config Grid ────────────────────────────────────────── */
@@ -302,6 +328,7 @@ a:hover { text-decoration: underline; }
   .stats { grid-template-columns: repeat(2, 1fr); }
   .stat-val { font-size: 1.25rem; }
   .hero-meta { flex-wrap: wrap; justify-content: center; }
+  .nips-grid { grid-template-columns: 1fr; }
 }
 
 /* ── Accessibility ──────────────────────────────────────── */

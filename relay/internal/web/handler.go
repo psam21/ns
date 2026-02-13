@@ -118,6 +118,85 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 				return fmt.Sprintf("%v", val)
 			}
 		},
+		"nipDescription": func(v interface{}) string {
+			nip := ""
+			switch val := v.(type) {
+			case int:
+				nip = fmt.Sprintf("%02d", val)
+			case string:
+				nip = val
+			default:
+				nip = fmt.Sprintf("%v", val)
+			}
+			descriptions := map[string]string{
+				"01": "Basic Protocol",
+				"02": "Follow List",
+				"03": "OpenTimestamps",
+				"04": "Encrypted DM (legacy)",
+				"09": "Event Deletion",
+				"11": "Relay Info",
+				"15": "Marketplace",
+				"16": "Event Treatment",
+				"17": "Private DMs",
+				"20": "Command Results",
+				"22": "Comment",
+				"23": "Long-form Content",
+				"24": "Extra Metadata",
+				"25": "Reactions",
+				"28": "Public Chat",
+				"29": "Relay Groups",
+				"30": "Custom Emoji",
+				"32": "Labeling",
+				"33": "Addressable Events",
+				"34": "Git Stuff",
+				"35": "Torrents",
+				"37": "Draft Wraps",
+				"38": "User Statuses",
+				"40": "Expiration",
+				"42": "Authentication",
+				"44": "Encrypted Payloads",
+				"45": "Event Counts",
+				"47": "Wallet Connect",
+				"50": "Search",
+				"51": "Lists",
+				"52": "Calendar Events",
+				"53": "Live Activities",
+				"54": "Wiki",
+				"56": "Reporting",
+				"57": "Lightning Zaps",
+				"58": "Badges",
+				"59": "Gift Wrap",
+				"60": "Cashu Wallets",
+				"61": "Nutzaps",
+				"62": "Request to Vanish",
+				"65": "Relay List Metadata",
+				"69": "P2P Orders",
+				"70": "Protected Events",
+				"71": "Video Events",
+				"72": "Communities",
+				"75": "Zap Goals",
+				"78": "App-specific Data",
+				"84": "Highlights",
+				"85": "Trusted Assertions",
+				"87": "Ecash Mint Discovery",
+				"88": "Polls",
+				"89": "App Handlers",
+				"90": "Data Vending Machine",
+				"94": "File Metadata",
+				"99": "Classified Listings",
+				"7D": "Threads",
+				"A0": "Voice Messages",
+				"A4": "Public Messages",
+				"B0": "Web Bookmarking",
+				"C0": "Code Snippets",
+				"C7": "Chats",
+				"EE": "E2EE via MLS",
+			}
+			if desc, ok := descriptions[nip]; ok {
+				return desc
+			}
+			return ""
+		},
 	}
 	tmpl, err := template.New("index.html").Funcs(funcMap).ParseFiles(tmplPath)
 	if err != nil {

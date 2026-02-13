@@ -51,10 +51,13 @@
 
       <!-- NIPs -->
       <section class="panel">
-        <h2 class="panel-title">Supported NIPs</h2>
-        <div class="nips">
+        <h2 class="panel-title">Supported NIPs <span class="nip-count">({{len .SupportedNIPs}})</span></h2>
+        <div class="nips-grid">
           {{range .SupportedNIPs}}
-          <a href="https://nips.nostr.com/{{formatNIP .}}" target="_blank" class="nip">{{formatNIP .}}</a>
+          <a href="https://nips.nostr.com/{{formatNIP .}}" target="_blank" class="nip-item">
+            <span class="nip-num">{{formatNIP .}}</span>
+            <span class="nip-desc">{{nipDescription .}}</span>
+          </a>
           {{end}}
         </div>
       </section>
