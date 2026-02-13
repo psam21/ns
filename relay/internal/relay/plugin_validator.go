@@ -205,6 +205,13 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			28935: true, // Invite request (ephemeral, relay-generated)
 			28936: true, // Leave request (user-sent)
 			10010: true, // User relay membership list
+			// NIP-66 Relay Discovery and Liveness Monitoring
+			30166: true, // Relay Discovery (addressable)
+			10166: true, // Relay Monitor Announcement (replaceable)
+			// NIP-39 External Identities in Profiles
+			10011: true, // External Identity List (replaceable)
+			// NIP-64 Chess (PGN)
+			64: true, // Chess game in PGN format
 		},
 		RequiredTags: map[int][]string{
 			5:     {"e"},      // Deletion events must have an "e" tag
@@ -268,6 +275,8 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			11126: {"a"},       // Entrypoint requires "a" (address to site index) tag
 			// NIP-43 Relay Access Metadata
 			28934: {"claim"},   // Join request requires "claim" tag with invite code
+			// NIP-66 Relay Discovery
+			30166: {"d"},       // Relay Discovery requires "d" tag (relay URL)
 		},
 		MaxCreatedAt: time.Now().Unix() + 300,    // 5 minutes in future
 		MinCreatedAt: time.Now().Unix() - 172800, // 2 days in past

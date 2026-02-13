@@ -45,6 +45,7 @@ var DefaultSupportedNIPs = []interface{}{
 	35, // NIP-35: Torrents
 	37, // NIP-37: Draft Wraps
 	38, // NIP-38: User Statuses
+	39, // NIP-39: External Identities in Profiles
 	40, // NIP-40: Expiration Timestamp
 	42, // NIP-42: Authentication of clients to relays
 	43, // NIP-43: Relay Access Metadata and Requests
@@ -63,7 +64,9 @@ var DefaultSupportedNIPs = []interface{}{
 	60, // NIP-60: Cashu Wallets
 	61, // NIP-61: Nutzaps
 	62, // NIP-62: Request to Vanish
+	64, // NIP-64: Chess (PGN)
 	65, // NIP-65: Relay List Metadata
+	66, // NIP-66: Relay Discovery and Liveness Monitoring
 	69, // NIP-69: Peer-to-peer Order Events
 	70, // NIP-70: Protected Events
 	71, // NIP-71: Video Events
