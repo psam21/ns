@@ -105,53 +105,100 @@ Learn more in our [Nostr Concepts](https://docs.shugur.com/concepts/) documentat
 
 ## 📋 Nostr Protocol Support
 
-### Supported NIPs (Nostr Improvement Proposals)
+### Supported NIPs — 62 (Nostr Improvement Proposals)
 
 Shugur Relay implements the following NIPs for maximum compatibility with Nostr clients:
 
 #### Core Protocol
 
 - **[NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md)**: Basic protocol flow description
-- **[NIP-02](https://github.com/nostr-protocol/nips/blob/master/02.md)**: Contact List and Petnames
+- **[NIP-02](https://github.com/nostr-protocol/nips/blob/master/02.md)**: Follow List
 - **[NIP-03](https://github.com/nostr-protocol/nips/blob/master/03.md)**: OpenTimestamps Attestations for Events
-- **[NIP-04](https://github.com/nostr-protocol/nips/blob/master/04.md)**: Encrypted Direct Message
-- **[NIP-09](https://github.com/nostr-protocol/nips/blob/master/09.md)**: Event Deletion
+- **[NIP-04](https://github.com/nostr-protocol/nips/blob/master/04.md)**: Encrypted Direct Message (legacy, see NIP-17)
+- **[NIP-09](https://github.com/nostr-protocol/nips/blob/master/09.md)**: Event Deletion Request (`e` + `a` tag support)
 - **[NIP-11](https://github.com/nostr-protocol/nips/blob/master/11.md)**: Relay Information Document
 
-#### Enhanced Features
+#### Authentication & Security
 
-- **[NIP-15](https://github.com/nostr-protocol/nips/blob/master/15.md)**: End of Stored Events Notice
+- **[NIP-42](https://github.com/nostr-protocol/nips/blob/master/42.md)**: Authentication of clients to relays
+- **[NIP-62](https://github.com/nostr-protocol/nips/blob/master/62.md)**: Request to Vanish
+- **[NIP-70](https://github.com/nostr-protocol/nips/blob/master/70.md)**: Protected Events
+
+#### Messaging & Social
+
+- **[NIP-15](https://github.com/nostr-protocol/nips/blob/master/15.md)**: Nostr Marketplace
 - **[NIP-16](https://github.com/nostr-protocol/nips/blob/master/16.md)**: Event Treatment
 - **[NIP-17](https://github.com/nostr-protocol/nips/blob/master/17.md)**: Private Direct Messages
 - **[NIP-20](https://github.com/nostr-protocol/nips/blob/master/20.md)**: Command Results
-- **[NIP-22](https://github.com/nostr-protocol/nips/blob/master/22.md)**: Event `created_at` Limits
+- **[NIP-22](https://github.com/nostr-protocol/nips/blob/master/22.md)**: Comment
 - **[NIP-23](https://github.com/nostr-protocol/nips/blob/master/23.md)**: Long-form Content
 - **[NIP-24](https://github.com/nostr-protocol/nips/blob/master/24.md)**: Extra metadata fields and tags
 - **[NIP-25](https://github.com/nostr-protocol/nips/blob/master/25.md)**: Reactions
-- **[NIP-26](https://github.com/nostr-protocol/nips/blob/master/26.md)**: Delegated Event Signing
-- **[NIP-47](https://github.com/nostr-protocol/nips/blob/master/47.md)**: Nostr Wallet Connect (NWC)
-
-#### Advanced Features
-
 - **[NIP-28](https://github.com/nostr-protocol/nips/blob/master/28.md)**: Public Chat
+- **[NIP-29](https://github.com/nostr-protocol/nips/blob/master/29.md)**: Relay-based Groups
+- **[NIP-30](https://github.com/nostr-protocol/nips/blob/master/30.md)**: Custom Emoji
 - **[NIP-33](https://github.com/nostr-protocol/nips/blob/master/33.md)**: Addressable Events
+- **[NIP-7D](https://github.com/nostr-protocol/nips/blob/master/7D.md)**: Threads
+- **[NIP-A4](https://github.com/nostr-protocol/nips/blob/master/A4.md)**: Public Messages
+- **[NIP-C7](https://github.com/nostr-protocol/nips/blob/master/C7.md)**: Chats
+
+#### Content & Media
+
+- **[NIP-32](https://github.com/nostr-protocol/nips/blob/master/32.md)**: Labeling
+- **[NIP-34](https://github.com/nostr-protocol/nips/blob/master/34.md)**: Git Stuff
+- **[NIP-35](https://github.com/nostr-protocol/nips/blob/master/35.md)**: Torrents
+- **[NIP-37](https://github.com/nostr-protocol/nips/blob/master/37.md)**: Draft Wraps
+- **[NIP-38](https://github.com/nostr-protocol/nips/blob/master/38.md)**: User Statuses
+- **[NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md)**: Wiki
+- **[NIP-71](https://github.com/nostr-protocol/nips/blob/master/71.md)**: Video Events
+- **[NIP-78](https://github.com/nostr-protocol/nips/blob/master/78.md)**: Application-specific data
+- **[NIP-84](https://github.com/nostr-protocol/nips/blob/master/84.md)**: Highlights
+- **[NIP-85](https://github.com/nostr-protocol/nips/blob/master/85.md)**: Trusted Assertions
+- **[NIP-89](https://github.com/nostr-protocol/nips/blob/master/89.md)**: Recommended Application Handlers
+- **[NIP-94](https://github.com/nostr-protocol/nips/blob/master/94.md)**: File Metadata
+- **[NIP-A0](https://github.com/nostr-protocol/nips/blob/master/A0.md)**: Voice Messages
+- **[NIP-B0](https://github.com/nostr-protocol/nips/blob/master/B0.md)**: Web Bookmarking
+- **[NIP-C0](https://github.com/nostr-protocol/nips/blob/master/C0.md)**: Code Snippets
+
+#### Events & Calendar
+
 - **[NIP-40](https://github.com/nostr-protocol/nips/blob/master/40.md)**: Expiration Timestamp
-- **[NIP-44](https://github.com/nostr-protocol/nips/blob/master/44.md)**: Encrypted Payloads (Versioned)
-- **[NIP-45](https://github.com/nostr-protocol/nips/blob/master/45.md)**: Counting Events
-- **[NIP-50](https://github.com/nostr-protocol/nips/blob/master/50.md)**: Search Capability
-- **[NIP-51](https://github.com/nostr-protocol/nips/blob/master/51.md)**: Lists
 - **[NIP-52](https://github.com/nostr-protocol/nips/blob/master/52.md)**: Calendar Events
 - **[NIP-53](https://github.com/nostr-protocol/nips/blob/master/53.md)**: Live Activities
-- **[NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md)**: Wiki
+
+#### Encryption & Privacy
+
+- **[NIP-44](https://github.com/nostr-protocol/nips/blob/master/44.md)**: Encrypted Payloads (Versioned)
+- **[NIP-59](https://github.com/nostr-protocol/nips/blob/master/59.md)**: Gift Wrap
+- **[NIP-EE](https://github.com/nickmessing/nips/blob/mls-protocol/EE.md)**: E2EE Messaging via MLS
+
+#### Financial & Commerce
+
+- **[NIP-47](https://github.com/nostr-protocol/nips/blob/master/47.md)**: Nostr Wallet Connect (NWC)
 - **[NIP-56](https://github.com/nostr-protocol/nips/blob/master/56.md)**: Reporting
 - **[NIP-57](https://github.com/nostr-protocol/nips/blob/master/57.md)**: Lightning Zaps
 - **[NIP-58](https://github.com/nostr-protocol/nips/blob/master/58.md)**: Badges
-- **[NIP-59](https://github.com/nostr-protocol/nips/blob/master/59.md)**: Gift Wrap
 - **[NIP-60](https://github.com/nostr-protocol/nips/blob/master/60.md)**: Cashu Wallets
-- **[NIP-61](https://github.com/nostr-protocol/nips/blob/master/61.md)**: Nutzaps (P2PK Cashu tokens)
+- **[NIP-61](https://github.com/nostr-protocol/nips/blob/master/61.md)**: Nutzaps
+- **[NIP-69](https://github.com/nostr-protocol/nips/blob/master/69.md)**: Peer-to-peer Order Events
+- **[NIP-75](https://github.com/nostr-protocol/nips/blob/master/75.md)**: Zap Goals
+- **[NIP-87](https://github.com/nostr-protocol/nips/blob/master/87.md)**: Ecash Mint Discoverability
+- **[NIP-88](https://github.com/nostr-protocol/nips/blob/master/88.md)**: Polls
+- **[NIP-99](https://github.com/nostr-protocol/nips/blob/master/99.md)**: Classified Listings
+
+#### Discovery & Infrastructure
+
+- **[NIP-45](https://github.com/nostr-protocol/nips/blob/master/45.md)**: Counting Events
+- **[NIP-50](https://github.com/nostr-protocol/nips/blob/master/50.md)**: Search Capability
+- **[NIP-51](https://github.com/nostr-protocol/nips/blob/master/51.md)**: Lists
 - **[NIP-65](https://github.com/nostr-protocol/nips/blob/master/65.md)**: Relay List Metadata
 - **[NIP-72](https://github.com/nostr-protocol/nips/blob/master/72.md)**: Moderated Communities
-- **[NIP-78](https://github.com/nostr-protocol/nips/blob/master/78.md)**: Application-specific data
+- **[NIP-90](https://github.com/nostr-protocol/nips/blob/master/90.md)**: Data Vending Machine
+
+#### Custom NIPs
+
+- **NIP-XX**: Time Capsules (kind 1041)
+- **NIP-YY**: Nostr Web Pages (kinds 1125, 1126, 31126, 11126)
 
 ### Protocol Features
 

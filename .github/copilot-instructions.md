@@ -92,7 +92,7 @@ git add -A && git commit -m "description" && git push
 | `relay/cmd/root.go` | CLI command setup |
 | `relay/internal/relay/plugin_validator.go` | **Central event validator** — `AllowedKinds` map, `RequiredTags` map, kind range checks (ephemeral 20000-29999, DVM 5000-6999, NIP-29 groups 9000-9030/39000-39003) |
 | `relay/internal/constants/relay_metadata.go` | **`DefaultSupportedNIPs`** list (displayed on homepage, advertised in NIP-11), `CustomNIP` structs, `DefaultRelayMetadata` |
-| `relay/internal/relay/connection.go` | WebSocket connection handler, message routing (EVENT, REQ, CLOSE, COUNT) |
+| `relay/internal/relay/connection.go` | WebSocket connection handler, message routing (EVENT, REQ, CLOSE, COUNT, AUTH), NIP-42 auth challenge/response, NIP-70 protected event enforcement |
 | `relay/internal/relay/subscription.go` | Subscription management, COUNT handling |
 | `relay/internal/relay/filter.go` | Filter validation, NIP-50 search support |
 
@@ -121,7 +121,8 @@ git add -A && git commit -m "description" && git push
 | `relay/internal/metrics/relay.go` | Prometheus metrics, atomic counters |
 | `relay/internal/application/node.go` | Application node, event processing |
 | `relay/internal/application/node_builder.go` | Node initialization |
-| `relay/internal/storage/` | CockroachDB storage layer |
+| `relay/internal/storage/queries.go` | CockroachDB queries — `persistDeletion` (NIP-09 with `e`+`a` tag support), `persistVanish` (NIP-62 full pubkey wipe), `IsVanishedPubkey` |
+| `relay/internal/storage/event_processor.go` | Event processing worker pool — `QueueEvent`, `QueueDeletion`, `QueueVanish`, `processEvents` switch (ephemeral→vanish→deletion→replaceable→addressable→default) |
 | `deploy/config.yaml` | Production relay config (contact, description, etc.) |
 
 ## Architecture Notes
@@ -131,6 +132,10 @@ git add -A && git commit -m "description" && git push
 - **RequiredTags**: Validation map in `plugin_validator.go` that enforces mandatory tags per event kind. Check actual NIP specs before adding — some specs have changed (e.g., NIP-78 needs `"d"` not `"p"`).
 - **Web templates are NOT embedded** in the binary. They are read from `/opt/relay/web/` on EC2 at runtime. This means template/CSS/JS changes don't require a rebuild, just file upload + restart.
 - **The `.first_boot` file** persists the relay's initial boot timestamp for the "live since" stat.
+- **NIP-42 AUTH flow**: On WebSocket connect, relay generates a 32-byte hex challenge and sends `["AUTH", challenge]`. Client responds with `["AUTH", signedEvent]` (kind 22242). Validated via `go-nostr/nip42.ValidateAuthEvent`. Authenticated pubkeys stored per-connection in `authedPubkeys` map. `relayURL` from `config.RelayConfig.PublicURL` (`wss://nostr.ltd`).
+- **NIP-70 Protected Events**: Events with `["-"]` tag are rejected with `auth-required` unless the author's pubkey is in the connection's `authedPubkeys`.
+- **NIP-62 Vanish pipeline**: Kind 62 → `IsVanishEvent` check in `event_processor.go` → `persistVanish` deletes ALL events from pubkey + gift-wrapped (kind 1059) events p-tagged to pubkey, then stores vanish request.
+- **NIP-09 Deletion**: `persistDeletion` supports both `"e"` tags (delete by event ID) and `"a"` tags (delete addressable events by `kind:pubkey:d-tag` up to `created_at`).
 
 ## Conventions
 

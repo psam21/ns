@@ -46,9 +46,11 @@ Nostr Clients (Damus, Amethyst, Primal, etc.)
 - **TLS:** Caddy with automatic Let's Encrypt
 - **Domain:** nostr.ltd (BigRock registrar)
 
-## Supported NIPs
+## Supported NIPs (62)
 
-NIP-01, 02, 03, 04, 09, 11, 15, 16, 17, 20, 22, 23, 24, 25, 28, 33, 40, 44, 45, 47, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 65, 72, 78
+01, 02, 03, 04, 09, 11, 15, 16, 17, 20, 22, 23, 24, 25, 28, 29, 30, 32, 33, 34, 35, 37, 38, 40, 42, 44, 45, 47, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 65, 69, 70, 71, 72, 75, 78, 84, 85, 87, 88, 89, 90, 94, 99, 7D, A0, A4, B0, C0, C7, EE
+
+Plus custom NIPs: XX (Time Capsules), YY (Nostr Web Pages)
 
 ## Blossom Media Server
 
@@ -121,5 +123,4 @@ sudo systemctl start blossom
 - All credentials injected via `EnvironmentFile=` in systemd (never in config files or git)
 - S3 access via dedicated IAM user with least-privilege policy
 - TLS termination at Caddy layer
-- systemd hardening: `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=true`
 - systemd hardening: `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=true`
