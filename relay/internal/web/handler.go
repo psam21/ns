@@ -173,6 +173,7 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 				"71": "Video Events",
 				"72": "Communities",
 				"75": "Zap Goals",
+				"77": "Negentropy Sync",
 				"78": "App-specific Data",
 				"84": "Highlights",
 				"85": "Trusted Assertions",

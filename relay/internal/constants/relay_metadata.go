@@ -68,6 +68,7 @@ var DefaultSupportedNIPs = []interface{}{
 	71, // NIP-71: Video Events
 	72, // NIP-72: Moderated Communities
 	75, // NIP-75: Zap Goals
+	77, // NIP-77: Negentropy Syncing
 	78, // NIP-78: Application-specific data
 	84, // NIP-84: Highlights
 	85, // NIP-85: Trusted Assertions

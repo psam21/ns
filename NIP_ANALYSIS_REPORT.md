@@ -1,7 +1,7 @@
 # Shugur Relay — Pending NIP Items
 
 **Updated:** 2026-02-13  
-**Current NIP count:** 60 (53 numeric + 7 string)
+**Current NIP count:** 61 (54 numeric + 7 string)
 
 ---
 
@@ -31,10 +31,10 @@ Added kinds 16, 34236, 1244, 30403, 10063. Added NIP-18 and NIP-B7 to supported 
 
 ### 🔴 HIGH PRIORITY
 
-#### NIP-77 — Negentropy Syncing
-- Efficient relay-relay and client-relay syncing via set reconciliation
-- Implement `NEG-OPEN`, `NEG-MSG`, `NEG-CLOSE`, `NEG-ERR` protocol messages
-- No new event kinds
+#### ~~NIP-77 — Negentropy Syncing~~ ✅ DONE
+- Implemented NEG-OPEN, NEG-MSG, NEG-CLOSE, NEG-ERR handlers
+- Uses go-nostr's built-in negentropy library for set reconciliation
+- Per-connection session management with limits (5 concurrent, 500K records, 2min timeout)
 
 #### NIP-86 — Relay Management API
 - Standardized admin API (ban/allow pubkeys, list banned, etc.)

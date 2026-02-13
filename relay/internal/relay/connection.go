@@ -250,6 +250,9 @@ type WsConnection struct {
 	authedPubkeys  map[string]bool
 	authMu         sync.RWMutex
 	relayURL       string
+
+	// NIP-77 Negentropy Syncing
+	negSessions *negSessions
 }
 
 // Ensure WsConnection implements domain.WebSocketConnection
@@ -290,6 +293,7 @@ func NewWsConnection(
 		eventCancel: eventCancel,
 		// NIP-42 AUTH
 		authedPubkeys: make(map[string]bool),
+		negSessions:   newNegSessions(),
 		relayURL:      cfg.PublicURL,
 	}
 
@@ -624,6 +628,12 @@ func (c *WsConnection) HandleMessages(ctx context.Context, cfg config.RelayConfi
 			c.handleClose(arr)
 		case "AUTH":
 			c.handleAuth(arr)
+		case "NEG-OPEN":
+			c.handleNegOpen(ctx, arr)
+		case "NEG-MSG":
+			c.handleNegMsg(arr)
+		case "NEG-CLOSE":
+			c.handleNegClose(arr)
 		default:
 			c.sendNotice("invalid: unknown command '" + cmdType + "'")
 		}
@@ -779,6 +789,11 @@ func (c *WsConnection) Close() {
 		oldSubs := len(c.subscriptions)
 		c.subscriptions = make(map[string][]nostr.Filter)
 		c.subMu.Unlock()
+
+		// Clean up NIP-77 negentropy sessions
+		if c.negSessions != nil {
+			c.negSessions.closeAll()
+		}
 
 		// Update metrics - only decrement once
 		if !c.metricsDecremented.Swap(true) {

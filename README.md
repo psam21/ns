@@ -46,9 +46,9 @@ Nostr Clients (Damus, Amethyst, Primal, etc.)
 - **TLS:** Caddy with automatic Let's Encrypt
 - **Domain:** nostr.ltd (BigRock registrar)
 
-## Supported NIPs (60)
+## Supported NIPs (61)
 
-01, 02, 03, 09, 11, 13, 15, 17, 18, 22, 23, 24, 25, 28, 29, 30, 32, 34, 35, 37, 38, 40, 42, 44, 45, 47, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 65, 69, 70, 71, 72, 75, 78, 84, 85, 87, 88, 89, 90, 94, 99, 7D, A0, A4, B0, B7, C0, C7
+01, 02, 03, 09, 11, 13, 15, 17, 18, 22, 23, 24, 25, 28, 29, 30, 32, 34, 35, 37, 38, 40, 42, 44, 45, 47, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 65, 69, 70, 71, 72, 75, 77, 78, 84, 85, 87, 88, 89, 90, 94, 99, 7D, A0, A4, B0, B7, C0, C7
 
 Plus custom NIPs: XX (Time Capsules), YY (Nostr Web Pages)
 
