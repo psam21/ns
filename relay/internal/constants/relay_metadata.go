@@ -90,6 +90,7 @@ var DefaultSupportedNIPs = []interface{}{
 	"C0", // NIP-C0: Code Snippets
 	"C7", // NIP-C7: Chats
 	"B7", // NIP-B7: Blossom Server List
+	"EE", // NIP-EE: MLS E2EE Messaging
 }
 
 // CustomNIP represents a custom NIP implementation

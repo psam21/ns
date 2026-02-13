@@ -105,7 +105,7 @@ Learn more in our [Nostr Concepts](https://docs.shugur.com/concepts/) documentat
 
 ## 📋 Nostr Protocol Support
 
-### Supported NIPs — 66 (Nostr Improvement Proposals)
+### Supported NIPs — 67 (Nostr Improvement Proposals)
 
 Shugur Relay implements the following NIPs for maximum compatibility with Nostr clients:
 
@@ -201,6 +201,7 @@ Shugur Relay implements the following NIPs for maximum compatibility with Nostr 
 - **[NIP-77](https://github.com/nostr-protocol/nips/blob/master/77.md)**: Negentropy Syncing
 - **[NIP-90](https://github.com/nostr-protocol/nips/blob/master/90.md)**: Data Vending Machine
 - **[NIP-B7](https://github.com/nostr-protocol/nips/blob/master/B7.md)**: Blossom Server List
+- **[NIP-EE](https://github.com/nostr-protocol/nips/blob/master/EE.md)**: MLS E2EE Messaging
 
 #### Custom NIPs
 

@@ -150,8 +150,8 @@ git add -A && git commit -m "description" && git push
 - The `temp/` directory is gitignored (used for scratch work like cloning NIP specs)
 - Contact: `epochshield@proton.me`
 
-## Current NIP Support (66 NIPs)
+## Current NIP Support (67 NIPs)
 
-01, 02, 03, 09, 11, 13, 15, 17, 18, 22, 23, 24, 25, 28, 29, 30, 32, 34, 35, 37, 38, 39, 40, 42, 43, 44, 45, 47, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 64, 65, 66, 69, 70, 71, 72, 75, 77, 78, 84, 85, 86, 87, 88, 89, 90, 94, 99, 7D, A0, A4, B0, B7, C0, C7
+01, 02, 03, 09, 11, 13, 15, 17, 18, 22, 23, 24, 25, 28, 29, 30, 32, 34, 35, 37, 38, 39, 40, 42, 43, 44, 45, 47, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 64, 65, 66, 69, 70, 71, 72, 75, 77, 78, 84, 85, 86, 87, 88, 89, 90, 94, 99, 7D, A0, A4, B0, B7, C0, C7, EE
 
 Plus custom NIPs: XX (Time Capsules), YY (Nostr Web Pages)
