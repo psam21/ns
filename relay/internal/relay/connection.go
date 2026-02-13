@@ -1026,3 +1026,20 @@ func (c *WsConnection) isAuthenticated(pubkey string) bool {
 	defer c.authMu.RUnlock()
 	return c.authedPubkeys[pubkey]
 }
+
+// hasAuthentication checks if any pubkey has been authenticated on this connection
+func (c *WsConnection) hasAuthentication() bool {
+	c.authMu.RLock()
+	defer c.authMu.RUnlock()
+	return len(c.authedPubkeys) > 0
+}
+
+// getAuthenticatedPubkey returns the first authenticated pubkey on this connection, or empty string
+func (c *WsConnection) getAuthenticatedPubkey() string {
+	c.authMu.RLock()
+	defer c.authMu.RUnlock()
+	for pk := range c.authedPubkeys {
+		return pk
+	}
+	return ""
+}

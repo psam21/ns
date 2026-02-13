@@ -9,8 +9,7 @@
 
 ### ~~NIP-11 — Relay Information Document~~ ✅ DONE\n- Banner already supported. Added `posting_policy` and `relay_countries` config fields.\n- `self` field and `privacy_policy`/`terms_of_service` not in go-nostr NIP-11 struct — skip until upstream adds them.
 
-### NIP-17 — Private Direct Messages
-- Enforce AUTH (NIP-42) for querying kind 14/15 and gift-wrapped events to prevent leaking to non-recipients
+### ~~NIP-17 — Private Direct Messages~~ ✅ DONE\n- Requires NIP-42 AUTH for querying kinds 4, 14, 15, 1059 (gift wrap)\n- Only sends DM/gift-wrap events to the authenticated user (author or p-tagged recipient)
 
 ### ~~NIP-40 — Expiration Timestamp~~ ✅ ALREADY IMPLEMENTED\n- Ingestion rejection in `plugin_validator.go` (rejects expired events)\n- Periodic purge via `StartExpiredEventsCleaner` (hourly) in `node_builder.go`
 

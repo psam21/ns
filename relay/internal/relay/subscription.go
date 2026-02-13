@@ -99,6 +99,21 @@ func (c *WsConnection) handleRequest(ctx context.Context, arr []interface{}) {
 		}
 	}
 
+	// NIP-17: Require AUTH for DM and gift-wrap queries to prevent leaking to non-recipients
+	if len(f.Kinds) > 0 {
+		requiresAuth := false
+		for _, k := range f.Kinds {
+			if k == 4 || k == 14 || k == 15 || k == 1059 {
+				requiresAuth = true
+				break
+			}
+		}
+		if requiresAuth && !c.hasAuthentication() {
+			c.sendClosed(subID, "auth-required: this query requires authentication")
+			return
+		}
+	}
+
 	// Store subscription
 	c.addSubscription(subID, []nostr.Filter{f})
 
@@ -164,11 +179,15 @@ func (c *WsConnection) processSubscription(ctx context.Context, subID string, f 
 			return
 		}
 
-		// For DMs, check if client is authorized
-		// Note: Gift wrap events (1059) are excluded as they handle access control via encryption
-		if evt.Kind == 4 || evt.Kind == 14 || evt.Kind == 15 {
-			if !isAuthorizedForDM(&evt, c.getSubscriptionFilters(subID)) {
-				continue // Skip sending this event
+		// For DMs and gift wrap, only send events the authenticated user is party to
+		if evt.Kind == 4 || evt.Kind == 14 || evt.Kind == 15 || evt.Kind == 1059 {
+			authedPK := c.getAuthenticatedPubkey()
+			if authedPK == "" {
+				continue // Not authenticated, skip
+			}
+			// Check if the authed user is the author or a recipient
+			if evt.PubKey != authedPK && !eventHasPTag(&evt, authedPK) {
+				continue // Not their event, skip
 			}
 		}
 
@@ -222,6 +241,16 @@ func isAuthorizedForDM(evt *nostr.Event, filters []nostr.Filter) bool {
 					return true
 				}
 			}
+		}
+	}
+	return false
+}
+
+// eventHasPTag checks if an event has a "p" tag with the given pubkey
+func eventHasPTag(evt *nostr.Event, pubkey string) bool {
+	for _, tag := range evt.Tags {
+		if len(tag) >= 2 && tag[0] == "p" && tag[1] == pubkey {
+			return true
 		}
 	}
 	return false
