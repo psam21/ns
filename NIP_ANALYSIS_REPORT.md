@@ -12,8 +12,7 @@
 ### NIP-17 — Private Direct Messages
 - Enforce AUTH (NIP-42) for querying kind 14/15 and gift-wrapped events to prevent leaking to non-recipients
 
-### NIP-40 — Expiration Timestamp
-- Verify relay rejects expired events on ingestion and periodically purges expired events from storage
+### ~~NIP-40 — Expiration Timestamp~~ ✅ ALREADY IMPLEMENTED\n- Ingestion rejection in `plugin_validator.go` (rejects expired events)\n- Periodic purge via `StartExpiredEventsCleaner` (hourly) in `node_builder.go`
 
 ### NIP-45 — Event Counts
 - Add HyperLogLog (`hll`) field support for merging counts across relays (latest spec addition)
