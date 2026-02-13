@@ -39,7 +39,14 @@ var DefaultSupportedNIPs = []interface{}{
 	24, // NIP-24: Extra metadata fields and tags
 	25, // NIP-25: Reactions
 	28, // NIP-28: Public Chat
+	29, // NIP-29: Relay-based Groups
+	30, // NIP-30: Custom Emoji
+	32, // NIP-32: Labeling
 	33, // NIP-33: Addressable Events
+	34, // NIP-34: Git Stuff
+	35, // NIP-35: Torrents
+	37, // NIP-37: Draft Wraps
+	38, // NIP-38: User Statuses
 	40, // NIP-40: Expiration Timestamp
 	44, // NIP-44: Encrypted Payloads (Versioned)
 	45, // NIP-45: Counting Events
@@ -54,9 +61,28 @@ var DefaultSupportedNIPs = []interface{}{
 	58, // NIP-58: Badges
 	59, // NIP-59: Gift Wrap
 	60, // NIP-60: Cashu Wallets
+	61, // NIP-61: Nutzaps
+	62, // NIP-62: Request to Vanish
 	65, // NIP-65: Relay List Metadata
-	72,   // NIP-72: Moderated Communities
-	78,   // NIP-78: Application-specific data
+	69, // NIP-69: Peer-to-peer Order Events
+	71, // NIP-71: Video Events
+	72, // NIP-72: Moderated Communities
+	75, // NIP-75: Zap Goals
+	78, // NIP-78: Application-specific data
+	84, // NIP-84: Highlights
+	85, // NIP-85: Trusted Assertions
+	87, // NIP-87: Ecash Mint Discoverability
+	88, // NIP-88: Polls
+	89, // NIP-89: Recommended Application Handlers
+	90, // NIP-90: Data Vending Machine
+	94, // NIP-94: File Metadata
+	99, // NIP-99: Classified Listings
+	"7D", // NIP-7D: Threads
+	"A0", // NIP-A0: Voice Messages
+	"A4", // NIP-A4: Public Messages
+	"B0", // NIP-B0: Web Bookmarking
+	"C0", // NIP-C0: Code Snippets
+	"C7", // NIP-C7: Chats
 	"EE", // NIP-EE: E2EE Messaging via MLS (kinds 443, 444, 445, 10051)
 }
 

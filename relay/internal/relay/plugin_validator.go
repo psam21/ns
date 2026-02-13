@@ -65,14 +65,19 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 		MaxMetadataLength: 10000,
 		AllowedKinds: map[int]bool{
 			0: true, 1: true, 2: true, 3: true, 4: true, 5: true,
-			6: true, 7: true, 40: true, 41: true, 42: true, 43: true, 44: true,
+			6: true, 7: true, 9: true, 11: true, 20: true, 21: true, 24: true,
+			40: true, 41: true, 42: true, 43: true, 44: true, 62: true,
 			14: true, 15: true, 1059: true, 10050: true,
-			1984: true, 9734: true, 9735: true, 10002: true, 30023: true, 31989: true,
+			1984: true, 1985: true, 9734: true, 9735: true, 10002: true,
+			30023: true, 30024: true, // NIP-23: Long-form Content + Drafts
+			31989: true, 31990: true, // NIP-89: App Handlers
 			1111: true, // NIP-22: Comment
+			// NIP-C7 Chats (kind 9), NIP-7D Threads (kind 11), NIP-A4 Public Messages (kind 24)
+			// NIP-68 Picture-first (kind 20), NIP-71 Video (kind 21), NIP-62 Vanish (kind 62)
+			// NIP-32 Labeling (kind 1985)
 			// NIP-20 Command Results
 			24133: true,
-			// NIP-16 Ephemeral Events (20000-29999)
-			20000: true, 20001: true, // Test ephemeral kinds
+			// NIP-16 Ephemeral Events (20000-29999) — range-allowed in validator
 			// NIP-33 Addressable Events
 			30000: true, 30001: true, 30002: true, 30003: true,
 			// NIP-51 Lists - Standard Lists
@@ -111,10 +116,22 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			8:     true, // NIP-58: Badge Award
 			1040:  true, // NIP-03 OpenTimestamps attestation
 			1041:  true, // NIP-XX Time-Lock Encrypted Messages
-			13194: true, // NIP-59 Wallet Connect events
+			1063:  true, // NIP-94: File Metadata
+			1222:  true, // NIP-A0: Voice Messages
+			1337:  true, // NIP-C0: Code Snippets
+			2003:  true, // NIP-35: Torrents
+			1018:  true, // NIP-88: Polls (response)
+			1068:  true, // NIP-88: Polls (poll event)
+			9041:  true, // NIP-75: Zap Goals
+			9802:  true, // NIP-84: Highlights
+			13194: true, // NIP-47: Wallet Connect info
 			30008: true, // NIP-58: Profile Badges
 			30009: true, // NIP-58: Badge Definition
 			30078: true, // NIP-78 Application-specific Data
+			30315: true, // NIP-38: User Statuses
+			30382: true, // NIP-85: Trusted Assertions
+			10040: true, // NIP-85: Trusted Assertion Delegation
+			30402: true, // NIP-99: Classified Listings
 			// NIP-52 Calendar Events
 			31922: true, // Date-based Calendar Event
 			31923: true, // Time-based Calendar Event  
@@ -138,6 +155,28 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			// NIP-61 Nutzaps
 			9321:  true, // Nutzap event  
 			10019: true, // Nutzap info event
+			// NIP-34 Git Stuff
+			1617:  true, // Patches
+			1618:  true, // Pull Requests
+			1619:  true, // Issues
+			1621:  true, // Comments on Git
+			1630:  true, 1631: true, 1632: true, 1633: true, // Patch status
+			10317: true, // Repository state
+			30617: true, // Repository
+			30618: true, // Repository announcements
+			// NIP-37 Draft Wraps
+			31234: true, // Draft event
+			10013: true, // Draft list
+			// NIP-71 Video Events
+			34235: true, // Video event
+			// NIP-87 Ecash Mint Discoverability
+			38000: true, // Mint recommendation
+			38172: true, // Mint trust
+			38173: true, // Mint trust revocation
+			// NIP-69 P2P Order Events
+			38383: true, // P2P Order
+			// NIP-B0 Web Bookmarking
+			39701: true, // Web Bookmark
 			// NIP-72 Moderated Communities
 			34550: true, // Community Definition
 			4550:  true, // Moderation Approval
@@ -182,7 +221,7 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			1022:  {"e"},      // Bid confirmation events require "e" tag
 			1040:  {"e"},      // OpenTimestamps attestation requires "e" tag
 			1041:  {"tlock"},  // NIP-XX Time capsule requires "tlock" tag
-			30078: {"p"},      // NIP-78: Application-specific Data requires "p" tag
+			30078: {"d"},      // NIP-78: Application-specific Data requires "d" tag
 			// NIP-52 Calendar Events
 			31922: {"d", "title", "start"}, // Date-based Calendar Event requires "d", "title", and "start" tags
 			31923: {"d", "title", "start"}, // Time-based Calendar Event requires "d", "title", and "start" tags
@@ -252,6 +291,18 @@ func (pv *PluginValidator) ValidateEvent(ctx context.Context, event nostr.Event)
 		// Check if it's an ephemeral event (20000-29999) - these should be allowed per NIP-16
 		if event.Kind >= 20000 && event.Kind < 30000 {
 			// Ephemeral events are allowed but not stored
+		} else if event.Kind >= 5000 && event.Kind <= 5999 {
+			// NIP-90 DVM job requests
+		} else if event.Kind >= 6000 && event.Kind <= 6999 {
+			// NIP-90 DVM job results
+		} else if event.Kind == 7000 {
+			// NIP-90 DVM job feedback
+		} else if event.Kind >= 9000 && event.Kind <= 9030 {
+			// NIP-29 Relay-based Groups moderation events
+		} else if event.Kind == 9021 || event.Kind == 9022 {
+			// NIP-29 join/leave requests
+		} else if event.Kind >= 39000 && event.Kind <= 39003 {
+			// NIP-29 group metadata events
 		} else {
 			return false, fmt.Sprintf("unsupported event kind: %d", event.Kind)
 		}
