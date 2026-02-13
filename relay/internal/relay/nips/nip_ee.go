@@ -49,19 +49,19 @@ func ValidateKeyPackageEvent(evt *nostr.Event) error {
 		return fmt.Errorf("KeyPackage event must have 'mls_protocol_version' tag")
 	}
 
-	// Must have ciphersuite tag
+	// Must have mls_ciphersuite tag
 	hasCiphersuite := false
 	for _, tag := range evt.Tags {
-		if len(tag) >= 2 && tag[0] == "ciphersuite" {
+		if len(tag) >= 2 && tag[0] == "mls_ciphersuite" {
 			hasCiphersuite = true
 			if tag[1] == "" {
-				return fmt.Errorf("ciphersuite tag must have a value")
+				return fmt.Errorf("mls_ciphersuite tag must have a value")
 			}
 			break
 		}
 	}
 	if !hasCiphersuite {
-		return fmt.Errorf("KeyPackage event must have 'ciphersuite' tag")
+		return fmt.Errorf("KeyPackage event must have 'mls_ciphersuite' tag")
 	}
 
 	// Must have relays tag

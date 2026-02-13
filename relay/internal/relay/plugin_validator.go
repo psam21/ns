@@ -204,7 +204,7 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			34550: {"d"},           // Community Definition requires "d" tag
 			4550:  {"a", "p", "k"}, // Moderation Approval requires community, author, and kind tags (e tag only for non-replaceable events)
 			// NIP-EE MLS E2EE Messaging
-			443:   {"mls_protocol_version", "ciphersuite"}, // KeyPackage requires protocol version and ciphersuite
+			443:   {"mls_protocol_version", "mls_ciphersuite"}, // KeyPackage requires protocol version and ciphersuite
 			445:   {"h"},            // Group Event requires "h" tag (group ID)
 			10051: {"relay"},        // KeyPackage Relays List requires at least one "relay" tag
 			// NIP-YY Nostr Web Pages
