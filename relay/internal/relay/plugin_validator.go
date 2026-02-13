@@ -65,7 +65,7 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 		MaxMetadataLength: 10000,
 		AllowedKinds: map[int]bool{
 			0: true, 1: true, 2: true, 3: true, 4: true, 5: true,
-			6: true, 7: true, 9: true, 11: true, 20: true, 21: true, 24: true,
+			6: true, 7: true, 9: true, 11: true, 16: true, 20: true, 21: true, 24: true,
 			40: true, 41: true, 42: true, 43: true, 44: true, 62: true,
 			14: true, 15: true, 1059: true, 10050: true,
 			1984: true, 1985: true, 9734: true, 9735: true, 10002: true,
@@ -118,6 +118,7 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			1041:  true, // NIP-XX Time-Lock Encrypted Messages
 			1063:  true, // NIP-94: File Metadata
 			1222:  true, // NIP-A0: Voice Messages
+			1244:  true, // NIP-A0: Voice Reply
 			1337:  true, // NIP-C0: Code Snippets
 			2003:  true, // NIP-35: Torrents
 			1018:  true, // NIP-88: Polls (response)
@@ -132,6 +133,7 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			30382: true, // NIP-85: Trusted Assertions
 			10040: true, // NIP-85: Trusted Assertion Delegation
 			30402: true, // NIP-99: Classified Listings
+			30403: true, // NIP-99: Draft Classified Listing
 			// NIP-52 Calendar Events
 			31922: true, // Date-based Calendar Event
 			31923: true, // Time-based Calendar Event  
@@ -169,6 +171,7 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			10013: true, // Draft list
 			// NIP-71 Video Events
 			34235: true, // Video event
+			34236: true, // Short-form vertical video
 			// NIP-87 Ecash Mint Discoverability
 			38000: true, // Mint recommendation
 			38172: true, // Mint trust
@@ -177,6 +180,8 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			38383: true, // P2P Order
 			// NIP-B0 Web Bookmarking
 			39701: true, // Web Bookmark
+			// NIP-B7 Blossom Server List
+			10063: true, // User Blossom Server List
 			// NIP-72 Moderated Communities
 			34550: true, // Community Definition
 			4550:  true, // Moderation Approval

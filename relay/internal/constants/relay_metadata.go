@@ -31,6 +31,7 @@ var DefaultSupportedNIPs = []interface{}{
 	11, // NIP-11: Relay Information Document
 	15, // NIP-15: Nostr Marketplace (for resilient marketplaces)
 	17, // NIP-17: Private Direct Messages
+	18, // NIP-18: Reposts
 	22, // NIP-22: Comment
 	23, // NIP-23: Long-form Content
 	24, // NIP-24: Extra metadata fields and tags
@@ -81,6 +82,7 @@ var DefaultSupportedNIPs = []interface{}{
 	"B0", // NIP-B0: Web Bookmarking
 	"C0", // NIP-C0: Code Snippets
 	"C7", // NIP-C7: Chats
+	"B7", // NIP-B7: Blossom Server List
 }
 
 // CustomNIP represents a custom NIP implementation
