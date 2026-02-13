@@ -7,9 +7,7 @@
 
 ## Compliance Improvements for Claimed NIPs
 
-### NIP-11 — Relay Information Document
-- Add optional fields: `self` (relay's own pubkey), `banner`, `privacy_policy`, `terms_of_service`
-- The `self` field is needed for NIP-29 groups and NIP-43 relay access
+### ~~NIP-11 — Relay Information Document~~ ✅ DONE\n- Banner already supported. Added `posting_policy` and `relay_countries` config fields.\n- `self` field and `privacy_policy`/`terms_of_service` not in go-nostr NIP-11 struct — skip until upstream adds them.
 
 ### NIP-17 — Private Direct Messages
 - Enforce AUTH (NIP-42) for querying kind 14/15 and gift-wrapped events to prevent leaking to non-recipients

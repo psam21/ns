@@ -23,6 +23,8 @@ RELAY:
   PUBLIC_KEY: ""                 # Relay public key (64-char hex string, leave empty to auto-generate)
   ICON: "https://github.com/Shugur-Network/relay/raw/main/logo.png" # Relay icon URL (shown in NIP-11)
   BANNER: "https://github.com/Shugur-Network/relay/raw/main/banner.png" # Relay banner URL (optional, shown in NIP-11)
+  POSTING_POLICY: ""             # URL to relay's posting policy (optional, shown in NIP-11)
+  RELAY_COUNTRIES: []            # ISO 3166-1 country codes where relay is hosted (optional, shown in NIP-11)
   WS_ADDR: ":8080"              # WebSocket listening address
   PUBLIC_URL: "wss://relay.shugur.net" # Public URL (optional)
   EVENT_CACHE_SIZE: 10000        # Event cache size

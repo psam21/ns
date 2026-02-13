@@ -196,6 +196,12 @@ func DefaultRelayMetadata(cfg *config.Config) nip11.RelayInformationDocument {
 	// Use relay banner from config if provided
 	relayBanner := cfg.Relay.Banner
 
+	// Use relay posting policy from config if provided
+	relayPostingPolicy := cfg.Relay.PostingPolicy
+
+	// Use relay countries from config if provided
+	relayCountries := cfg.Relay.RelayCountries
+
 	// Use actual configuration values for limitations where available, fallback to constants
 	maxContentLength := cfg.Relay.ThrottlingConfig.MaxContentLen
 	if maxContentLength == 0 {
@@ -211,7 +217,9 @@ func DefaultRelayMetadata(cfg *config.Config) nip11.RelayInformationDocument {
 		Software:      DefaultRelaySoftware,
 		Version:       config.Version,
 		Icon:          relayIcon,
-		Banner:        relayBanner,
+		Banner:         relayBanner,
+		PostingPolicy:  relayPostingPolicy,
+		RelayCountries: relayCountries,
 		Limitation: &nip11.RelayLimitationDocument{
 			MaxMessageLength: maxContentLength, // Use actual configured content length
 			MaxSubscriptions: MaxSubscriptions, // Use constant (configurable via config if needed)

@@ -10,6 +10,8 @@ type RelayConfig struct {
 	PublicKey        string           `mapstructure:"PUBLIC_KEY"        json:"public_key"        validate:"omitempty,pubkey"`
 	Icon             string           `mapstructure:"ICON"              json:"icon"              validate:"omitempty,url"`
 	Banner           string           `mapstructure:"BANNER"            json:"banner"            validate:"omitempty,url"`
+	PostingPolicy    string           `mapstructure:"POSTING_POLICY"    json:"posting_policy"    validate:"omitempty,url"`
+	RelayCountries   []string         `mapstructure:"RELAY_COUNTRIES"   json:"relay_countries"`
 	WSAddr           string           `mapstructure:"WS_ADDR"           json:"ws_addr"           validate:"required,wsaddr"`
 	PublicURL        string           `mapstructure:"PUBLIC_URL"        json:"public_url"        validate:"omitempty,url"`
 	IdleTimeout      time.Duration    `mapstructure:"IDLE_TIMEOUT"      json:"idle_timeout"      validate:"required,reasonable_duration"`
