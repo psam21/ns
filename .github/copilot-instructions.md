@@ -103,10 +103,11 @@ git add -A && git commit -m "description" && git push
 | `relay/internal/relay/nips/nip42.go` | NIP-42: AUTH challenge/validate, NIP-70: IsProtectedEvent |
 | `relay/internal/relay/nips/nip62.go` | NIP-62: Request to Vanish validation |
 | `relay/internal/relay/nips/nip_ee.go` | NIP-EE: MLS E2EE validators (kinds 443, 444, 445, 10051) |
-| `relay/internal/relay/nips/nip45.go` | NIP-45: COUNT request handling |
+| `relay/internal/relay/nips/nip45.go` | NIP-45: COUNT request handling with HyperLogLog support |
 | `relay/internal/relay/nip77.go` | NIP-77: Negentropy syncing (NEG-OPEN/MSG/CLOSE/ERR) |
 | `relay/internal/relay/nip86.go` | NIP-86: Relay Management API (JSON-RPC, NIP-98 auth, 18 methods) |
 | `relay/internal/relay/nip29.go` | NIP-29: Relay-based Groups (group store, membership, moderation, relay-signed metadata) |
+| `relay/internal/relay/nip43.go` | NIP-43: Relay Access Metadata (membership store, invite codes, join/leave flow) |
 
 ### Web / Dashboard
 
@@ -148,13 +149,8 @@ git add -A && git commit -m "description" && git push
 - The `temp/` directory is gitignored (used for scratch work like cloning NIP specs)
 - Contact: `epochshield@proton.me`
 
-## Current NIP Support (62 NIPs)
+## Current NIP Support (66 NIPs)
 
-01, 02, 03, 09, 11, 13, 15, 17, 18, 22, 23, 24, 25, 28, 29, 30, 32, 34, 35, 37, 38, 40, 42, 44, 45, 47, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 65, 69, 70, 71, 72, 75, 77, 78, 84, 85, 86, 87, 88, 89, 90, 94, 99, 7D, A0, A4, B0, B7, C0, C7
+01, 02, 03, 09, 11, 13, 15, 17, 18, 22, 23, 24, 25, 28, 29, 30, 32, 34, 35, 37, 38, 39, 40, 42, 43, 44, 45, 47, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 64, 65, 66, 69, 70, 71, 72, 75, 77, 78, 84, 85, 86, 87, 88, 89, 90, 94, 99, 7D, A0, A4, B0, B7, C0, C7
 
 Plus custom NIPs: XX (Time Capsules), YY (Nostr Web Pages)
-
-## Future Work (requires deeper protocol implementation)
-
-- **NIP-43** (Relay Access Metadata) — complex relay integration with relay-published membership events
-- **NIP-66** (Relay Discovery and Liveness Monitoring) — kinds 30166, 10166

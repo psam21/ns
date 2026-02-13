@@ -105,7 +105,7 @@ Learn more in our [Nostr Concepts](https://docs.shugur.com/concepts/) documentat
 
 ## 📋 Nostr Protocol Support
 
-### Supported NIPs — 62 (Nostr Improvement Proposals)
+### Supported NIPs — 66 (Nostr Improvement Proposals)
 
 Shugur Relay implements the following NIPs for maximum compatibility with Nostr clients:
 
@@ -121,6 +121,7 @@ Shugur Relay implements the following NIPs for maximum compatibility with Nostr 
 #### Authentication & Security
 
 - **[NIP-42](https://github.com/nostr-protocol/nips/blob/master/42.md)**: Authentication of clients to relays
+- **[NIP-43](https://github.com/nostr-protocol/nips/blob/master/43.md)**: Relay Access Metadata and Requests
 - **[NIP-62](https://github.com/nostr-protocol/nips/blob/master/62.md)**: Request to Vanish
 - **[NIP-70](https://github.com/nostr-protocol/nips/blob/master/70.md)**: Protected Events
 - **[NIP-86](https://github.com/nostr-protocol/nips/blob/master/86.md)**: Relay Management API
@@ -148,6 +149,7 @@ Shugur Relay implements the following NIPs for maximum compatibility with Nostr 
 - **[NIP-35](https://github.com/nostr-protocol/nips/blob/master/35.md)**: Torrents
 - **[NIP-37](https://github.com/nostr-protocol/nips/blob/master/37.md)**: Draft Wraps
 - **[NIP-38](https://github.com/nostr-protocol/nips/blob/master/38.md)**: User Statuses
+- **[NIP-39](https://github.com/nostr-protocol/nips/blob/master/39.md)**: External Identities in Profiles
 - **[NIP-54](https://github.com/nostr-protocol/nips/blob/master/54.md)**: Wiki
 - **[NIP-71](https://github.com/nostr-protocol/nips/blob/master/71.md)**: Video Events
 - **[NIP-78](https://github.com/nostr-protocol/nips/blob/master/78.md)**: Application-specific data
@@ -158,6 +160,10 @@ Shugur Relay implements the following NIPs for maximum compatibility with Nostr 
 - **[NIP-A0](https://github.com/nostr-protocol/nips/blob/master/A0.md)**: Voice Messages
 - **[NIP-B0](https://github.com/nostr-protocol/nips/blob/master/B0.md)**: Web Bookmarking
 - **[NIP-C0](https://github.com/nostr-protocol/nips/blob/master/C0.md)**: Code Snippets
+
+#### Games
+
+- **[NIP-64](https://github.com/nostr-protocol/nips/blob/master/64.md)**: Chess (PGN)
 
 #### Events & Calendar
 
@@ -190,6 +196,7 @@ Shugur Relay implements the following NIPs for maximum compatibility with Nostr 
 - **[NIP-50](https://github.com/nostr-protocol/nips/blob/master/50.md)**: Search Capability
 - **[NIP-51](https://github.com/nostr-protocol/nips/blob/master/51.md)**: Lists
 - **[NIP-65](https://github.com/nostr-protocol/nips/blob/master/65.md)**: Relay List Metadata
+- **[NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md)**: Relay Discovery and Liveness Monitoring
 - **[NIP-72](https://github.com/nostr-protocol/nips/blob/master/72.md)**: Moderated Communities
 - **[NIP-77](https://github.com/nostr-protocol/nips/blob/master/77.md)**: Negentropy Syncing
 - **[NIP-90](https://github.com/nostr-protocol/nips/blob/master/90.md)**: Data Vending Machine
