@@ -50,10 +50,12 @@ Added kinds 16, 34236, 1244, 30403, 10063. Added NIP-18 and NIP-B7 to supported 
 - Configurable `MIN_POW_DIFFICULTY` in config (default 0 = no requirement)
 - Advertised in NIP-11 `min_pow_difficulty` field
 
-#### NIP-29 — Relay-based Groups
-- Full relay-managed group system (complex)
-- Kinds: `9000`–`9009`, `9021`, `9022`, `39000`–`39003`
-- Requires relay keypair (`self` in NIP-11), membership enforcement, moderation events
+#### ~~NIP-29 — Relay-based Groups~~ ✅ DONE
+- Full in-memory group store with membership, admin roles, and metadata
+- Moderation events (9000-9009): create group, put/remove user, edit metadata, delete, invites
+- Join/leave requests (9021/9022) with invite code support
+- Relay-signed metadata events (39000-39003): metadata, admins, members, roles
+- Relay secp256k1 keypair for signing (PRIVATE_KEY config, auto-generated if empty)
 
 #### NIP-43 — Relay Access Metadata and Requests
 - Kinds: `13534`, `8000`, `8001`, `28934`, `10010`

@@ -106,6 +106,7 @@ git add -A && git commit -m "description" && git push
 | `relay/internal/relay/nips/nip45.go` | NIP-45: COUNT request handling |
 | `relay/internal/relay/nip77.go` | NIP-77: Negentropy syncing (NEG-OPEN/MSG/CLOSE/ERR) |
 | `relay/internal/relay/nip86.go` | NIP-86: Relay Management API (JSON-RPC, NIP-98 auth, 18 methods) |
+| `relay/internal/relay/nip29.go` | NIP-29: Relay-based Groups (group store, membership, moderation, relay-signed metadata) |
 
 ### Web / Dashboard
 
@@ -155,4 +156,5 @@ Plus custom NIPs: XX (Time Capsules), YY (Nostr Web Pages)
 
 ## Future Work (requires deeper protocol implementation)
 
-- **NIP-29** (Relay-based Groups) — full relay-managed group system with membership enforcement
+- **NIP-43** (Relay Access Metadata) — complex relay integration with relay-published membership events
+- **NIP-66** (Relay Discovery and Liveness Monitoring) — kinds 30166, 10166
