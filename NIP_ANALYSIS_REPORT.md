@@ -1,7 +1,7 @@
 # Shugur Relay — Pending NIP Items
 
 **Updated:** 2026-02-13  
-**Current NIP count:** 61 (54 numeric + 7 string)
+**Current NIP count:** 62 (55 numeric + 7 string)
 
 ---
 
@@ -36,10 +36,12 @@ Added kinds 16, 34236, 1244, 30403, 10063. Added NIP-18 and NIP-B7 to supported 
 - Uses go-nostr's built-in negentropy library for set reconciliation
 - Per-connection session management with limits (5 concurrent, 500K records, 2min timeout)
 
-#### NIP-86 — Relay Management API
-- Standardized admin API (ban/allow pubkeys, list banned, etc.)
-- The relay already has a custom admin API — this would standardize it
-- Implement JSON-RPC over HTTP with `application/nostr+json+rpc` content type
+#### ~~NIP-86 — Relay Management API~~ ✅ DONE
+- JSON-RPC management endpoint (Content-Type: application/nostr+json+rpc)
+- NIP-98 authorization with kind 27235 + payload hash verification
+- 18 methods: supportedmethods, ban/allow pubkeys, ban/allow events,
+  change relay name/description/icon, allow/disallow kinds, block/unblock IPs
+- Admin auth via relay PUBLIC_KEY or ADMIN_PUBKEYS config
 
 ### 🟡 MEDIUM PRIORITY
 
