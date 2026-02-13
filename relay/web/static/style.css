@@ -143,7 +143,7 @@ a:hover { text-decoration: underline; }
 /* ── Stats ──────────────────────────────────────────────── */
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 1px;
   background: var(--border);
   border: 1px solid var(--border);
@@ -164,10 +164,11 @@ a:hover { text-decoration: underline; }
 .stat-val {
   display: block;
   font-family: var(--mono);
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 600;
   color: #fff;
   letter-spacing: -0.02em;
+  white-space: nowrap;
   transition: color .3s, text-shadow .5s;
 }
 
