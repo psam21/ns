@@ -177,6 +177,7 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 				"78": "App-specific Data",
 				"84": "Highlights",
 				"85": "Trusted Assertions",
+				"86": "Management API",
 				"87": "Ecash Mint Discovery",
 				"88": "Polls",
 				"89": "App Handlers",

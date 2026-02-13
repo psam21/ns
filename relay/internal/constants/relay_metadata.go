@@ -72,6 +72,7 @@ var DefaultSupportedNIPs = []interface{}{
 	78, // NIP-78: Application-specific data
 	84, // NIP-84: Highlights
 	85, // NIP-85: Trusted Assertions
+	86, // NIP-86: Relay Management API
 	87, // NIP-87: Ecash Mint Discoverability
 	88, // NIP-88: Polls
 	89, // NIP-89: Recommended Application Handlers

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Shugur-Network/relay/internal/config"
@@ -37,6 +38,7 @@ type ValidationLimits struct {
 type PluginValidator struct {
 	config    *config.Config
 	blacklist map[string]bool
+	mu        sync.RWMutex // protects blacklist and limits.AllowedKinds
 	limits    ValidationLimits
 
 	verifiedPubkeys map[string]time.Time
@@ -314,7 +316,10 @@ func (pv *PluginValidator) ValidateEvent(ctx context.Context, event nostr.Event)
 	}
 
 	// 3. Check blacklist (case-insensitive)
-	if pv.blacklist[strings.ToLower(event.PubKey)] {
+	pv.mu.RLock()
+	banned := pv.blacklist[strings.ToLower(event.PubKey)]
+	pv.mu.RUnlock()
+	if banned {
 		return false, "pubkey is blacklisted"
 	}
 
@@ -612,12 +617,52 @@ func (pv *PluginValidator) ValidateFilter(f nostr.Filter) error {
 
 // AddBlacklistedPubkey adds a pubkey to the blacklist
 func (pv *PluginValidator) AddBlacklistedPubkey(pubkey string) {
+	pv.mu.Lock()
+	defer pv.mu.Unlock()
 	pv.blacklist[strings.ToLower(pubkey)] = true
 }
 
 // RemoveBlacklistedPubkey removes a pubkey from the blacklist
 func (pv *PluginValidator) RemoveBlacklistedPubkey(pubkey string) {
+	pv.mu.Lock()
+	defer pv.mu.Unlock()
 	delete(pv.blacklist, strings.ToLower(pubkey))
+}
+
+// GetBlacklistedPubkeys returns a copy of all blacklisted pubkeys
+func (pv *PluginValidator) GetBlacklistedPubkeys() []string {
+	pv.mu.RLock()
+	defer pv.mu.RUnlock()
+	pubkeys := make([]string, 0, len(pv.blacklist))
+	for k := range pv.blacklist {
+		pubkeys = append(pubkeys, k)
+	}
+	return pubkeys
+}
+
+// GetAllowedKinds returns a sorted list of all allowed event kinds
+func (pv *PluginValidator) GetAllowedKinds() []int {
+	pv.mu.RLock()
+	defer pv.mu.RUnlock()
+	kinds := make([]int, 0, len(pv.limits.AllowedKinds))
+	for k := range pv.limits.AllowedKinds {
+		kinds = append(kinds, k)
+	}
+	return kinds
+}
+
+// AddAllowedKind adds an event kind to the allowed kinds map
+func (pv *PluginValidator) AddAllowedKind(kind int) {
+	pv.mu.Lock()
+	defer pv.mu.Unlock()
+	pv.limits.AllowedKinds[kind] = true
+}
+
+// RemoveAllowedKind removes an event kind from the allowed kinds map
+func (pv *PluginValidator) RemoveAllowedKind(kind int) {
+	pv.mu.Lock()
+	defer pv.mu.Unlock()
+	delete(pv.limits.AllowedKinds, kind)
 }
 
 // ValidateAndProcessEvent performs validation and processing of incoming events

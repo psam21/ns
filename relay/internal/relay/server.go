@@ -79,6 +79,9 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 		if isWebSocketRequest(r) {
 			// Handle as relay WebSocket connection
 			handleWebSocketConnection(ctx, w, r, upgrader, s.node, s.cfg)
+		} else if r.Header.Get("Content-Type") == "application/nostr+json+rpc" {
+			// NIP-86: Relay Management API (JSON-RPC)
+			s.handleManagementAPI(w, r)
 		} else {
 			// Handle HTTP requests with input validation
 			switch {
