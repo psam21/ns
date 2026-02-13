@@ -92,6 +92,7 @@ var (
 var (
 	messagesProcessedCount int64
 	activeConnectionsCount int64
+	totalConnectionsCount  int64
 	messagesSentCount      int64
 	activeSubscrCount      int64
 	lastEventTimestamp     int64
@@ -124,6 +125,7 @@ func GetActiveConnectionsCount() int64 {
 func IncrementActiveConnections() {
 	ActiveConnections.Inc()
 	atomic.AddInt64(&activeConnectionsCount, 1)
+	atomic.AddInt64(&totalConnectionsCount, 1)
 	now := time.Now().Unix()
 	atomic.StoreInt64(&lastConnTimestamp, now)
 	connectionWindow.Add(now)
@@ -133,6 +135,11 @@ func IncrementActiveConnections() {
 func DecrementActiveConnections() {
 	ActiveConnections.Dec()
 	atomic.AddInt64(&activeConnectionsCount, -1)
+}
+
+// GetTotalConnectionsCount returns the cumulative number of connections since start
+func GetTotalConnectionsCount() int64 {
+	return atomic.LoadInt64(&totalConnectionsCount)
 }
 
 // GetMessagesSentCount returns the current count of sent messages

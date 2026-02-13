@@ -18,7 +18,6 @@
           <span class="status-text">ONLINE</span>
         </div>
         <h1 class="hero-title">{{.Name}}</h1>
-        <p class="hero-sub">{{.Description}}</p>
         <div class="hero-endpoint">
           <code id="websocket-url">wss://{{.Host}}</code>
           <button class="copy-btn" onclick="copyToClipboard('websocket-url')" title="Copy">
@@ -29,27 +28,39 @@
           <span><i class="fas fa-code-branch"></i> {{.Version}}</span>
           <span class="sep">/</span>
           <a href="mailto:{{.Contact}}"><i class="fas fa-envelope"></i> {{.Contact}}</a>
+          <span class="sep">/</span>
+          <a href="https://github.com/psam21/ns" target="_blank"><i class="fab fa-github"></i> source</a>
         </div>
       </header>
 
       <!-- Live Stats -->
-      <section class="stats">
-        <div class="stat">
-          <span class="stat-val" id="active-connections">{{.Stats.ActiveConnections}}</span>
-          <span class="stat-lbl">connections</span>
-        </div>
-        <div class="stat">
-          <span class="stat-val" id="events-stored">{{.Stats.EventsStored}}</span>
-          <span class="stat-lbl">events</span>
-        </div>
-        <div class="stat">
-          <span class="stat-val" id="messages-processed">{{.Stats.MessagesProcessed}}</span>
-          <span class="stat-lbl">requests</span>
-        </div>
-        <div class="stat">
-          <span class="stat-val" id="uptime">{{.Uptime}}</span>
-          <span class="stat-lbl">uptime</span>
-        </div>
+      <section class="stats-group">
+        <div class="stats-header">aggregate <span class="stats-hint">(historical)</span></div>
+        <section class="stats">
+          <div class="stat">
+            <span class="stat-val" id="events-stored">{{.Stats.EventsStored}}</span>
+            <span class="stat-lbl">events stored</span>
+          </div>
+          <div class="stat">
+            <span class="stat-val" id="total-connections">{{.Stats.TotalConnections}}</span>
+            <span class="stat-lbl">total connections</span>
+          </div>
+        </section>
+        <div class="stats-header">session <span class="stats-hint">(since last reboot)</span></div>
+        <section class="stats">
+          <div class="stat">
+            <span class="stat-val" id="active-connections">{{.Stats.ActiveConnections}}</span>
+            <span class="stat-lbl">connections</span>
+          </div>
+          <div class="stat">
+            <span class="stat-val" id="messages-processed">{{.Stats.MessagesProcessed}}</span>
+            <span class="stat-lbl">requests</span>
+          </div>
+          <div class="stat">
+            <span class="stat-val" id="uptime">{{.Uptime}}</span>
+            <span class="stat-lbl">uptime</span>
+          </div>
+        </section>
       </section>
 
       <!-- NIPs -->
@@ -78,8 +89,6 @@
 
       <!-- Footer -->
       <footer class="foot">
-        <a href="https://github.com/psam21/ns" target="_blank"><i class="fab fa-github"></i> source</a>
-        <span class="sep">&middot;</span>
         <span>made with <i class="fas fa-heart heart"></i> for freedom tech</span>
       </footer>
 

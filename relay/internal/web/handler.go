@@ -53,6 +53,7 @@ type LimitationData struct {
 // StatsData represents relay statistics
 type StatsData struct {
 	ActiveConnections    int64            `json:"active_connections"`
+	TotalConnections     int64            `json:"total_connections"`
 	MessagesProcessed    int64            `json:"messages_processed"`
 	EventsStored         int64            `json:"events_stored"`
 	ActiveSubscriptions  int64            `json:"active_subscriptions"`
@@ -272,6 +273,7 @@ func (h *Handler) HandleMetricsAPI(w http.ResponseWriter, r *http.Request) {
 		"uptime_seconds":         int64(uptime.Seconds()),
 		"uptime_human":           h.formatUptime(uptime),
 		"active_connections":     stats.ActiveConnections,
+		"total_connections":      stats.TotalConnections,
 		"messages_processed":     stats.MessagesProcessed,
 		"events_stored":          stats.EventsStored,
 		"active_subscriptions":   stats.ActiveSubscriptions,
@@ -379,6 +381,7 @@ func (h *Handler) getStatsData() *StatsData {
 	// Get other metrics - using our tracking functions
 	stats := &StatsData{
 		ActiveConnections:    activeConns,
+		TotalConnections:     metrics.GetTotalConnectionsCount(),
 		MessagesProcessed:    metrics.GetMessagesProcessedCount(),
 		EventsStored:         eventsStored,
 		ActiveSubscriptions:  metrics.GetActiveSubscriptionsCount(),

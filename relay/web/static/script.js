@@ -103,6 +103,7 @@ class RelayDashboard {
       // Update all the stats with real data
       if (data.stats) {
         this.updateStatElement('active-connections', data.stats.active_connections);
+        this.updateStatElement('total-connections', data.stats.total_connections);
         this.updateStatElement('messages-processed', data.stats.messages_processed);
         this.updateStatElement('events-stored', data.stats.events_stored);
       }

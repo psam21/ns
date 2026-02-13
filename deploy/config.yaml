@@ -16,8 +16,8 @@ METRICS:
 
 RELAY:
   NAME: "nostr.ltd"
-  DESCRIPTION: "Nostr relay powered by Shugur Network"
-  CONTACT: "admin@nostr.ltd"
+  DESCRIPTION: ""
+  CONTACT: "epochshield@proton.me"
   PUBLIC_KEY: ""
   ICON: ""
   BANNER: ""
