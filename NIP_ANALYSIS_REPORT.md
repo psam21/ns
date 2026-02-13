@@ -1,7 +1,7 @@
 # Shugur Relay — Pending NIP Items
 
 **Updated:** 2026-02-13  
-**Current NIP count:** 62 (55 numeric + 7 string)
+**Current NIP count:** 57 (51 numeric + 6 string)
 
 ---
 
@@ -79,12 +79,6 @@
 
 ---
 
-## Deprecation Cleanup
+## ~~Deprecation Cleanup~~ ✅ DONE
 
-| NIP | Status | Superseded By | Action |
-|-----|--------|---------------|--------|
-| **04** | `unrecommended` | NIP-17 | Remove from `supported_nips`; keep kind 4 in AllowedKinds for compat |
-| **16** | merged into NIP-01 | NIP-01 | Remove from `supported_nips` (cosmetic) |
-| **20** | merged into NIP-01 | NIP-01 | Remove from `supported_nips` (cosmetic) |
-| **33** | merged into NIP-01 | NIP-01 | Remove from `supported_nips` (cosmetic) |
-| **EE** | `unrecommended` | Marmot Protocol | Remove from `supported_nips`; keep kinds for compat |
+Removed NIPs 04, 16, 20, 33, EE from `supported_nips` (kinds kept for backwards compat).
