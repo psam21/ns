@@ -114,22 +114,22 @@ Shugur Relay implements the following NIPs for maximum compatibility with Nostr 
 - **[NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md)**: Basic protocol flow description
 - **[NIP-02](https://github.com/nostr-protocol/nips/blob/master/02.md)**: Follow List
 - **[NIP-03](https://github.com/nostr-protocol/nips/blob/master/03.md)**: OpenTimestamps Attestations for Events
-- **[NIP-04](https://github.com/nostr-protocol/nips/blob/master/04.md)**: Encrypted Direct Message (legacy, see NIP-17)
 - **[NIP-09](https://github.com/nostr-protocol/nips/blob/master/09.md)**: Event Deletion Request (`e` + `a` tag support)
 - **[NIP-11](https://github.com/nostr-protocol/nips/blob/master/11.md)**: Relay Information Document
+- **[NIP-13](https://github.com/nostr-protocol/nips/blob/master/13.md)**: Proof of Work
 
 #### Authentication & Security
 
 - **[NIP-42](https://github.com/nostr-protocol/nips/blob/master/42.md)**: Authentication of clients to relays
 - **[NIP-62](https://github.com/nostr-protocol/nips/blob/master/62.md)**: Request to Vanish
 - **[NIP-70](https://github.com/nostr-protocol/nips/blob/master/70.md)**: Protected Events
+- **[NIP-86](https://github.com/nostr-protocol/nips/blob/master/86.md)**: Relay Management API
 
 #### Messaging & Social
 
 - **[NIP-15](https://github.com/nostr-protocol/nips/blob/master/15.md)**: Nostr Marketplace
-- **[NIP-16](https://github.com/nostr-protocol/nips/blob/master/16.md)**: Event Treatment
 - **[NIP-17](https://github.com/nostr-protocol/nips/blob/master/17.md)**: Private Direct Messages
-- **[NIP-20](https://github.com/nostr-protocol/nips/blob/master/20.md)**: Command Results
+- **[NIP-18](https://github.com/nostr-protocol/nips/blob/master/18.md)**: Reposts
 - **[NIP-22](https://github.com/nostr-protocol/nips/blob/master/22.md)**: Comment
 - **[NIP-23](https://github.com/nostr-protocol/nips/blob/master/23.md)**: Long-form Content
 - **[NIP-24](https://github.com/nostr-protocol/nips/blob/master/24.md)**: Extra metadata fields and tags
@@ -137,7 +137,6 @@ Shugur Relay implements the following NIPs for maximum compatibility with Nostr 
 - **[NIP-28](https://github.com/nostr-protocol/nips/blob/master/28.md)**: Public Chat
 - **[NIP-29](https://github.com/nostr-protocol/nips/blob/master/29.md)**: Relay-based Groups
 - **[NIP-30](https://github.com/nostr-protocol/nips/blob/master/30.md)**: Custom Emoji
-- **[NIP-33](https://github.com/nostr-protocol/nips/blob/master/33.md)**: Addressable Events
 - **[NIP-7D](https://github.com/nostr-protocol/nips/blob/master/7D.md)**: Threads
 - **[NIP-A4](https://github.com/nostr-protocol/nips/blob/master/A4.md)**: Public Messages
 - **[NIP-C7](https://github.com/nostr-protocol/nips/blob/master/C7.md)**: Chats
@@ -170,7 +169,6 @@ Shugur Relay implements the following NIPs for maximum compatibility with Nostr 
 
 - **[NIP-44](https://github.com/nostr-protocol/nips/blob/master/44.md)**: Encrypted Payloads (Versioned)
 - **[NIP-59](https://github.com/nostr-protocol/nips/blob/master/59.md)**: Gift Wrap
-- **[NIP-EE](https://github.com/nickmessing/nips/blob/mls-protocol/EE.md)**: E2EE Messaging via MLS
 
 #### Financial & Commerce
 
@@ -193,7 +191,9 @@ Shugur Relay implements the following NIPs for maximum compatibility with Nostr 
 - **[NIP-51](https://github.com/nostr-protocol/nips/blob/master/51.md)**: Lists
 - **[NIP-65](https://github.com/nostr-protocol/nips/blob/master/65.md)**: Relay List Metadata
 - **[NIP-72](https://github.com/nostr-protocol/nips/blob/master/72.md)**: Moderated Communities
+- **[NIP-77](https://github.com/nostr-protocol/nips/blob/master/77.md)**: Negentropy Syncing
 - **[NIP-90](https://github.com/nostr-protocol/nips/blob/master/90.md)**: Data Vending Machine
+- **[NIP-B7](https://github.com/nostr-protocol/nips/blob/master/B7.md)**: Blossom Server List
 
 #### Custom NIPs
 
@@ -203,12 +203,16 @@ Shugur Relay implements the following NIPs for maximum compatibility with Nostr 
 ### Protocol Features
 
 - **WebSocket Connection**: Real-time bidirectional communication
-- **Event Validation**: Cryptographic signature verification
+- **Event Validation**: Cryptographic signature verification with Proof of Work (NIP-13)
 - **Subscription Management**: Efficient filtering and real-time updates
 - **Rate Limiting**: Protection against spam and abuse
 - **Event Storage**: Persistent storage with CockroachDB
 - **Search Support**: Full-text search capabilities (NIP-50)
 - **Relay Information**: Discoverable relay metadata (NIP-11)
+- **Negentropy Syncing**: Efficient set reconciliation for relay sync (NIP-77)
+- **Management API**: JSON-RPC admin endpoints with NIP-98 auth (NIP-86)
+- **Relay-based Groups**: Full group management with membership enforcement (NIP-29)
+- **Private DM Enforcement**: AUTH-gated DM queries (NIP-17 + NIP-42)
 
 ## 🚀 Features
 
