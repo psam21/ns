@@ -45,6 +45,9 @@ func NewServer(relayCfg config.RelayConfig, node domain.NodeInterface, fullCfg *
 		config.Version,
 	)
 
+	// Initialize NIP-29 group store
+	InitGroupStore(fullCfg)
+
 	return &Server{
 		cfg:           relayCfg,
 		fullCfg:       fullCfg,

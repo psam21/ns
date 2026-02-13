@@ -966,6 +966,26 @@ func (c *WsConnection) handleEvent(ctx context.Context, arr []interface{}) {
 		}
 	}
 
+	// NIP-29: Validate and process group events
+	if IsGroupEvent(&evt) {
+		gs := GetGroupStore()
+		if gs != nil {
+			ok, reason := gs.ValidateGroupEvent(&evt)
+			if !ok {
+				c.sendOK(evt.ID, false, "blocked: "+reason)
+				return
+			}
+			// Process group state changes and get relay-generated events
+			relayEvents := gs.ProcessGroupEvent(&evt)
+			for _, relayEvt := range relayEvents {
+				// Store relay-generated metadata events
+				if relayEvt != nil {
+					c.node.GetEventProcessor().QueueEvent(*relayEvt)
+				}
+			}
+		}
+	}
+
 	// Queue the event for processing
 	if ok := c.node.GetEventProcessor().QueueEvent(evt); !ok {
 		c.sendOK(evt.ID, false, "server busy, try again")

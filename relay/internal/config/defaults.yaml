@@ -21,6 +21,7 @@ RELAY:
   DESCRIPTION: "High-performance, reliable, scalable Nostr relay for decentralized communication." # Relay description (max 200 chars, shown in NIP-11)
   CONTACT: "support@shugur.com"  # Relay contact email (shown in NIP-11)
   PUBLIC_KEY: ""                 # Relay public key (64-char hex string, leave empty to auto-generate)
+  PRIVATE_KEY: ""                # Relay private key (64-char hex, auto-generated if empty, used for NIP-29 group signing)
   ADMIN_PUBKEYS: []              # Admin pubkeys for NIP-86 management API (hex strings)
   ICON: "https://github.com/Shugur-Network/relay/raw/main/logo.png" # Relay icon URL (shown in NIP-11)
   BANNER: "https://github.com/Shugur-Network/relay/raw/main/banner.png" # Relay banner URL (optional, shown in NIP-11)
