@@ -197,6 +197,14 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			1126:  true, // Page Manifest
 			31126: true, // Site Index
 			11126: true, // Entrypoint
+			// NIP-43 Relay Access Metadata
+			13534: true, // Membership list (relay-signed)
+			8000:  true, // Add user (relay-signed)
+			8001:  true, // Remove user (relay-signed)
+			28934: true, // Join request (user-sent)
+			28935: true, // Invite request (ephemeral, relay-generated)
+			28936: true, // Leave request (user-sent)
+			10010: true, // User relay membership list
 		},
 		RequiredTags: map[int][]string{
 			5:     {"e"},      // Deletion events must have an "e" tag
@@ -258,6 +266,8 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			1126:  {"e"},       // Page Manifest requires "e" (asset references) tags
 			31126: {"d", "x"},  // Site Index requires "d" (truncated hash) and "x" (full SHA-256 hash) tags
 			11126: {"a"},       // Entrypoint requires "a" (address to site index) tag
+			// NIP-43 Relay Access Metadata
+			28934: {"claim"},   // Join request requires "claim" tag with invite code
 		},
 		MaxCreatedAt: time.Now().Unix() + 300,    // 5 minutes in future
 		MinCreatedAt: time.Now().Unix() - 172800, // 2 days in past

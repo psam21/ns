@@ -47,6 +47,7 @@ var DefaultSupportedNIPs = []interface{}{
 	38, // NIP-38: User Statuses
 	40, // NIP-40: Expiration Timestamp
 	42, // NIP-42: Authentication of clients to relays
+	43, // NIP-43: Relay Access Metadata and Requests
 	44, // NIP-44: Encrypted Payloads (Versioned)
 	45, // NIP-45: Counting Events
 	47, // NIP-47: Nostr Wallet Connect (NWC)

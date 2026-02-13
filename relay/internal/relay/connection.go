@@ -986,6 +986,30 @@ func (c *WsConnection) handleEvent(ctx context.Context, arr []interface{}) {
 		}
 	}
 
+	// NIP-43: Validate and process relay access metadata events
+	if IsNIP43Event(&evt) {
+		ms := GetMembershipStore()
+		accepted, msg, relayEvents := ms.HandleNIP43Event(&evt)
+		if !accepted {
+			c.sendOK(evt.ID, false, msg)
+			return
+		}
+		// Store relay-generated events (membership list updates, add/remove)
+		for _, relayEvt := range relayEvents {
+			if relayEvt != nil {
+				c.node.GetEventProcessor().QueueEvent(*relayEvt)
+			}
+		}
+		if msg != "" {
+			// Join/leave messages like "info: welcome!" or "duplicate: already a member"
+			c.sendOK(evt.ID, true, msg)
+			// Don't store join/leave requests themselves — only relay-generated events
+			if evt.Kind == 28934 || evt.Kind == 28936 {
+				return
+			}
+		}
+	}
+
 	// Queue the event for processing
 	if ok := c.node.GetEventProcessor().QueueEvent(evt); !ok {
 		c.sendOK(evt.ID, false, "server busy, try again")
