@@ -141,6 +141,11 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			// NIP-72 Moderated Communities
 			34550: true, // Community Definition
 			4550:  true, // Moderation Approval
+			// NIP-EE MLS E2EE Messaging
+			443:   true, // MLS KeyPackage Event
+			444:   true, // MLS Welcome Event (inner, arrives via gift wrap)
+			445:   true, // MLS Group Event (encrypted group messages)
+			10051: true, // KeyPackage Relays List
 			// NIP-YY Nostr Web Pages
 			1125:  true, // Asset (HTML, CSS, JavaScript, fonts, etc.)
 			1126:  true, // Page Manifest
@@ -198,6 +203,10 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			// NIP-72 Moderated Communities
 			34550: {"d"},           // Community Definition requires "d" tag
 			4550:  {"a", "p", "k"}, // Moderation Approval requires community, author, and kind tags (e tag only for non-replaceable events)
+			// NIP-EE MLS E2EE Messaging
+			443:   {"mls_protocol_version", "ciphersuite"}, // KeyPackage requires protocol version and ciphersuite
+			445:   {"h"},            // Group Event requires "h" tag (group ID)
+			10051: {"relay"},        // KeyPackage Relays List requires at least one "relay" tag
 			// NIP-YY Nostr Web Pages
 			1125:  {"m", "x"},  // Asset requires "m" (MIME type) and "x" (SHA-256 hash) tags
 			1126:  {"e"},       // Page Manifest requires "e" (asset references) tags
@@ -456,6 +465,15 @@ func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 		return nips.ValidateComment(event)
 	case 4550:
 		return nips.ValidateApprovalEvent(event)
+	// NIP-EE MLS E2EE Messaging validation
+	case 443:
+		return nips.ValidateKeyPackageEvent(event)
+	case 444:
+		return nips.ValidateWelcomeEvent(event)
+	case 445:
+		return nips.ValidateGroupEvent(event)
+	case 10051:
+		return nips.ValidateKeyPackageRelaysList(event)
 	// NIP-YY Nostr Web Pages validation
 	case 1125:
 		return nips.ValidateAsset(event)
@@ -618,9 +636,17 @@ func (pv *PluginValidator) ValidateAndProcessEvent(ctx context.Context, event no
 		if err := nips.ValidateTimeCapsuleEvent(&event); err != nil {
 			return false, fmt.Sprintf("invalid time capsule: %s", err.Error()), nil
 		}
-	case 1059: // NIP-59 Gift wrap (for private time capsules)
+	case 1059: // NIP-59 Gift wrap (for private time capsules and MLS Welcome events)
 		if err := nips.ValidateGiftWrapEvent(&event); err != nil {
 			return false, fmt.Sprintf("invalid gift wrap: %s", err.Error()), nil
+		}
+	case 443: // NIP-EE MLS KeyPackage
+		if err := nips.ValidateKeyPackageEvent(&event); err != nil {
+			return false, fmt.Sprintf("invalid MLS KeyPackage: %s", err.Error()), nil
+		}
+	case 445: // NIP-EE MLS Group Event
+		if err := nips.ValidateGroupEvent(&event); err != nil {
+			return false, fmt.Sprintf("invalid MLS Group event: %s", err.Error()), nil
 		}
 	}
 
