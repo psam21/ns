@@ -132,13 +132,10 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 				"01": "Basic Protocol",
 				"02": "Follow List",
 				"03": "OpenTimestamps",
-				"04": "Encrypted DM (legacy)",
 				"09": "Event Deletion",
 				"11": "Relay Info",
 				"15": "Marketplace",
-				"16": "Event Treatment",
 				"17": "Private DMs",
-				"20": "Command Results",
 				"22": "Comment",
 				"23": "Long-form Content",
 				"24": "Extra Metadata",
@@ -147,7 +144,6 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 				"29": "Relay Groups",
 				"30": "Custom Emoji",
 				"32": "Labeling",
-				"33": "Addressable Events",
 				"34": "Git Stuff",
 				"35": "Torrents",
 				"37": "Draft Wraps",
@@ -190,7 +186,6 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 				"B0": "Web Bookmarking",
 				"C0": "Code Snippets",
 				"C7": "Chats",
-				"EE": "E2EE via MLS",
 			}
 			if desc, ok := descriptions[nip]; ok {
 				return desc
