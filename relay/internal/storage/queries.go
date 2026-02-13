@@ -432,6 +432,88 @@ func (db *DB) GetEventCount(ctx context.Context, filter nostr.Filter) (int64, er
 	return count, nil
 }
 
+// GetEventPubkeys returns pubkeys of events matching the given filter.
+// Used for NIP-45 HyperLogLog computation.
+func (db *DB) GetEventPubkeys(ctx context.Context, filter nostr.Filter) ([]string, error) {
+	query := strings.Builder{}
+	query.Grow(256)
+	args := make([]interface{}, 0, 10)
+	argIndex := 1
+
+	query.WriteString(`SELECT pubkey FROM events`)
+
+	needsWhere := false
+	addWhere := func() {
+		if !needsWhere {
+			query.WriteString(` WHERE `)
+			needsWhere = true
+		} else {
+			query.WriteString(` AND `)
+		}
+	}
+
+	if len(filter.IDs) > 0 {
+		addWhere()
+		query.WriteString(fmt.Sprintf("id = ANY($%d)", argIndex))
+		args = append(args, filter.IDs)
+		argIndex++
+	}
+	if len(filter.Authors) > 0 {
+		addWhere()
+		query.WriteString(fmt.Sprintf("pubkey = ANY($%d)", argIndex))
+		args = append(args, filter.Authors)
+		argIndex++
+	}
+	if len(filter.Kinds) > 0 {
+		addWhere()
+		query.WriteString(fmt.Sprintf("kind = ANY($%d)", argIndex))
+		args = append(args, filter.Kinds)
+		argIndex++
+	}
+	if filter.Since != nil {
+		addWhere()
+		query.WriteString(fmt.Sprintf("created_at >= $%d", argIndex))
+		args = append(args, filter.Since.Time().Unix())
+		argIndex++
+	}
+	if filter.Until != nil {
+		addWhere()
+		query.WriteString(fmt.Sprintf("created_at <= $%d", argIndex))
+		args = append(args, filter.Until.Time().Unix())
+		argIndex++
+	}
+	if len(filter.Tags) > 0 {
+		for tagName, tagValues := range filter.Tags {
+			if len(tagValues) > 0 {
+				addWhere()
+				query.WriteString(fmt.Sprintf("tags @> $%d", argIndex))
+				tagArray := make([][]string, len(tagValues))
+				for i, val := range tagValues {
+					tagArray[i] = []string{tagName, val}
+				}
+				args = append(args, tagArray)
+				argIndex++
+			}
+		}
+	}
+
+	rows, err := db.Pool.Query(ctx, query.String(), args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query event pubkeys: %w", err)
+	}
+	defer rows.Close()
+
+	var pubkeys []string
+	for rows.Next() {
+		var pk string
+		if err := rows.Scan(&pk); err != nil {
+			return nil, fmt.Errorf("failed to scan pubkey: %w", err)
+		}
+		pubkeys = append(pubkeys, pk)
+	}
+	return pubkeys, rows.Err()
+}
+
 func (db *DB) EventExists(ctx context.Context, eventID string) (bool, error) {
 	var exists bool
 	err := db.Pool.QueryRow(ctx,

@@ -286,6 +286,11 @@ func (n *Node) GetEventCount(ctx context.Context, filter nostr.Filter) (int64, e
 	return n.db.GetEventCount(ctx, filter)
 }
 
+// GetEventPubkeys returns pubkeys of events matching the given filter (for NIP-45 HLL)
+func (n *Node) GetEventPubkeys(ctx context.Context, filter nostr.Filter) ([]string, error) {
+	return n.db.GetEventPubkeys(ctx, filter)
+}
+
 // GetConnectionCount returns the current number of active connections (for health checks)
 func (n *Node) GetConnectionCount() int {
 	n.wsConnsMu.RLock()

@@ -16,6 +16,9 @@ type EventHandler interface {
 
 	// Get the event count for a filter
 	GetEventCount(ctx context.Context, filter nostr.Filter) (int64, error)
+
+	// Get pubkeys of events matching a filter (for NIP-45 HyperLogLog)
+	GetEventPubkeys(ctx context.Context, filter nostr.Filter) ([]string, error)
 }
 
 // ValidationResult represents the outcome of event validation
