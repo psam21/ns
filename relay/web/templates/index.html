@@ -4,149 +4,86 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{.Name}} - Nostr Relay</title>
-    <link
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-      rel="stylesheet"
-    />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
     <link href="/static/style.css" rel="stylesheet" />
     <link rel="icon" href="/static/favicon.ico" type="image/x-icon" />
   </head>
   <body>
     <div class="container">
-      <!-- Header -->
-      <header class="header">
-        <div class="header-content">
-          <div class="logo">
-            <img src="/static/shugur-logo-full.svg" alt="{{.Name}}" class="logo-img" />
-          </div>
-          <div class="header-right">
-            <span class="relay-name">{{.Name}}</span>
-            <div class="status-indicator">
-              <div class="status-dot online"></div>
-              <span>Online</span>
-            </div>
-          </div>
+
+      <!-- Hero -->
+      <header class="hero">
+        <div class="hero-status">
+          <span class="pulse-dot"></span>
+          <span class="status-text">ONLINE</span>
         </div>
-        <p class="header-description">{{.Description}}</p>
-        <div class="header-meta">
-          <span class="header-meta-item">
-            <i class="fas fa-link"></i>
-            <span class="websocket-url" id="websocket-url">wss://{{.Host}}</span>
-            <button class="copy-btn" onclick="copyToClipboard('websocket-url')"><i class="fas fa-copy"></i></button>
-          </span>
-          <span class="header-meta-item">
-            <i class="fas fa-code-branch"></i> {{.Software}} {{.Version}}
-          </span>
-          <span class="header-meta-item">
-            <a href="mailto:{{.Contact}}"><i class="fas fa-envelope"></i> {{.Contact}}</a>
-          </span>
+        <h1 class="hero-title">{{.Name}}</h1>
+        <p class="hero-sub">{{.Description}}</p>
+        <div class="hero-endpoint">
+          <code id="websocket-url">wss://{{.Host}}</code>
+          <button class="copy-btn" onclick="copyToClipboard('websocket-url')" title="Copy">
+            <i class="fas fa-copy"></i>
+          </button>
+        </div>
+        <div class="hero-meta">
+          <span><i class="fas fa-code-branch"></i> {{.Version}}</span>
+          <span class="sep">/</span>
+          <a href="mailto:{{.Contact}}"><i class="fas fa-envelope"></i> {{.Contact}}</a>
         </div>
       </header>
 
-      <!-- Main Content -->
-      <main class="main">
-        <!-- Active Connections Row (first) -->
-        <section class="stats-section">
-          <div class="card stat-card">
-            <div class="stat-icon"><i class="fas fa-plug"></i></div>
-            <div class="stat-content">
-              <h3>Active Connections</h3>
-              <div class="stat-value" id="active-connections">{{.Stats.ActiveConnections}}</div>
-            </div>
-          </div>
-          <div class="card stat-card">
-            <div class="stat-icon"><i class="fas fa-envelope"></i></div>
-            <div class="stat-content">
-              <h3>Processed Requests</h3>
-              <div class="stat-value" id="messages-processed">{{.Stats.MessagesProcessed}}</div>
-            </div>
-          </div>
-          <div class="card stat-card">
-            <div class="stat-icon"><i class="fas fa-database"></i></div>
-            <div class="stat-content">
-              <h3>Stored Events</h3>
-              <div class="stat-value" id="events-stored">{{.Stats.EventsStored}}</div>
-            </div>
-          </div>
-          <div class="card stat-card">
-            <div class="stat-icon"><i class="fas fa-clock"></i></div>
-            <div class="stat-content">
-              <h3>Uptime</h3>
-              <div class="stat-value" id="uptime">{{.Uptime}}</div>
-            </div>
-          </div>
-        </section>
+      <!-- Live Stats -->
+      <section class="stats">
+        <div class="stat">
+          <span class="stat-val" id="active-connections">{{.Stats.ActiveConnections}}</span>
+          <span class="stat-lbl">connections</span>
+        </div>
+        <div class="stat">
+          <span class="stat-val" id="events-stored">{{.Stats.EventsStored}}</span>
+          <span class="stat-lbl">events</span>
+        </div>
+        <div class="stat">
+          <span class="stat-val" id="messages-processed">{{.Stats.MessagesProcessed}}</span>
+          <span class="stat-lbl">requests</span>
+        </div>
+        <div class="stat">
+          <span class="stat-val" id="uptime">{{.Uptime}}</span>
+          <span class="stat-lbl">uptime</span>
+        </div>
+      </section>
 
-        <!-- Supported NIPs Section -->
-        <section class="card nips-section">
-          <h2><i class="fas fa-check-circle"></i> Supported NIPs</h2>
-          <div class="nips-grid">
-            {{range .SupportedNIPs}}
-            <a href="https://nips.nostr.com/{{formatNIP .}}" target="_blank" class="nip-badge-link">
-              <div class="nip-badge">
-                <span class="nip-number">NIP-{{formatNIP .}}</span>
-                <i class="fas fa-external-link-alt nip-link-icon"></i>
-              </div>
-            </a>
-            {{end}}
-          </div>
-        </section>
+      <!-- NIPs -->
+      <section class="panel">
+        <h2 class="panel-title">Supported NIPs</h2>
+        <div class="nips">
+          {{range .SupportedNIPs}}
+          <a href="https://nips.nostr.com/{{formatNIP .}}" target="_blank" class="nip">{{formatNIP .}}</a>
+          {{end}}
+        </div>
+      </section>
 
-        <!-- Relay Configuration Section -->
-        <section class="card limitations-section">
-          <h2><i class="fas fa-cog"></i> Relay Configuration</h2>
-          <div class="limitations-grid">
-            <div class="limitation-item">
-              <label>Max Message Length</label>
-              <span>{{.Limitation.MaxMessageLength}} chars</span>
-            </div>
-            <div class="limitation-item">
-              <label>Max Connections</label>
-              <span>{{.Limitation.MaxConnections}}</span>
-            </div>
-            <div class="limitation-item">
-              <label>Max Subscriptions</label>
-              <span>{{.Limitation.MaxSubscriptions}}</span>
-            </div>
-            <div class="limitation-item">
-              <label>Max Filters</label>
-              <span>{{.Limitation.MaxFilters}}</span>
-            </div>
-            <div class="limitation-item">
-              <label>Max Event Tags</label>
-              <span>{{.Limitation.MaxEventTags}}</span>
-            </div>
-            <div class="limitation-item">
-              <label>Auth Required</label>
-              <span class="{{if .Limitation.AuthRequired}}enabled{{else}}disabled{{end}}">
-                {{if .Limitation.AuthRequired}}Yes{{else}}No{{end}}
-              </span>
-            </div>
-            <div class="limitation-item">
-              <label>Payment Required</label>
-              <span class="{{if .Limitation.PaymentRequired}}enabled{{else}}disabled{{end}}">
-                {{if .Limitation.PaymentRequired}}Yes{{else}}No{{end}}
-              </span>
-            </div>
-          </div>
-        </section>
-      </main>
+      <!-- Config -->
+      <section class="panel">
+        <h2 class="panel-title">Configuration</h2>
+        <div class="config-grid">
+          <div class="cfg"><span class="cfg-k">max_msg_length</span><span class="cfg-v">{{.Limitation.MaxMessageLength}}</span></div>
+          <div class="cfg"><span class="cfg-k">max_connections</span><span class="cfg-v">{{.Limitation.MaxConnections}}</span></div>
+          <div class="cfg"><span class="cfg-k">max_subscriptions</span><span class="cfg-v">{{.Limitation.MaxSubscriptions}}</span></div>
+          <div class="cfg"><span class="cfg-k">max_filters</span><span class="cfg-v">{{.Limitation.MaxFilters}}</span></div>
+          <div class="cfg"><span class="cfg-k">max_event_tags</span><span class="cfg-v">{{.Limitation.MaxEventTags}}</span></div>
+          <div class="cfg"><span class="cfg-k">auth_required</span><span class="cfg-v {{if .Limitation.AuthRequired}}val-on{{else}}val-off{{end}}">{{if .Limitation.AuthRequired}}true{{else}}false{{end}}</span></div>
+          <div class="cfg"><span class="cfg-k">payment_required</span><span class="cfg-v {{if .Limitation.PaymentRequired}}val-on{{else}}val-off{{end}}">{{if .Limitation.PaymentRequired}}true{{else}}false{{end}}</span></div>
+        </div>
+      </section>
 
       <!-- Footer -->
-      <footer class="footer">
-        <div class="footer-content">
-          <div class="footer-simple">
-            <a href="https://github.com/psam21/ns" target="_blank" class="footer-source">
-              <i class="fab fa-github"></i> Relay Source Code
-            </a>
-            <span class="footer-separator">&middot;</span>
-            <span class="footer-love">Made with <i class="fas fa-heart"></i> for freedom tech</span>
-          </div>
-        </div>
+      <footer class="foot">
+        <a href="https://github.com/psam21/ns" target="_blank"><i class="fab fa-github"></i> source</a>
+        <span class="sep">&middot;</span>
+        <span>made with <i class="fas fa-heart heart"></i> for freedom tech</span>
       </footer>
-    </div>
 
-    <!-- Scripts -->
+    </div>
     <script src="/static/script.js"></script>
   </body>
 </html>

@@ -142,7 +142,7 @@ class RelayDashboard {
       // Add a subtle animation when value changes
       element.style.transform = 'scale(1.05)';
       element.style.transition = 'transform 0.2s ease-in-out';
-      element.style.color = '#3b82f6'; // Brief blue highlight
+      element.style.color = '#00e599'; // Brief green highlight
       
       setTimeout(() => {
         element.textContent = newValueStr;
@@ -157,7 +157,7 @@ class RelayDashboard {
       
       // Add a subtle pulse to show it updated
       setTimeout(() => {
-        element.style.textShadow = '0 0 8px rgba(59, 130, 246, 0.4)';
+        element.style.textShadow = '0 0 8px rgba(0, 229, 153, 0.4)';
         setTimeout(() => {
           element.style.textShadow = '';
         }, 1000);
@@ -204,8 +204,9 @@ class RelayDashboard {
         position: fixed;
         bottom: 20px;
         right: 20px;
-        background: rgba(0, 0, 0, 0.7);
-        color: white;
+        background: rgba(17, 17, 17, 0.9);
+        color: #888;
+        border: 1px solid #222;
         padding: 8px 12px;
         border-radius: 8px;
         font-size: 12px;
