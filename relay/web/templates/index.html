@@ -19,146 +19,57 @@
           <div class="logo">
             <img src="/static/shugur-logo-full.svg" alt="{{.Name}}" class="logo-img" />
           </div>
-          <div class="status-indicator">
-            <div class="status-dot online"></div>
-            <span>Online</span>
+          <div class="header-right">
+            <span class="relay-name">{{.Name}}</span>
+            <div class="status-indicator">
+              <div class="status-dot online"></div>
+              <span>Online</span>
+            </div>
           </div>
+        </div>
+        <p class="header-description">{{.Description}}</p>
+        <div class="header-meta">
+          <span class="header-meta-item">
+            <i class="fas fa-link"></i>
+            <span class="websocket-url" id="websocket-url">wss://{{.Host}}</span>
+            <button class="copy-btn" onclick="copyToClipboard('websocket-url')"><i class="fas fa-copy"></i></button>
+          </span>
+          <span class="header-meta-item">
+            <i class="fas fa-code-branch"></i> {{.Software}} {{.Version}}
+          </span>
+          <span class="header-meta-item">
+            <a href="mailto:{{.Contact}}"><i class="fas fa-envelope"></i> {{.Contact}}</a>
+          </span>
         </div>
       </header>
 
       <!-- Main Content -->
       <main class="main">
-        <!-- Relay Info Section -->
-        <section class="card relay-info">
-          <h2><i class="fas fa-broadcast-tower"></i> Relay Information</h2>
-          <div class="table-container">
-            <table class="info-table">
-              <tbody>
-                <tr>
-                  <td class="info-label">Name</td>
-                  <td class="info-value">{{.Name}}</td>
-                  <td class="info-actions"></td>
-                </tr>
-                <tr>
-                  <td class="info-label">Description</td>
-                  <td class="info-value">{{.Description}}</td>
-                  <td class="info-actions"></td>
-                </tr>
-                <tr>
-                  <td class="info-label">Software</td>
-                  <td class="info-value">{{.Software}} {{.Version}}</td>
-                  <td class="info-actions"></td>
-                </tr>
-                <tr>
-                  <td class="info-label">Contact</td>
-                  <td class="info-value">
-                    <a href="mailto:{{.Contact}}" target="_blank">{{.Contact}}</a>
-                  </td>
-                  <td class="info-actions"></td>
-                </tr>
-                <tr>
-                  <td class="info-label">WebSocket URL</td>
-                  <td class="info-value">
-                    <span class="websocket-url" id="websocket-url"
-                      >wss://{{.Host}}</span
-                    >
-                  </td>
-                  <td class="info-actions">
-                    <button
-                      class="copy-btn"
-                      onclick="copyToClipboard('websocket-url')"
-                    >
-                      <i class="fas fa-copy"></i>
-                    </button>
-                  </td>
-                </tr>
-                <tr>
-                  <td class="info-label">Public Key</td>
-                  <td class="info-value">
-                    <span class="pubkey" id="pubkey">{{.Pubkey}}</span>
-                  </td>
-                  <td class="info-actions">
-                    <button
-                      class="copy-btn"
-                      onclick="copyToClipboard('pubkey')"
-                    >
-                      <i class="fas fa-copy"></i>
-                    </button>
-                  </td>
-                </tr>
-                <tr>
-                  <td class="info-label">Relay ID</td>
-                  <td class="info-value">
-                    <span class="relay-id" id="relay-id">{{.RelayID}}</span>
-                  </td>
-                  <td class="info-actions">
-                    <button
-                      class="copy-btn"
-                      onclick="copyToClipboard('relay-id')"
-                    >
-                      <i class="fas fa-copy"></i>
-                    </button>
-                  </td>
-                </tr>
-                <tr>
-                  <td class="info-label">Distributed</td>
-                  <td class="info-value">
-                    {{if .Cluster.IsCluster}}
-                    <span class="cluster-indicator" 
-                          data-cluster-info='{{.Cluster | printf "%v"}}'>
-                      <span class="cluster-status">Yes</span>
-                      <i class="fas fa-info-circle cluster-info-icon" title="Hover for cluster details"></i>
-                    </span>
-                    {{else}}
-                    <span class="cluster-standalone">No</span>
-                    {{end}}
-                  </td>
-                  <td class="info-actions"></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <!-- Statistics Section -->
+        <!-- Active Connections Row (first) -->
         <section class="stats-section">
           <div class="card stat-card">
-            <div class="stat-icon">
-              <i class="fas fa-plug"></i>
-            </div>
+            <div class="stat-icon"><i class="fas fa-plug"></i></div>
             <div class="stat-content">
               <h3>Active Connections</h3>
-              <div class="stat-value" id="active-connections">
-                {{.Stats.ActiveConnections}}
-              </div>
+              <div class="stat-value" id="active-connections">{{.Stats.ActiveConnections}}</div>
             </div>
           </div>
           <div class="card stat-card">
-            <div class="stat-icon">
-              <i class="fas fa-envelope"></i>
-            </div>
+            <div class="stat-icon"><i class="fas fa-envelope"></i></div>
             <div class="stat-content">
               <h3>Processed Requests</h3>
-              <div class="stat-value" id="messages-processed">
-                {{.Stats.MessagesProcessed}}
-              </div>
+              <div class="stat-value" id="messages-processed">{{.Stats.MessagesProcessed}}</div>
             </div>
           </div>
           <div class="card stat-card">
-            <div class="stat-icon">
-              <i class="fas fa-database"></i>
-            </div>
+            <div class="stat-icon"><i class="fas fa-database"></i></div>
             <div class="stat-content">
               <h3>Stored Events</h3>
-              <div class="stat-value" id="events-stored">
-                {{.Stats.EventsStored}}
-              </div>
+              <div class="stat-value" id="events-stored">{{.Stats.EventsStored}}</div>
             </div>
           </div>
           <div class="card stat-card">
-            <div class="stat-icon">
-              <i class="fas fa-clock"></i>
-            </div>
+            <div class="stat-icon"><i class="fas fa-clock"></i></div>
             <div class="stat-content">
               <h3>Uptime</h3>
               <div class="stat-value" id="uptime">{{.Uptime}}</div>
@@ -166,14 +77,14 @@
           </div>
         </section>
 
-        <!-- NIPs Support Section -->
+        <!-- Supported NIPs Section -->
         <section class="card nips-section">
           <h2><i class="fas fa-check-circle"></i> Supported NIPs</h2>
           <div class="nips-grid">
             {{range .SupportedNIPs}}
-            <a href="https://github.com/nostr-protocol/nips/blob/master/{{printf "%02d" .}}.md" target="_blank" class="nip-badge-link">
+            <a href="https://nips.nostr.com/{{formatNIP .}}" target="_blank" class="nip-badge-link">
               <div class="nip-badge">
-                <span class="nip-number">NIP-{{printf "%02d" .}}</span>
+                <span class="nip-number">NIP-{{formatNIP .}}</span>
                 <i class="fas fa-external-link-alt nip-link-icon"></i>
               </div>
             </a>
@@ -181,28 +92,7 @@
           </div>
         </section>
 
-        <!-- Custom NIPs Section -->
-        {{if .CustomNIPs}}
-        <section class="card nips-section">
-          <h2><i class="fas fa-star"></i> Custom NIPs</h2>
-          <div class="custom-nips-list">
-            {{range .CustomNIPs}}
-            <a href="{{.Link}}" target="_blank" class="custom-nip-card">
-              <div class="custom-nip-header">
-                <span class="custom-nip-id">NIP-{{.ID}}</span>
-                <i class="fas fa-external-link-alt nip-link-icon"></i>
-              </div>
-              <div class="custom-nip-content">
-                <h3 class="custom-nip-name">{{.Name}}</h3>
-                <p class="custom-nip-description">{{.Description}}</p>
-              </div>
-            </a>
-            {{end}}
-          </div>
-        </section>
-        {{end}}
-
-        <!-- Limitations Section -->
+        <!-- Relay Configuration Section -->
         <section class="card limitations-section">
           <h2><i class="fas fa-cog"></i> Relay Configuration</h2>
           <div class="limitations-grid">
@@ -228,17 +118,13 @@
             </div>
             <div class="limitation-item">
               <label>Auth Required</label>
-              <span
-                class="{{if .Limitation.AuthRequired}}enabled{{else}}disabled{{end}}"
-              >
+              <span class="{{if .Limitation.AuthRequired}}enabled{{else}}disabled{{end}}">
                 {{if .Limitation.AuthRequired}}Yes{{else}}No{{end}}
               </span>
             </div>
             <div class="limitation-item">
               <label>Payment Required</label>
-              <span
-                class="{{if .Limitation.PaymentRequired}}enabled{{else}}disabled{{end}}"
-              >
+              <span class="{{if .Limitation.PaymentRequired}}enabled{{else}}disabled{{end}}">
                 {{if .Limitation.PaymentRequired}}Yes{{else}}No{{end}}
               </span>
             </div>
@@ -249,34 +135,12 @@
       <!-- Footer -->
       <footer class="footer">
         <div class="footer-content">
-          <div class="footer-info">
-            <div class="footer-brand">
-              <img src="/static/shugur-logo-full.svg" alt="Shugur" class="footer-logo" />
-            </div>
-            <p class="footer-tagline">Build open, resilient tech for everyone.</p>
-            <p class="footer-copyright">&copy; <span id="currentYear"></span> Shugur Network. All rights reserved.</p>
-          </div>
-          
-          <div class="footer-nav">
-            <div class="footer-links">
-              <a href="https://github.com/Shugur-Network/Relay" target="_blank">
-                <i class="fab fa-github"></i> Source Code
-              </a>
-              <a href="https://github.com/Shugur-Network/docs" target="_blank">
-                <i class="fas fa-book"></i> Documentation
-              </a>
-              <a href="https://shugur.com" target="_blank">
-                <i class="fas fa-globe"></i> Website
-              </a>
-              <a href="mailto:{{.Contact}}" target="_blank">
-                <i class="fas fa-envelope"></i> Support
-              </a>
-            </div>
-            
-            <div class="footer-status">
-              <div class="footer-status-dot"></div>
-              <span>Relay Online</span>
-            </div>
+          <div class="footer-simple">
+            <a href="https://github.com/psam21/ns" target="_blank" class="footer-source">
+              <i class="fab fa-github"></i> Relay Source Code
+            </a>
+            <span class="footer-separator">&middot;</span>
+            <span class="footer-love">Made with <i class="fas fa-heart"></i> for freedom tech</span>
           </div>
         </div>
       </footer>
@@ -284,11 +148,5 @@
 
     <!-- Scripts -->
     <script src="/static/script.js"></script>
-    <script>
-      document.addEventListener('DOMContentLoaded', function() {
-        var currentYear = new Date().getFullYear();
-        document.getElementById('currentYear').textContent = currentYear;
-      });
-    </script>
   </body>
 </html>

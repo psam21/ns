@@ -101,9 +101,21 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 	dashboardHeaders := DefaultSecurityHeaders()
 	dashboardHeaders.Apply(w)
 	
-	// Load template
+	// Load template with custom functions
 	tmplPath := filepath.Join("web", "templates", "index.html")
-	tmpl, err := template.ParseFiles(tmplPath)
+	funcMap := template.FuncMap{
+		"formatNIP": func(v interface{}) string {
+			switch val := v.(type) {
+			case int:
+				return fmt.Sprintf("%02d", val)
+			case string:
+				return val
+			default:
+				return fmt.Sprintf("%v", val)
+			}
+		},
+	}
+	tmpl, err := template.New("index.html").Funcs(funcMap).ParseFiles(tmplPath)
 	if err != nil {
 		h.logger.Error("Failed to parse dashboard template", zap.Error(err))
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

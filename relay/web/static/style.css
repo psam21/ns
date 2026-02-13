@@ -161,6 +161,64 @@ body {
   100% { opacity: 1; box-shadow: 0 0 0.75rem rgba(239, 68, 68, 0.4); }
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.relay-name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.header-description {
+  margin: 1rem 0 0.75rem;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.header-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8125rem;
+  color: var(--text-tertiary);
+}
+
+.header-meta-item a {
+  color: var(--text-tertiary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.header-meta-item a:hover {
+  color: var(--text-brand);
+}
+
+.header-meta-item .copy-btn {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 0.125rem 0.25rem;
+  font-size: 0.75rem;
+  transition: color 0.2s ease;
+}
+
+.header-meta-item .copy-btn:hover {
+  color: var(--text-brand);
+}
+
 /* Card Styles */
 .card {
   background: var(--bg-primary);
@@ -581,119 +639,48 @@ body {
 
 /* Footer */
 .footer {
-  margin-top: 4rem;
-  padding: 3rem 0;
+  margin-top: 2rem;
+  padding: 1.5rem 0;
   border-top: 1px solid var(--border-default);
-  background: #FAFAFA;
 }
 
 .footer-content {
   width: 100%;
   padding: 0 2rem;
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 2rem;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  font-weight: 400;
+  justify-content: center;
+  align-items: center;
 }
 
-.footer-info {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  flex: 1;
-  max-width: 400px;
-}
-
-.footer-brand {
+.footer-simple {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 0.5rem;
-}
-
-.footer-logo {
-  width: 170px;
-  height: 40px;
-  padding: 0;
-}
-
-.footer-tagline {
-  color: var(--text-tertiary);
-  font-size: 0.875rem;
-  line-height: 1.5;
-  margin: 0;
-}
-
-.footer-copyright {
+  font-size: 0.9rem;
   color: var(--text-secondary);
-  font-size: 0.8125rem;
-  margin: 0;
 }
 
-.footer-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  align-items: flex-end;
-}
-
-.footer-links {
-  display: flex;
-  gap: 2rem;
-  flex-wrap: wrap;
-}
-
-.footer-links a {
-  color: var(--text-secondary);
+.footer-source {
+  color: var(--text-brand);
   text-decoration: none;
   font-weight: 500;
   transition: color 0.2s ease;
-  font-size: 0.875rem;
 }
 
-.footer-links a:hover {
-  color: var(--text-brand);
-}
-
-.footer-social {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-}
-
-.footer-social a {
-  color: var(--text-tertiary);
-  font-size: 1.25rem;
-  transition: color 0.2s ease;
-}
-
-.footer-social a:hover {
+.footer-source:hover {
   color: var(--shugur-500);
 }
 
-.footer-status {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: var(--success-50);
-  border: 1px solid var(--success-200);
-  border-radius: 1.5rem;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--success-700);
+.footer-separator {
+  color: var(--gray-300);
 }
 
-.footer-status-dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  background: var(--success-500);
-  border-radius: 50%;
-  animation: pulse 2s infinite;
+.footer-love {
+  color: var(--text-tertiary);
+}
+
+.footer-love .fa-heart {
+  color: #ef4444;
 }
 
 /* Responsive Design */
@@ -737,40 +724,13 @@ body {
   }
 
   .footer-content {
+    padding: 0 1rem;
+  }
+
+  .footer-simple {
     flex-direction: column;
     text-align: center;
-    gap: 2rem;
-    padding: 0 1rem;
-    align-items: center;
-  }
-
-  .footer-nav {
-    order: -1;
-    align-items: center;
-  }
-
-  .footer-info {
-    max-width: none;
-    align-items: center;
-  }
-
-  .footer-links {
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 1.5rem;
-  }
-
-  .footer-social {
-    justify-content: center;
-  }
-
-  .footer-brand {
-    justify-content: center;
-  }
-
-  .footer-logo {
-    width: 120px;
-    height: 28px;
+    gap: 0.5rem;
   }
 
   .info-table {
