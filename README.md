@@ -67,6 +67,8 @@ Plus custom NIPs: XX (Time Capsules), YY (Nostr Web Pages)
 | `/mirror` | PUT | Mirror blob from URL |
 | `/media` | PUT | Upload + optimize media |
 
+**Upload limit:** 10MB hard cap (enforced at header check and during streaming).
+
 Files are stored in S3 with no expiration (perpetual) and authenticated via kind `24242` Nostr events. Deletes are hard deletes — blobs are purged from S3 when no owners remain.
 
 ## Repository Structure

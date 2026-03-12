@@ -147,6 +147,37 @@ git add -A && git commit -m "description" && git push
 - **Schema init fast-path**: `InitializeSchema` checks if the `events` table exists and skips all DDL if so. Without this, `CREATE INDEX IF NOT EXISTS` takes ~158s on 60K+ rows. The `splitSQL()` helper splits DDL at semicolons while respecting `$$` dollar-quoted function bodies, since pgx extended query protocol only supports single statements.
 - **Database**: PostgreSQL 16 running locally on EC2 (migrated from CockroachDB Cloud). Connection via `127.0.0.1:5432`, user `relay`, database `shugur`.
 
+## Blossom Media Server
+
+| Item | Value |
+|------|-------|
+| Source | `blossom/src/` (TypeScript/Node.js) |
+| Config | `blossom/config.yml` |
+| EC2 path | `/opt/blossom/` |
+| Systemd service | `blossom` |
+| Port (internal) | `3000` |
+| Storage | AWS S3 (`nostr-ltd-blossom` bucket, ap-south-1) |
+| Upload limit | 10MB hard cap (`maxUploadSize` in config) |
+
+### Key Blossom Source Files
+
+| File | Purpose |
+|------|--------|
+| `blossom/src/index.ts` | Koa app setup, middleware, static serving |
+| `blossom/src/config.ts` | Config type definition, YAML/env var loading, defaults |
+| `blossom/src/api/upload.ts` | `/upload` endpoint, `checkUpload` middleware (auth, rules, size limit) |
+| `blossom/src/api/media.ts` | `/media` endpoint (upload + optimize) |
+| `blossom/src/api/mirror.ts` | `/mirror` endpoint (fetch + store from URL) |
+| `blossom/src/storage/upload.ts` | Stream handling, temp files, 10MB streaming enforcement |
+| `blossom/config.yml` | Production config (S3, auth, upload limit) |
+
+### Blossom Architecture Notes
+
+- **Upload size limit**: `maxUploadSize` (default 10MB) enforced at 3 levels: `Content-Length` header check in `checkUpload` middleware (returns 413), streaming byte count in `saveFromUploadRequest`, and streaming byte count in `saveFromResponse` (for mirrors).
+- **Auth**: Kind `24242` Nostr events, BUD-06 sha256 binding via `x` tag.
+- **Storage**: S3 backend with `removeWhenNoOwners: true` — blobs are hard-deleted from S3 when last owner removes.
+- **Media optimization**: Images → WebP (1920×1080 max, quality 90), Video → MP4 (libx264, 1080p max, 30fps).
+
 ## Conventions
 
 - Commit messages should be descriptive with what changed and why
