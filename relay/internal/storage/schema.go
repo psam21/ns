@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"strings"
 
 	"github.com/Shugur-Network/relay/internal/logger"
 	"go.uber.org/zap"
@@ -53,15 +54,67 @@ func (db *DB) InitializeSchema(ctx context.Context) error {
 
 	logger.Info("Initializing database schema...")
 
-	// Execute the schema DDL to create tables
-	_, err := db.Pool.Exec(ctx, schemaDDL)
-	if err != nil {
-		logger.Error("Failed to initialize database schema", zap.Error(err))
-		return fmt.Errorf("failed to initialize database schema: %w", err)
+	// Fast path: if the events table already exists, skip DDL entirely.
+	// All DDL uses IF NOT EXISTS / CREATE OR REPLACE, so re-running is safe
+	// but slow (~2min on 60K+ rows due to index existence checks).
+	var tableExists bool
+	if err := db.Pool.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'events')`,
+	).Scan(&tableExists); err != nil {
+		logger.Warn("Could not check for existing schema, running full DDL", zap.Error(err))
+	} else if tableExists {
+		logger.Info("✅ Database schema already exists, skipping DDL")
+		return nil
+	}
+
+	// Split DDL into individual statements and execute each one.
+	// pgx extended query protocol only supports single statements;
+	// splitting avoids the need for simple protocol and handles
+	// dollar-quoted function bodies correctly.
+	statements := splitSQL(schemaDDL)
+	for _, stmt := range statements {
+		if _, err := db.Pool.Exec(ctx, stmt); err != nil {
+			logger.Error("Failed to execute schema statement", zap.Error(err), zap.String("sql", stmt[:min(len(stmt), 80)]))
+			return fmt.Errorf("failed to initialize database schema: %w", err)
+		}
 	}
 
 	logger.Info("✅ Database schema initialized successfully")
 	return nil
+}
+
+// splitSQL splits a SQL script into individual statements, respecting
+// dollar-quoted strings (e.g. $$ ... $$) so function bodies are not split.
+func splitSQL(ddl string) []string {
+	var stmts []string
+	var cur strings.Builder
+	inDollarQuote := false
+	runes := []rune(ddl)
+
+	for i := 0; i < len(runes); i++ {
+		ch := runes[i]
+		// Detect $$ delimiter
+		if ch == '$' && i+1 < len(runes) && runes[i+1] == '$' {
+			cur.WriteRune(ch)
+			cur.WriteRune(runes[i+1])
+			i++
+			inDollarQuote = !inDollarQuote
+			continue
+		}
+		if ch == ';' && !inDollarQuote {
+			s := strings.TrimSpace(cur.String())
+			if s != "" {
+				stmts = append(stmts, s)
+			}
+			cur.Reset()
+			continue
+		}
+		cur.WriteRune(ch)
+	}
+	if s := strings.TrimSpace(cur.String()); s != "" {
+		stmts = append(stmts, s)
+	}
+	return stmts
 }
 
 // VerifySchema checks if all required tables exist

@@ -24,18 +24,15 @@ CREATE TABLE IF NOT EXISTS events (
   CONSTRAINT kind_range CHECK (kind >= 0 AND kind <= 65535)
 );
 
--- Performance-optimized indexes (INCLUDE for covering queries, PostgreSQL 11+)
+-- Performance-optimized indexes
 CREATE INDEX IF NOT EXISTS events_created_at_desc
-  ON events (created_at DESC)
-  INCLUDE (pubkey, kind, tags, content, sig);
+  ON events (created_at DESC);
 
 CREATE INDEX IF NOT EXISTS events_kind_created_at
-  ON events (kind ASC, created_at ASC)
-  INCLUDE (pubkey, tags, content, sig);
+  ON events (kind ASC, created_at ASC);
 
 CREATE INDEX IF NOT EXISTS events_pubkey_created_at
-  ON events (pubkey ASC, created_at ASC)
-  INCLUDE (kind, tags, content, sig);
+  ON events (pubkey ASC, created_at ASC);
 
 -- GIN indexes for JSONB queries
 CREATE INDEX IF NOT EXISTS events_tags ON events USING GIN (tags);
@@ -45,12 +42,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_replaceable
   ON events (pubkey, kind)
   WHERE kind = 0 OR kind = 3 OR kind = 41 OR (kind >= 10000 AND kind < 20000);
 
+-- Helper function to extract "d" tag value for addressable events
+CREATE OR REPLACE FUNCTION nostr_d_tag(tags JSONB)
+RETURNS TEXT IMMUTABLE LANGUAGE sql AS $$
+  SELECT elem->>1 FROM jsonb_array_elements(tags) AS elem
+  WHERE elem->>0 = 'd' LIMIT 1
+$$;
+
 -- Unique partial index for addressable events (kinds 30000-39999 with "d" tag)
 CREATE UNIQUE INDEX IF NOT EXISTS uq_addressable
-  ON events (pubkey, kind, (
-    (SELECT elem->>1 FROM jsonb_array_elements(tags) AS elem
-     WHERE elem->>0 = 'd' LIMIT 1)
-  ))
+  ON events (pubkey, kind, nostr_d_tag(tags))
   WHERE kind >= 30000 AND kind < 40000
     AND tags @> '[["d"]]'::jsonb;
 
@@ -58,7 +59,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_addressable
 -- Performance Notes
 -- =============================================================================
 -- This schema provides:
--- 1. Optimized indexes with INCLUDE clauses for covering queries
+-- 1. Standard btree indexes for common query patterns
 -- 2. GIN index for efficient JSONB tag queries
 -- 3. Partial unique indexes for Nostr replaceable/addressable event semantics
 -- 4. Aurora PostgreSQL handles replication, compression, and HA automatically
