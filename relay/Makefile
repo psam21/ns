@@ -269,7 +269,7 @@ prod-logs:
 .PHONY: db-up
 db-up:
 	@echo "Starting database..."
-	@docker-compose -f docker/compose/docker-compose.dev.yml up -d cockroach
+	@docker-compose -f docker/compose/docker-compose.dev.yml up -d postgres
 
 .PHONY: db-migrate
 db-migrate: build

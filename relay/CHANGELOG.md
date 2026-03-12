@@ -339,7 +339,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Core NIP Support**: Implemented NIPs 1, 2, 3, 4, 9, 11, 15, 16, 17, 20, 22, 23, 25, 28, 33, 40, 44
-- **Database Integration**: CockroachDB support with connection pooling
+- **Database Integration**: PostgreSQL support with connection pooling
 - **WebSocket Server**: Full WebSocket relay implementation
 - **Configuration System**: YAML-based configuration with validation
 

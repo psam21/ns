@@ -47,7 +47,6 @@ log/
 *.db
 *.sqlite
 *.sqlite3
-cockroachDB/
 ds/
 vaultConfig/
 
