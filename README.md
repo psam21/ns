@@ -33,15 +33,15 @@ Nostr Clients (Damus, Amethyst, Primal, etc.)
        │                           │
        ▼                           ▼
 ┌──────────────┐          ┌─────────────────┐
-│  AWS S3      │          │ CockroachDB     │
-│  (blobs)     │          │ Cloud           │
+│  AWS S3      │          │ Aurora          │
+│  (blobs)     │          │ PostgreSQL      │
 └──────────────┘          └─────────────────┘
 ```
 
 ## Infrastructure
 
 - **Compute:** AWS EC2 t4g.small (ARM Graviton, 2 vCPU, 2 GB RAM) — ap-south-1 (Mumbai)
-- **Database:** CockroachDB Cloud Serverless (free tier)
+- **Database:** Aurora PostgreSQL Serverless v2
 - **Blob Storage:** AWS S3 (`nostr-ltd-blossom` bucket, ap-south-1)
 - **TLS:** Caddy with automatic Let's Encrypt
 - **Domain:** nostr.ltd (BigRock registrar)
@@ -83,12 +83,12 @@ Files are stored in S3 with no expiration (perpetual) and authenticated via kind
 │   ├── src/                   # Server source (TypeScript)
 │   ├── admin/                 # Admin dashboard (React)
 │   └── public/                # Upload UI
-└── relay/                     # Shugur Relay source (patched for CockroachDB Cloud)
+└── relay/                     # Shugur Relay source (PostgreSQL backend)
 ```
 
 ## Patches Applied
 
-The relay source includes patches for CockroachDB Cloud support:
+The relay source includes patches for Aurora PostgreSQL support:
 
 - **`internal/config/database.go`** — Added `URL` field for direct connection strings
 - **`internal/config/defaults.yaml`** — Added `URL` default and `RATE_LIMIT.BAN_DURATION`

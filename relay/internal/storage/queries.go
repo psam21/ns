@@ -125,13 +125,13 @@ func (db *DB) InsertEvent(ctx context.Context, evt nostr.Event) error {
 
 // Modified EventBuffer that processes events one at a time
 
-// BatchInsertEvents optimized for CockroachDB with timeout handling
+// BatchInsertEvents optimized for PostgreSQL with timeout handling
 func (db *DB) BatchInsertEvents(ctx context.Context, events []nostr.Event) error {
 	if len(events) == 0 {
 		return nil
 	}
 
-	// Use smaller batches for CockroachDB
+	// Use smaller batches for efficiency
 	const batchSize = 50
 
 	// Execute in smaller batches with retries
@@ -165,12 +165,6 @@ func (db *DB) insertEventBatch(ctx context.Context, events []nostr.Event) error 
 			db.recordError(fmt.Errorf("rollback failed: %w", rollbackErr))
 		}
 	}()
-
-	// Set statement timeout and priority
-	_, err = tx.Exec(ctx, "SET TRANSACTION PRIORITY HIGH")
-	if err != nil {
-		return fmt.Errorf("failed to set transaction priority: %w", err)
-	}
 
 	batch := &pgx.Batch{}
 	for _, evt := range events {

@@ -3,21 +3,23 @@
 # This file contains everything needed for a production-ready relay
 
 services:
-  cockroachdb:
-    image: cockroachdb/cockroach:latest
-    container_name: cockroachdb
-    command: start-single-node --insecure
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_USER: relay
+      POSTGRES_PASSWORD: relay
+      POSTGRES_DB: shugur
     volumes:
-      - cockroach_volume:/cockroach/cockroach-data
+      - postgres_volume:/var/lib/postgresql/data
     ports:
-      - "26257:26257" # CockroachDB SQL
-      - "9090:8080" # CockroachDB Admin UI
+      - "5432:5432" # PostgreSQL
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health?ready=1"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "pg_isready -U relay -d shugur"]
+      interval: 10s
+      timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 10s
     networks:
       - relay_network
 
@@ -28,10 +30,11 @@ services:
     # SECURITY: No external ports - all traffic routes through Caddy
     environment:
       - SHUGUR_ENV=development
-      - SHUGUR_DB_HOST=cockroachdb
-      - SHUGUR_DB_PORT=26257
+      - SHUGUR_DB_HOST=postgres
+      - SHUGUR_DB_PORT=5432
       - SHUGUR_DB_DATABASE=shugur
-      - SHUGUR_DB_USER=root
+      - SHUGUR_DB_USER=relay
+      - SHUGUR_DB_PASSWORD=relay
       - SHUGUR_DB_SSL_MODE=disable
       - SHUGUR_LOG_LEVEL=debug
       - SHUGUR_LOG_FORMAT=text
@@ -45,7 +48,7 @@ services:
       - ./logs:/app/logs
       - ./web:/app/web:ro
     depends_on:
-      cockroachdb:
+      postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/info"]
@@ -82,7 +85,7 @@ services:
 
 # Persistent volumes for data storage
 volumes:
-  cockroach_volume:
+  postgres_volume:
     driver: local
   caddy_data:
     driver: local

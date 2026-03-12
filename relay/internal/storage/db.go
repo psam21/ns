@@ -28,7 +28,7 @@ const (
 	DBStateClosed
 )
 
-// DB represents the CockroachDB connection
+// DB represents the PostgreSQL database connection
 type DB struct {
 	Pool            *pgxpool.Pool
 	Bloom           *bloom.BloomFilter
@@ -88,7 +88,7 @@ func createPoolBasedOnLoad(ctx context.Context, dbURI string, maxWSConnections i
 	return pgxpool.NewWithConfig(ctx, config)
 }
 
-// InitDB initializes the CockroachDB connection with retries and optimized connection pooling
+// InitDB initializes the PostgreSQL connection with retries and optimized connection pooling
 func InitDB(ctx context.Context, dbURI string, maxWSConnections int) (*DB, error) {
 	var pool *pgxpool.Pool
 	var err error
@@ -232,7 +232,7 @@ func (db *DB) ExecuteCommand(ctx context.Context, query string, args ...interfac
 	return err
 }
 
-// RebuildBloomFilter fetches all event IDs from CockroachDB and updates the Bloom filter.
+// RebuildBloomFilter fetches all event IDs from PostgreSQL and updates the Bloom filter.
 func (db *DB) RebuildBloomFilter(ctx context.Context) error {
 	if !db.isConnected() {
 		return fmt.Errorf("database is not connected")

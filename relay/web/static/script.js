@@ -346,7 +346,7 @@ function formatUptime(seconds) {
 // Initialize dashboard when DOM is loaded
 document.addEventListener("DOMContentLoaded", () => {
   new RelayDashboard();
-  new CockroachClusterInfo();
+  new DatabaseClusterInfo();
 
   // Set WebSocket URL dynamically
   const websocketUrlElement = document.getElementById("websocket-url");
@@ -356,8 +356,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-// CockroachDB Cluster Information Handler
-class CockroachClusterInfo {
+// Database Cluster Information Handler
+class DatabaseClusterInfo {
   constructor() {
     this.tooltip = null;
     this.init();

@@ -222,7 +222,7 @@ We use a **tag-based release approach** for streamlined releases:
 | Component | Version | Purpose |
 |-----------|---------|---------|
 | **Go** | 1.24.4+ | Main development language |
-| **CockroachDB** | v24.1.5+ | Primary database |
+| **PostgreSQL** | 16+ | Primary database |
 | **Docker** | 20.0+ | Development containers |
 | **Git** | 2.0+ | Version control |
 
@@ -253,13 +253,14 @@ go run ./cmd --config config/development.yaml
 #### Option 2: Manual Setup
 
 ```bash
-# 1. Setup CockroachDB (Development Ports)
+# 1. Setup PostgreSQL (Development Ports)
 docker run -d \
-  --name cockroach-dev \
-  -p 26260:26257 \
-  -p 9091:8080 \
-  cockroachdb/cockroach:v24.1.5 \
-  start-single-node --insecure
+  --name postgres-dev \
+  -p 5433:5432 \
+  -e POSTGRES_USER=relay \
+  -e POSTGRES_PASSWORD=relay \
+  -e POSTGRES_DB=shugur \
+  postgres:16-alpine
 
 # 2. Configure relay
 cp config/development.yaml config.yaml
@@ -368,9 +369,9 @@ export SHUGUR_METRICS_PORT=8182
 
 | File | Purpose | Environment | Ports |
 |------|---------|-------------|-------|
-| `config/development.yaml` | Local development | Development | WS: 8081, Metrics: 8182, DB: 26260 |
-| `config/test.yaml` | Testing environment | Testing | WS: 8082, Metrics: 8183, DB: 26262 |
-| `config/production.yaml` | Production template | Production | WS: 8080, Metrics: 8180, DB: 26257 |
+| `config/development.yaml` | Local development | Development | WS: 8081, Metrics: 8182, DB: 5433 |
+| `config/test.yaml` | Testing environment | Testing | WS: 8082, Metrics: 8183, DB: 5434 |
+| `config/production.yaml` | Production template | Production | WS: 8080, Metrics: 8180, DB: 5432 |
 | `config.yaml` | Your local config | Local override | Custom |
 
 ### Multi-Environment Setup
@@ -379,11 +380,11 @@ Shugur Relay supports running multiple environments simultaneously on the same h
 
 #### **Environment Ports Overview**
 
-| Environment | WebSocket | Metrics | DB SQL | DB RPC | DB Admin |
-|-------------|-----------|---------|--------|--------|----------|
-| **Development** | 8081 | 8182 | 26260 |  | 9091 |
-| **Testing** | 8082 | 8183 | 26262 |  | 9092 |
-| **Production** | 8080 | 8180 | 26257 | 26258 | 9090 |
+| Environment | WebSocket | Metrics | DB |
+|-------------|-----------|---------|----|
+| **Development** | 8081 | 8182 | 5433 |
+| **Testing** | 8082 | 8183 | 5434 |
+| **Production** | 8080 | 8180 | 5432 |
 
 #### **Running Multiple Environments**
 
@@ -423,13 +424,13 @@ For detailed port mapping information, see [config/PORT_MAPPING.md](config/PORT_
 
 ```bash
 # Connect to database
-docker exec -it cockroach-dev ./cockroach sql --insecure
+docker exec -it postgres-dev psql -U relay -d shugur
 
 # Backup development data
-docker exec cockroach-dev ./cockroach dump shugur --insecure > backup.sql
+docker exec postgres-dev pg_dump -U relay shugur > backup.sql
 
 # Restore from backup
-docker exec -i cockroach-dev ./cockroach sql --insecure < backup.sql
+docker exec -i postgres-dev psql -U relay -d shugur < backup.sql
 ```
 
 ## 🧪 Testing
@@ -665,7 +666,7 @@ We appreciate all contributions! Contributors will be:
 2. **Check Resources**
    - [Nostr Protocol Documentation](https://github.com/nostr-protocol/nostr)
    - [NIP Specifications](https://github.com/nostr-protocol/nips)
-   - [CockroachDB Documentation](https://www.cockroachlabs.com/docs/)
+   - [PostgreSQL Documentation](https://www.postgresql.org/docs/16/)
 
 ### How to Ask for Help
 

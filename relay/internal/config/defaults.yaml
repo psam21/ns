@@ -55,9 +55,9 @@ RELAY_POLICY:
     PUBKEYS: []                  # List of pubkeys to whitelist (hex format)
 
 DATABASE:
-  URL: ""                        # Full connection URL (for CockroachDB Cloud). When set, SERVER and PORT are ignored.
+  URL: ""                        # Full connection URL (for Aurora PostgreSQL). When set, SERVER and PORT are ignored.
   SERVER: "localhost"            # Database server hostname (used when URL is empty)
-  PORT: 26257                    # Database port (used when URL is empty)
+  PORT: 5432                     # Database port (used when URL is empty)
 
 CAPSULES:
   ENABLED: true                  # Enable time capsules feature

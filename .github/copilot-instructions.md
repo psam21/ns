@@ -4,7 +4,7 @@
 
 This monorepo contains two main components:
 
-- **Shugur Relay** (`relay/`) — A high-performance Nostr relay written in Go, backed by CockroachDB
+- **Shugur Relay** (`relay/`) — A high-performance Nostr relay written in Go, backed by PostgreSQL
 - **Blossom** (`blossom/`) — A media server (TypeScript/Node.js) for Nostr file storage
 - **Deploy configs** (`deploy/`) — systemd services, Caddyfile, config templates
 
@@ -106,7 +106,7 @@ git add -A && git commit -m "description" && git push
 | `relay/internal/relay/nips/nip_ee.go` | NIP-EE: MLS E2EE validators (kinds 443, 444, 445, 10051) |
 | `relay/internal/relay/nips/nip45.go` | NIP-45: COUNT request handling with HyperLogLog support |
 | `relay/internal/relay/nip77.go` | NIP-77: Negentropy syncing (NEG-OPEN/MSG/CLOSE/ERR) |
-| `relay/internal/relay/nip86.go` | NIP-86: Relay Management API (JSON-RPC, NIP-98 auth, 18 methods) |
+| `relay/internal/relay/nip86.go` | NIP-86: Relay Management API (JSON-RPC, NIP-98 auth, 17 methods) |
 | `relay/internal/relay/nip29.go` | NIP-29: Relay-based Groups (group store, membership, moderation, relay-signed metadata) |
 | `relay/internal/relay/nip43.go` | NIP-43: Relay Access Metadata (membership store, invite codes, join/leave flow) |
 
@@ -126,7 +126,7 @@ git add -A && git commit -m "description" && git push
 | `relay/internal/metrics/relay.go` | Prometheus metrics, atomic counters |
 | `relay/internal/application/node.go` | Application node, event processing |
 | `relay/internal/application/node_builder.go` | Node initialization |
-| `relay/internal/storage/queries.go` | CockroachDB queries — `persistDeletion` (NIP-09 with `e`+`a` tag support), `persistVanish` (NIP-62 full pubkey wipe), `IsVanishedPubkey` |
+| `relay/internal/storage/queries.go` | PostgreSQL queries — `persistDeletion` (NIP-09 with `e`+`a` tag support), `persistVanish` (NIP-62 full pubkey wipe), `IsVanishedPubkey` |
 | `relay/internal/storage/event_processor.go` | Event processing worker pool — `QueueEvent`, `QueueDeletion`, `QueueVanish`, `processEvents` switch (ephemeral→vanish→deletion→replaceable→addressable→default) |
 | `deploy/config.yaml` | Production relay config (contact, description, etc.) |
 

@@ -1,5 +1,6 @@
 blossom/node_modules/
 blossom/data/
+data/
 blossom/.env
 blossom/build/
 blossom/dist/

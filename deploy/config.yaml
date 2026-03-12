@@ -1,6 +1,6 @@
 # Production Configuration for nostr.ltd Relay
 # Running on AWS EC2 t4g.small (2 vCPU ARM, 2 GB RAM)
-# Database: CockroachDB Cloud Serverless
+# Database: Aurora PostgreSQL Serverless v2
 
 LOGGING:
   LEVEL: info

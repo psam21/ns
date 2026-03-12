@@ -159,7 +159,6 @@ body:
       label: Database Backend
       description: Which database backend are you using?
       options:
-        - CockroachDB
         - PostgreSQL
         - Other
     validations:

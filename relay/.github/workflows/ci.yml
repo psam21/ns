@@ -243,19 +243,20 @@ jobs:
       - name: Start test database
         if: matrix.test-type == 'integration'
         run: |
-          echo "🗄️ Starting CockroachDB for integration tests..."
+          echo "🗄️ Starting PostgreSQL for integration tests..."
           docker run -d \
-            --name cockroach-test \
-            -p 26257:26257 \
-            -p 8080:8080 \
+            --name postgres-test \
+            -p 5432:5432 \
+            -e POSTGRES_USER=relay \
+            -e POSTGRES_PASSWORD=relay \
+            -e POSTGRES_DB=shugur \
             --memory=1g \
             --cpus=1.0 \
-            cockroachdb/cockroach:v24.1.5 \
-            start-single-node --insecure --max-sql-memory=50% --cache=256MB
+            postgres:16-alpine
 
           # Wait for database to be ready
-          timeout 60s bash -c 'until docker exec cockroach-test /cockroach/cockroach sql --insecure --execute="SELECT 1;" > /dev/null 2>&1; do sleep 3; done'
-          echo "✅ CockroachDB is ready"
+          timeout 60s bash -c 'until docker exec postgres-test pg_isready -U relay -d shugur > /dev/null 2>&1; do sleep 3; done'
+          echo "✅ PostgreSQL is ready"
 
       - name: Run unit tests
         if: matrix.test-type == 'unit'
@@ -270,7 +271,7 @@ jobs:
           go test -v -race -run="Integration" -coverprofile=coverage-integration.out -timeout=15m ./...
         env:
           SHUGUR_DB_HOST: localhost
-          SHUGUR_DB_PORT: 26257
+          SHUGUR_DB_PORT: 5432
           SHUGUR_DB_USER: root
           SHUGUR_DB_SSL_MODE: disable
 
@@ -342,8 +343,8 @@ jobs:
       - name: Cleanup test environment
         if: always() && matrix.test-type == 'integration'
         run: |
-          docker stop cockroach-test || true
-          docker rm cockroach-test || true
+          docker stop postgres-test || true
+          docker rm postgres-test || true
 
   # Build verification (PR only - no artifacts)
   build-verify:

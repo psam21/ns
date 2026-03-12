@@ -2,13 +2,13 @@
 
 ## Architecture Overview
 
-**Shugur Relay** is a production-grade Nostr relay built in Go with CockroachDB. The architecture follows a layered design:
+**Shugur Relay** is a production-grade Nostr relay built in Go with PostgreSQL. The architecture follows a layered design:
 
 - **`cmd/`** - CLI entry points using Cobra (`main.go`, `root.go`, `version.go`)
 - **`internal/application/`** - Application orchestration (`Node` struct coordinates all components)
 - **`internal/domain/`** - Core interfaces and business logic contracts
 - **`internal/relay/`** - Nostr protocol handling and WebSocket management
-- **`internal/storage/`** - CockroachDB operations with connection pooling
+- **`internal/storage/`** - PostgreSQL operations with connection pooling
 - **`internal/config/`** - Configuration management using Viper with validation
 
 ## Core Components & Patterns
@@ -80,7 +80,7 @@ make build
 
 ### Environment Setup
 ```bash
-# Development database (CockroachDB)
+# Development database (PostgreSQL)
 docker-compose -f docker/compose/docker-compose.development.yml up -d
 
 # Production environment
@@ -124,7 +124,7 @@ Configuration precedence: **CLI flags** > **Config file** > **Environment variab
 
 ## Integration Points
 
-### 1. CockroachDB Integration
+### 1. PostgreSQL Integration
 - Connection string format: `postgresql://user:pass@host:port/database?sslmode=require`
 - Pool size scales with `maxWSConnections` setting
 - Schema management via `internal/storage/schema.sql`

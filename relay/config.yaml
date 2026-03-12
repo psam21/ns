@@ -52,5 +52,5 @@ CAPSULES:
   MAX_WITNESSES: 10 # Maximum number of witnesses allowed per time capsule
 
 DATABASE:
-  SERVER: "cockroachdb" # Database server hostname
-  PORT: 26257 # Database port
+  SERVER: "postgres" # Database server hostname
+  PORT: 5432 # Database port

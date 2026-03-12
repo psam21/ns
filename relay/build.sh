@@ -13,7 +13,7 @@
 #   ./build.sh --linux                  # Linux (amd64,arm64)
 #   ./build.sh --darwin                 # macOS (amd64,arm64)
 #   ./build.sh --windows                # Windows (amd64,arm64)
-#   ./build.sh --tags "cockroach"       # Pass Go build tags
+#   ./build.sh --tags "postgres"       # Pass Go build tags
 #   ./build.sh --static                 # Static-ish build (CGO_DISABLED=1, adds -trimpath)
 #   ./build.sh --checksum               # Generate SHA256SUMS.txt for produced binaries
 #   ./build.sh --archive                # Create .tar.gz (unix) / .zip (windows) artifacts
@@ -82,7 +82,7 @@ Options:
   --windows             Build for Windows (amd64+arm64)
   --name NAME           Override output binary base name (default: ${BINARY_NAME})
   --main PATH           Override main package path to build (default: ${MAIN_PATH})
-  --tags "TAGS"         Add Go build tags (e.g., "cockroach,netgo")
+  --tags "TAGS"         Add Go build tags (e.g., "netgo")
   --static              Static-ish build: sets CGO_ENABLED=0 and adds -trimpath
   --checksum            Generate SHA256SUMS.txt for produced binaries
   --archive             Create per-target archives (.tar.gz/.zip)

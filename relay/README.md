@@ -27,8 +27,8 @@
     <a href="https://golang.org/">
       <img src="https://img.shields.io/badge/Go-1.24.4+-00ADD8?style=flat&logo=go&logoColor=white" alt="Go Version">
     </a>
-    <a href="https://www.cockroachlabs.com/">
-      <img src="https://img.shields.io/badge/CockroachDB-v24.1.5+-6933FF?style=flat&logo=cockroachlabs&logoColor=white" alt="CockroachDB">
+    <a href="https://www.postgresql.org/">
+      <img src="https://img.shields.io/badge/PostgreSQL-16+-4169E1?style=flat&logo=postgresql&logoColor=white" alt="PostgreSQL">
     </a>
     <a href="https://nostr.com/">
       <img src="https://img.shields.io/badge/Nostr-Protocol-8B5CF6?style=flat&logo=lightning&logoColor=white" alt="Nostr Protocol">
@@ -73,7 +73,7 @@
 
 ---
 
-Shugur Relay is a production-ready Nostr relay built in Go with CockroachDB for distributed storage. It's designed for operators who need reliability, observability, and horizontal scale.
+Shugur Relay is a production-ready Nostr relay built in Go with PostgreSQL for persistent storage. It's designed for operators who need reliability, observability, and horizontal scale.
 
 ## 📖 Table of Contents
 
@@ -214,7 +214,7 @@ Shugur Relay implements the following NIPs for maximum compatibility with Nostr 
 - **Event Validation**: Cryptographic signature verification with Proof of Work (NIP-13)
 - **Subscription Management**: Efficient filtering and real-time updates
 - **Rate Limiting**: Protection against spam and abuse
-- **Event Storage**: Persistent storage with CockroachDB
+- **Event Storage**: Persistent storage with PostgreSQL
 - **Search Support**: Full-text search capabilities (NIP-50)
 - **Relay Information**: Discoverable relay metadata (NIP-11)
 - **Negentropy Syncing**: Efficient set reconciliation for relay sync (NIP-77)
@@ -226,7 +226,7 @@ Shugur Relay implements the following NIPs for maximum compatibility with Nostr 
 
 - **Production-Ready**: Built for reliability and performance with enterprise-grade features.
 - **Horizontally Scalable**: Stateless architecture allows easy scaling across multiple nodes.
-- **Distributed Database**: Uses CockroachDB for high availability and global distribution.
+- **Distributed Database**: Uses PostgreSQL (Aurora Serverless v2) for high availability and scalability.
 - **Advanced Throttling**: Sophisticated rate limiting and abuse prevention mechanisms.
 - **NIP Compliance**: Implements essential Nostr Improvement Proposals (NIPs).
 - **Observability**: Built-in metrics, logging, and monitoring capabilities.
@@ -243,7 +243,7 @@ Before installing Shugur Relay, ensure you have:
 - **Docker & Docker Compose** (for containerized deployment)
 - **Go 1.24.4+** (for building from source)
 - **2GB+ RAM** and **10GB+ disk space**
-- **Open Ports**: 8080 (WebSocket), 8180 (Metrics), 26257 (Database)
+- **Open Ports**: 8080 (WebSocket), 8180 (Metrics), 5432 (Database)
 
 ### Distributed Installation (Recommended)
 
@@ -255,7 +255,7 @@ curl -fsSL https://github.com/Shugur-Network/relay/raw/main/scripts/install.dist
 
 ✅ **What this does:**
 - Installs Docker and dependencies
-- Sets up CockroachDB cluster
+- Sets up PostgreSQL database cluster
 - Deploys relays across nodes
 - Configures monitoring and logging
 
@@ -269,7 +269,7 @@ curl -fsSL https://github.com/Shugur-Network/relay/raw/main/scripts/install.stan
 
 ✅ **What this does:**
 - Installs Docker and dependencies
-- Sets up single CockroachDB instance
+- Sets up single PostgreSQL instance
 - Deploys relay container
 - Configures basic monitoring
 
@@ -277,7 +277,7 @@ curl -fsSL https://github.com/Shugur-Network/relay/raw/main/scripts/install.stan
 
 **Common Issues:**
 
-- **Port conflicts**: Check if ports 8080, 26257 are free: `sudo netstat -tlnp | grep :8080`
+- **Port conflicts**: Check if ports 8080, 5432 are free: `sudo netstat -tlnp | grep :8080`
 - **Docker permission**: Add user to docker group: `sudo usermod -aG docker $USER`
 - **Firewall**: Open required ports: `sudo ufw allow 8080/tcp`
 
@@ -419,7 +419,7 @@ Comprehensive documentation is available in our [documentation](https://docs.shu
 ### **General Questions**
 
 **Q: What makes Shugur Relay different from other Nostr relays?**
-A: Shugur Relay is built for production use with enterprise features like horizontal scaling, distributed database support (CockroachDB), advanced rate limiting, and comprehensive observability.
+A: Shugur Relay is built for production use with enterprise features like horizontal scaling, PostgreSQL-backed storage, advanced rate limiting, and comprehensive observability.
 
 **Q: Can I run Shugur Relay on a Raspberry Pi?**
 A: While possible, we recommend at least 2GB RAM. Use the standalone installation and consider resource limits in your configuration.
@@ -439,7 +439,7 @@ A: Yes! Shugur Relay is stateless and designed for horizontal scaling. Use our d
 A: We support 35+ NIPs including all core protocol features and advanced functionality like Cashu Wallets, Nutzaps, Moderated Communities, Lightning Zaps, and more. See the [Nostr Protocol Support](#-nostr-protocol-support) section above for the complete list.
 
 **Q: How do I backup my relay data?**
-A: For CockroachDB: `cockroach sql --execute="BACKUP TO 's3://bucket/backup?AUTH=implicit';"`. For other databases, use standard backup procedures.
+A: Use standard PostgreSQL backup tools: `pg_dump shugur > backup.sql` or set up automated snapshots with Aurora.
 
 ### **Performance Questions**
 

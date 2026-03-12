@@ -1,37 +1,9 @@
-# Shugur Distributed  Relay - Multi-Node Docker Compose
-# This is a reference template for a complete 3-node cluster setup
+# Shugur Distributed Relay - Multi-Node Docker Compose
+# This is a reference template for a distributed relay setup
+# Each node runs a relay instance connecting to a shared Aurora PostgreSQL cluster
 # Generated files are created automatically by install.distributed.sh
 
-version: '3.8'
-
-# Node 1 Configuration
 services:
-  # CockroachDB Node 1
-  cockroachdb-node1:
-    image: cockroachdb/cockroach:latest
-    container_name: cockroachdb-node1
-    hostname: cockroachdb-node1
-    command: start --certs-dir=/cockroach/cockroach-certs --advertise-addr=node1.example.com:26257 --join=node1.example.com:26257,node2.example.com:26257,node3.example.com:26257 --cache=25% --max-sql-memory=25%
-    volumes:
-      - cockroach_data_node1:/cockroach/cockroach-data
-      - ./certs:/cockroach/cockroach-certs:ro
-      - ./logs/cockroachdb:/cockroach/logs
-    ports:
-      - "26257:26257"  # SQL port
-      - "26258:26258"  # Inter-node communication
-      - "9090:8080"    # Admin UI
-    environment:
-      - COCKROACH_SKIP_ENABLING_DIAGNOSTIC_REPORTING=true
-    healthcheck:
-      test: ["CMD", "/cockroach/cockroach", "sql", "--certs-dir=/cockroach/cockroach-certs", "--host=localhost:26257", "--execute=SELECT 1;"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-      restart: unless-stopped
-    networks:
-      - distributed_network
-
   # Relay Service Node 1
   relay-node1:
     image: ghcr.io/shugur-network/relay:latest
@@ -40,9 +12,11 @@ services:
     restart: unless-stopped
     environment:
       - SHUGUR_ENV=production
-      - SHUGUR_DB_HOST=localhost
-      - SHUGUR_DB_PORT=26257
+      - SHUGUR_DB_HOST=${DB_HOST}  # Aurora PostgreSQL endpoint
+      - SHUGUR_DB_PORT=5432
+      - SHUGUR_DB_DATABASE=shugur
       - SHUGUR_DB_USER=relay
+      - SHUGUR_DB_PASSWORD=${DB_PASSWORD}
       - SHUGUR_DB_SSL_MODE=require
       - SHUGUR_LOG_LEVEL=info
       - SHUGUR_LOG_FORMAT=json
@@ -55,16 +29,12 @@ services:
       - ./config/config.yaml:/app/config.yaml:ro
       - ./certs:/app/certs:ro
       - ./logs/relay:/app/logs
-    depends_on:
-      cockroachdb-node1:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-      restart: unless-stopped
     network_mode: host
 
   # Caddy Reverse Proxy Node 1
@@ -90,13 +60,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-      restart: unless-stopped
     networks:
       - distributed_network
 
 volumes:
-  cockroach_data_node1:
-    driver: local
   caddy_data_node1:
     driver: local
   caddy_config_node1:
@@ -109,21 +76,6 @@ networks:
 # Additional nodes would have similar configurations with:
 # - Different node IDs (node2, node3, etc.)
 # - Different hostnames and container names
-# - Same cluster join string
 # - Unique volume names
+# - Same Aurora PostgreSQL connection (DB_HOST, DB_PASSWORD from .env)
 # - Same network configuration
-
-# Example for Node 2:
-# cockroachdb-node2:
-#   image: cockroachdb/cockroach:v22.2.7
-#   container_name: cockroachdb-node2
-#   hostname: cockroachdb-node2
-#   command: start --certs-dir=/cockroach/cockroach-certs --advertise-addr=cockroachdb-node2:26257 --join=cockroachdb-node1:26257,cockroachdb-node2:26257,cockroachdb-node3:26257
-#   volumes:
-#     - cockroach_data_node2:/cockroach/cockroach-data
-
-# Example for Node 3:
-# cockroachdb-node3:
-#   command: start --certs-dir=/cockroach/cockroach-certs --advertise-addr=node3.example.com:26257 --join=node1.example.com:26257,node2.example.com:26257,node3.example.com:26257
-#   volumes:
-#     - cockroach_data_node3:/cockroach/cockroach-data

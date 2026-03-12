@@ -37,7 +37,7 @@ type DashboardData struct {
 	Limitation    *LimitationData               `json:"limitation"`
 	Stats         *StatsData                    `json:"stats"`
 	LiveSince     string                        `json:"live_since"`
-	Cluster       *storage.CockroachClusterInfo `json:"cluster"`
+	Cluster       *storage.DatabaseInfo `json:"cluster"`
 }
 
 // LimitationData represents relay limitations
@@ -75,7 +75,7 @@ type Handler struct {
 	liveSince time.Time
 	db        interface {
 		GetTotalEventCount(ctx context.Context) (int64, error)
-		GetCockroachClusterInfo(ctx context.Context) (*storage.CockroachClusterInfo, error)
+		GetDatabaseInfo(ctx context.Context) (*storage.DatabaseInfo, error)
 		GetClusterHealth(ctx context.Context) (map[string]interface{}, error)
 	} // Database interface
 }
@@ -479,26 +479,26 @@ func (h *Handler) getStatsData() *StatsData {
 	return stats
 }
 
-// getClusterData retrieves CockroachDB cluster information
-func (h *Handler) getClusterData() *storage.CockroachClusterInfo {
+// getClusterData retrieves database information
+func (h *Handler) getClusterData() *storage.DatabaseInfo {
 	if h.db == nil {
-		return &storage.CockroachClusterInfo{
-			IsCluster: false,
+		return &storage.DatabaseInfo{
+			IsHealthy: false,
 		}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), constants.HealthCheckTimeout*time.Second)
 	defer cancel()
 
-	clusterInfo, err := h.db.GetCockroachClusterInfo(ctx)
+	dbInfo, err := h.db.GetDatabaseInfo(ctx)
 	if err != nil {
-		h.logger.Warn("Failed to get cluster information", zap.Error(err))
-		return &storage.CockroachClusterInfo{
-			IsCluster: false,
+		h.logger.Warn("Failed to get database information", zap.Error(err))
+		return &storage.DatabaseInfo{
+			IsHealthy: false,
 		}
 	}
 
-	return clusterInfo
+	return dbInfo
 }
 
 // HandleClusterAPI serves the cluster API endpoint
@@ -572,7 +572,7 @@ func (h *Handler) HandleClusterAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		clusterInfo, err := h.db.GetCockroachClusterInfo(ctx)
+		clusterInfo, err := h.db.GetDatabaseInfo(ctx)
 		if err != nil {
 			// Use new error handling system
 			dbErr := errors.HandleDatabaseError("cluster info retrieval", err)

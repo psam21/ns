@@ -7,22 +7,17 @@ This document outlines the port assignments for running development, testing, an
 ### Development Environment
 - **WebSocket**: `8081` (WS_ADDR)
 - **Metrics**: `8182` (METRICS.PORT)
-- **Database SQL**: `26260` (CockroachDB)
-- **Database RPC**: `26261` (CockroachDB)
-- **Database Admin UI**: `9091` (CockroachDB)
+- **Database**: `5433` (PostgreSQL)
 
 ### Testing Environment
 - **WebSocket**: `8082` (WS_ADDR)
 - **Metrics**: `8183` (METRICS.PORT)
-- **Database SQL**: `26262` (CockroachDB)
-- **Database RPC**: `26263` (CockroachDB)
-- **Database Admin UI**: `9092` (CockroachDB)
+- **Database**: `5434` (PostgreSQL)
 
 ### Production Environment
 - **WebSocket**: `8080` (WS_ADDR)
 - **Metrics**: `8180` (METRICS.PORT)
-- **Database SQL**: `26257` (CockroachDB)
-- **Database Admin UI**: `9090` (CockroachDB)
+- **Database**: `5432` (PostgreSQL)
 
 ## Configuration Files
 
@@ -70,25 +65,21 @@ docker-compose -f docker/compose/docker-compose.standalone.yml up -d
 ### Development
 - **WebSocket**: `ws://localhost:8081`
 - **Metrics**: `http://localhost:8182/metrics`
-- **Database Admin**: `http://localhost:9091`
 
 ### Testing
 - **WebSocket**: `ws://localhost:8082`
 - **Metrics**: `http://localhost:8183/metrics`
-- **Database Admin**: `http://localhost:9092`
 
 ### Production
 - **WebSocket**: `ws://localhost:8080`
 - **Metrics**: `http://localhost:8181/metrics`
-- **Database Admin**: `http://localhost:9090`
 
 ## Port Conflict Prevention
 
 All ports are carefully assigned to avoid conflicts:
 - WebSocket ports: 8080, 8081, 8082
 - Metrics ports: 8180, 8181, 8182, 8183
-- Database SQL ports: 26257, 26260, 26262
-- Database Admin UI ports: 9090, 9091, 9092
+- Database ports: 5432, 5433, 5434
 
 ## Environment Variables
 
@@ -98,15 +89,15 @@ You can override ports using environment variables:
 # Development
 export SHUGUR_WS_ADDR=":8081"
 export SHUGUR_METRICS_PORT="8182"
-export SHUGUR_DB_PORT="26260"
+export SHUGUR_DB_PORT="5433"
 
 # Testing
 export SHUGUR_WS_ADDR=":8082"
 export SHUGUR_METRICS_PORT="8183"
-export SHUGUR_DB_PORT="26262"
+export SHUGUR_DB_PORT="5434"
 
 # Production
 export SHUGUR_WS_ADDR=":8080"
 export SHUGUR_METRICS_PORT="8181"
-export SHUGUR_DB_PORT="26257"
+export SHUGUR_DB_PORT="5432"
 ```

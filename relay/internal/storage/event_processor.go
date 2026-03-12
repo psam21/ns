@@ -168,7 +168,6 @@ func (ep *EventProcessor) processEvents(ctx context.Context) {
 							metrics.EventsStored.Inc()
 
 							// Broadcast event immediately to local clients for real-time streaming
-							// This ensures same-node clients get events instantly without waiting for changefeed
 							if ep.db.eventDispatcher != nil {
 								logger.Debug("Broadcasting event to local clients",
 									zap.String("event_id", evt.ID),

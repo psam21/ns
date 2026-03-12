@@ -160,9 +160,7 @@ const (
 
 // Timeout constants (in seconds)
 const (
-	ClusterSettingTimeout = 10 // Timeout for cluster setting operations
-	ChangefeedTestTimeout = 5  // Timeout for changefeed capability tests
-	HealthCheckTimeout    = 5  // Timeout for health check operations
+	HealthCheckTimeout = 5 // Timeout for health check operations
 )
 
 // DefaultRelayMetadata returns the default relay metadata document

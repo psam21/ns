@@ -1,6 +1,6 @@
 #!/bin/bash
 # Shugur Relay - Standalone Installation Script (polished)
-# Complete one-command installer: Docker (if needed) + CockroachDB + Relay + Caddy
+# Complete one-command installer: Docker (if needed) + PostgreSQL + Relay + Caddy
 # DB and schema are auto-managed by the relay on first start.
 
 set -Eeuo pipefail
@@ -25,7 +25,7 @@ cleanup_on_failure() {
       docker compose -f docker-compose.standalone.yml down --volumes --remove-orphans 2>/dev/null || true
       
       # Force remove containers if they still exist
-      local containers=("cockroachdb" "relay" "caddy")
+      local containers=("postgres" "relay" "caddy")
       for container in "${containers[@]}"; do
         if docker ps -a --format "{{.Names}}" | grep -q "^${container}$"; then
           log_debug "Force removing container: $container"
@@ -34,7 +34,7 @@ cleanup_on_failure() {
       done
       
       # Remove Docker volumes created by the installation
-      local volumes=("cockroach_volume" "caddy_data" "caddy_config")
+      local volumes=("postgres_volume" "caddy_data" "caddy_config")
       for volume in "${volumes[@]}"; do
         if docker volume ls --format "{{.Name}}" | grep -q "^.*_${volume}$\|^${volume}$"; then
           log_debug "Removing Docker volume: $volume"
@@ -84,7 +84,7 @@ manual_cleanup() {
   fi
   
   # Force remove containers
-  local containers=("cockroachdb" "relay" "caddy")
+  local containers=("postgres" "relay" "caddy")
   for container in "${containers[@]}"; do
     if docker ps -a --format "{{.Names}}" | grep -q "^${container}$"; then
       log_info "Removing container: $container"
@@ -93,7 +93,7 @@ manual_cleanup() {
   done
   
   # Remove volumes
-  local volumes=("cockroach_volume" "caddy_data" "caddy_config")
+  local volumes=("postgres_volume" "caddy_data" "caddy_config")
   for volume in "${volumes[@]}"; do
     if docker volume ls --format "{{.Name}}" | grep -q "_${volume}$\|^${volume}$"; then
       log_info "Removing volume: $volume"
@@ -183,9 +183,7 @@ check_required_ports() {
   local ports_to_check=(
     "80:HTTP (Caddy)"
     "443:HTTPS (Caddy)" 
-    "26257:CockroachDB SQL"
-    "26258:CockroachDB RPC"
-    "9090:CockroachDB Admin UI"
+    "5432:PostgreSQL"
   )
   
   local ports_in_use=()
@@ -225,7 +223,7 @@ show_banner() {
 ==========================================
 This will set up:
  • Docker (if missing)
- • CockroachDB (single-node)
+ • PostgreSQL (single-node)
  • Shugur Relay (prebuilt image)
  • Caddy (reverse proxy + HTTPS)
 
@@ -233,7 +231,7 @@ This will set up:
  • sudo/root access
  • Valid domain name (FQDN) for production HTTPS
  • DNS A record pointing to this server
- • Ports 80, 443, 26257, 26258, 9090 available
+ • Ports 80, 443, 5432 available
 
 Usage:
   sudo ./install.standalone.sh                    # Interactive mode (prompts for domain)
@@ -523,8 +521,8 @@ CAPSULES:
   MAX_WITNESSES: 9
 
 DATABASE:
-  SERVER: "cockroachdb"
-  PORT: 26257
+  SERVER: "postgres"
+  PORT: 5432
 EOF
 }
 
@@ -548,25 +546,26 @@ create_complete_compose_file() {
   local compose_file="docker-compose.standalone.yml"
   log_info "Writing compose file: $compose_file"
   cat > "$compose_file" <<'EOF'
-# Shugur Relay - Complete Standalone (Cockroach + Relay + Caddy)
+# Shugur Relay - Complete Standalone (PostgreSQL + Relay + Caddy)
 
 services:
-  cockroachdb:
-    image: cockroachdb/cockroach:latest
-    container_name: cockroachdb
-    command: start-single-node --insecure
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_USER: relay
+      POSTGRES_PASSWORD: relay
+      POSTGRES_DB: shugur
     volumes:
-      - cockroach_volume:/cockroach/cockroach-data
+      - postgres_volume:/var/lib/postgresql/data
     ports:
-      - "26257:26257"  # SQL
-      - "26258:26258"  # RPC
-      - "9090:8080"    # Admin UI (host 9090 -> container 8080)
+      - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health?ready=1 >/dev/null"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "pg_isready -U relay -d shugur"]
+      interval: 10s
+      timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 10s
     networks:
       - relay_network
 
@@ -576,9 +575,11 @@ services:
     restart: unless-stopped
     environment:
       - SHUGUR_ENV=production
-      - SHUGUR_DB_HOST=cockroachdb
-      - SHUGUR_DB_PORT=26257
-      - SHUGUR_DB_USER=root
+      - SHUGUR_DB_HOST=postgres
+      - SHUGUR_DB_PORT=5432
+      - SHUGUR_DB_DATABASE=shugur
+      - SHUGUR_DB_USER=relay
+      - SHUGUR_DB_PASSWORD=relay
       - SHUGUR_DB_SSL_MODE=disable
       - SHUGUR_LOG_LEVEL=info
       - SHUGUR_LOG_FORMAT=json
@@ -591,7 +592,7 @@ services:
       - ./config.yaml:/app/config.yaml:ro
       - ./logs:/app/logs
     depends_on:
-      cockroachdb:
+      postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "(command -v wget >/dev/null && wget -q --spider http://localhost:8080/api/info) || (command -v curl >/dev/null && curl -fsI http://localhost:8080/api/info)"]
@@ -626,7 +627,7 @@ services:
       - relay_network
 
 volumes:
-  cockroach_volume:
+  postgres_volume:
     driver: local
   caddy_data:
     driver: local
@@ -642,14 +643,14 @@ EOF
 start_all_services() {
   local compose_file="docker-compose.standalone.yml"
 
-  log_info "Starting CockroachDB..."
-  docker compose -f "$compose_file" up -d cockroachdb
+  log_info "Starting PostgreSQL..."
+  docker compose -f "$compose_file" up -d postgres
 
-  log_info "Waiting for CockroachDB to be ready..."
+  log_info "Waiting for PostgreSQL to be ready..."
   local max_attempts=30 attempt=0
   while (( attempt < max_attempts )); do
-    if docker compose -f "$compose_file" exec -T cockroachdb /cockroach/cockroach sql --insecure --execute="SELECT 1;" >/dev/null 2>&1; then
-      log_info "CockroachDB is ready."
+    if docker compose -f "$compose_file" exec -T postgres pg_isready -U relay -d shugur >/dev/null 2>&1; then
+      log_info "PostgreSQL is ready."
       break
     fi
     attempt=$((attempt+1))
@@ -657,7 +658,7 @@ start_all_services() {
     sleep 2
   done
   if (( attempt == max_attempts )); then
-    log_error "CockroachDB failed to become ready."
+    log_error "PostgreSQL failed to become ready."
     exit 1
   fi
 
@@ -696,7 +697,7 @@ show_completion_message() {
   echo
   echo "🎉 Installation Complete"
   echo "========================"
-  log_info "✅ CockroachDB (single-node) | ✅ Relay | ✅ Caddy"
+  log_info "✅ PostgreSQL (single-node) | ✅ Relay | ✅ Caddy"
 
   if [[ "$server_url" == "localhost" ]]; then
     log_info "Relay Dashboard:  http://localhost"
@@ -711,7 +712,7 @@ show_completion_message() {
     log_info "WebSocket:        wss://$server_url"
     log_info "🔒 Using Let's Encrypt HTTPS certificate"
   fi
-  log_info "Cockroach Admin:  http://localhost:9090"
+  log_info "Database Admin:   Connect via: docker exec -it postgres psql -U relay -d shugur"
   echo
   log_info "📊 Management:"
   log_info "  docker compose -f docker-compose.standalone.yml logs -f"

@@ -222,7 +222,7 @@ func (b *NodeBuilder) BuildDB() error {
 	dbName := constants.DatabaseName
 	var defaultDbURI, targetDbURI string
 
-	// Cloud mode: full connection URL provided (e.g. CockroachDB Cloud)
+	// Cloud mode: full connection URL provided (e.g. Aurora PostgreSQL)
 	if b.config.Database.URL != "" {
 		logger.Info("Building database connection (cloud mode via URL)")
 

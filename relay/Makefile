@@ -239,16 +239,16 @@ docker-push:
 .PHONY: dev-up
 dev-up:
 	@echo "Starting development environment..."
-	@docker-compose -f docker/compose/docker-compose.dev.yml up -d
+	@docker-compose -f docker/compose/docker-compose.development.yml up -d
 
 .PHONY: dev-down
 dev-down:
 	@echo "Stopping development environment..."
-	@docker-compose -f docker/compose/docker-compose.dev.yml down
+	@docker-compose -f docker/compose/docker-compose.development.yml down
 
 .PHONY: dev-logs
 dev-logs:
-	@docker-compose -f docker/compose/docker-compose.dev.yml logs -f
+	@docker-compose -f docker/compose/docker-compose.development.yml logs -f
 
 # Production environment
 .PHONY: prod-up
@@ -279,8 +279,8 @@ db-migrate: build
 .PHONY: db-reset
 db-reset:
 	@echo "Resetting database..."
-	@docker-compose -f docker/compose/docker-compose.dev.yml down -v cockroach
-	@docker-compose -f docker/compose/docker-compose.dev.yml up -d cockroach
+	@docker-compose -f docker/compose/docker-compose.development.yml down -v postgres
+	@docker-compose -f docker/compose/docker-compose.development.yml up -d postgres
 
 # Run application
 .PHONY: run

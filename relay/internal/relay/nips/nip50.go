@@ -50,7 +50,7 @@ func ValidateSearchFilter(filter nostr.Filter, opts SearchOptions) error {
 	return nil
 }
 
-// BuildSearchQuery builds a CockroachDB-compatible search query
+// BuildSearchQuery builds a PostgreSQL-compatible search query
 func BuildSearchQuery(search string, opts SearchOptions) (string, []string, error) {
 	terms := strings.Fields(search)
 	if len(terms) == 0 {

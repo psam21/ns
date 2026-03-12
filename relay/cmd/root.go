@@ -27,7 +27,7 @@ var rootCmd = &cobra.Command{
 	Short: "Shugur relay is a high-performance Nostr relay server",
 	Long:  `High-performance, reliable, scalable Nostr relay for decentralized communication.`,
 	Example: `
-  relay start --db-host localhost --db-port 26257
+  relay start --db-host localhost --db-port 5432
   relay start --log-level debug --metrics-port 9090
   relay start --config /path/to/config.yaml`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -96,8 +96,8 @@ func init() {
 
 	// CLI flags for relay configuration
 	rootCmd.PersistentFlags().String("relay-name", "", "Name of the relay (max 30 chars)")
-	rootCmd.PersistentFlags().String("db-host", "localhost", "CockroachDB host")
-	rootCmd.PersistentFlags().IntP("db-port", "", 26257, "CockroachDB port")
+	rootCmd.PersistentFlags().String("db-host", "localhost", "PostgreSQL host")
+	rootCmd.PersistentFlags().IntP("db-port", "", 5432, "PostgreSQL port")
 	rootCmd.PersistentFlags().String("log-level", "info", "Logging level (debug, info, warn, error, fatal)")
 	rootCmd.PersistentFlags().String("log-file", "", "Path to the log file")
 	rootCmd.PersistentFlags().String("log-format", "text", "Log output format (text or json)")
