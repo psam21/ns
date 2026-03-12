@@ -9,6 +9,7 @@ import mime from "mime";
 
 import logger from "../logger.js";
 import { getFileHash } from "../helpers/file.js";
+import { config } from "../config.js";
 
 const log = logger.extend("uploads");
 const tmpDir = await pfs.mkdtemp(path.join(tmpdir(), "uploads-"));
@@ -43,6 +44,19 @@ export function saveFromUploadRequest(message: IncomingMessage) {
 
     log("Starting", tempFile);
 
+    const maxSize = config.upload.maxUploadSize;
+    let received = 0;
+
+    message.on("data", (chunk: Buffer) => {
+      received += chunk.length;
+      if (maxSize && received > maxSize) {
+        message.destroy();
+        write.destroy();
+        rmTempFile(tempFile);
+        reject(new Error(`File too large. Max upload size is ${Math.round(maxSize / 1024 / 1024)}MB`));
+      }
+    });
+
     message.pipe(write);
     message.on("error", (err) => {
       rmTempFile(tempFile);
@@ -72,6 +86,19 @@ export function saveFromResponse(response: IncomingMessage): Promise<UploadDetai
 
     const tempFile = newTempFile(type);
     const write = fs.createWriteStream(tempFile);
+
+    const maxSize = config.upload.maxUploadSize;
+    let received = 0;
+
+    response.on("data", (chunk: Buffer) => {
+      received += chunk.length;
+      if (maxSize && received > maxSize) {
+        response.destroy();
+        write.destroy();
+        rmTempFile(tempFile);
+        reject(new Error(`File too large. Max upload size is ${Math.round(maxSize / 1024 / 1024)}MB`));
+      }
+    });
 
     response.pipe(write);
     response.on("error", (err) => reject(err));

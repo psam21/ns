@@ -41,6 +41,7 @@ upload:
   enabled: true
   requireAuth: true
   requirePubkeyInRule: false
+  maxUploadSize: 10485760  # 10MB hard limit
 
 media:
   enabled: true

@@ -48,6 +48,7 @@ export type Config = {
     enabled: boolean;
     requireAuth: boolean;
     requirePubkeyInRule: boolean;
+    maxUploadSize?: number;
   };
   media: {
     enabled: boolean;
@@ -113,7 +114,7 @@ const defaultConfig: Config = {
     local: { dir: "data/blobs" },
     rules: [],
   },
-  upload: { enabled: false, requireAuth: true, requirePubkeyInRule: false },
+  upload: { enabled: false, requireAuth: true, requirePubkeyInRule: false, maxUploadSize: 10 * 1024 * 1024 },
   media: { enabled: false, requireAuth: true, requirePubkeyInRule: false },
   list: { requireAuth: false, allowListOthers: false },
   tor: { enabled: false, proxy: "" },

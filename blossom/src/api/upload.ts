@@ -41,6 +41,12 @@ export function checkUpload(
         contentLength = parseInt(ctx.header["content-length"]);
       }
 
+      // enforce max upload size
+      const maxSize = config.upload.maxUploadSize;
+      if (maxSize && contentLength && contentLength > maxSize) {
+        throw new HttpErrors.PayloadTooLarge(`File too large. Max upload size is ${Math.round(maxSize / 1024 / 1024)}MB`);
+      }
+
       const pubkey = ctx.state.auth?.pubkey;
       const rule = getFileRule(
         {
