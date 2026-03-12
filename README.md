@@ -6,10 +6,10 @@ Nostr relay and media server deployment for **nostr.ltd**, powered by [Shugur Re
 
 | Service | URL |
 |---|---|
-| **Relay (WebSocket)** | `wss://www.nostr.ltd` |
-| **Relay Dashboard** | [https://www.nostr.ltd](https://www.nostr.ltd) |
+| **Relay (WebSocket)** | `wss://nostr.ltd` |
+| **Relay Dashboard** | [https://nostr.ltd](https://nostr.ltd) |
 | **Blossom Media Server** | `https://blossom.nostr.ltd` |
-| **NIP-11 Info** | `curl -H "Accept: application/nostr+json" https://www.nostr.ltd` |
+| **NIP-11 Info** | `curl -H "Accept: application/nostr+json" https://nostr.ltd` |
 
 ## Architecture
 
@@ -33,22 +33,22 @@ Nostr Clients (Damus, Amethyst, Primal, etc.)
        │                           │
        ▼                           ▼
 ┌──────────────┐          ┌─────────────────┐
-│  AWS S3      │          │ Aurora          │
-│  (blobs)     │          │ PostgreSQL      │
+│  AWS S3      │          │  PostgreSQL 16  │
+│  (blobs)     │          │  (local)        │
 └──────────────┘          └─────────────────┘
 ```
 
 ## Infrastructure
 
 - **Compute:** AWS EC2 t4g.small (ARM Graviton, 2 vCPU, 2 GB RAM) — ap-south-1 (Mumbai)
-- **Database:** Aurora PostgreSQL Serverless v2
+- **Database:** PostgreSQL 16 (local on EC2)
 - **Blob Storage:** AWS S3 (`nostr-ltd-blossom` bucket, ap-south-1)
 - **TLS:** Caddy with automatic Let's Encrypt
 - **Domain:** nostr.ltd (BigRock registrar)
 
-## Supported NIPs (61)
+## Supported NIPs (67)
 
-01, 02, 03, 09, 11, 13, 15, 17, 18, 22, 23, 24, 25, 28, 29, 30, 32, 34, 35, 37, 38, 40, 42, 44, 45, 47, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 65, 69, 70, 71, 72, 75, 77, 78, 84, 85, 87, 88, 89, 90, 94, 99, 7D, A0, A4, B0, B7, C0, C7
+01, 02, 03, 09, 11, 13, 15, 17, 18, 22, 23, 24, 25, 28, 29, 30, 32, 34, 35, 37, 38, 39, 40, 42, 43, 44, 45, 47, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 64, 65, 66, 69, 70, 71, 72, 75, 77, 78, 84, 85, 86, 87, 88, 89, 90, 94, 99, 7D, A0, A4, B0, B7, C0, C7, EE
 
 Plus custom NIPs: XX (Time Capsules), YY (Nostr Web Pages)
 
@@ -88,12 +88,14 @@ Files are stored in S3 with no expiration (perpetual) and authenticated via kind
 
 ## Patches Applied
 
-The relay source includes patches for Aurora PostgreSQL support:
+The relay source includes patches for PostgreSQL support:
 
 - **`internal/config/database.go`** — Added `URL` field for direct connection strings
 - **`internal/config/defaults.yaml`** — Added `URL` default and `RATE_LIMIT.BAN_DURATION`
 - **`internal/config/config.go`** — Conditional validation when using URL vs Server+Port
 - **`internal/application/node_builder.go`** — Cloud mode in `BuildDB()` with `replaceDBNameInURL()` helper
+- **`internal/storage/schema.go`** — Fast-path schema init (skips DDL when tables exist), `splitSQL()` for pgx compatibility
+- **`internal/storage/schema.sql`** — PostgreSQL-optimized schema with `nostr_d_tag()` immutable function
 
 ## Deployment
 
