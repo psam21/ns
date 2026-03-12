@@ -23,6 +23,7 @@ This monorepo contains two main components:
 | Web templates (EC2) | `/opt/relay/web/templates/` |
 | Web static files (EC2) | `/opt/relay/web/static/` |
 | Systemd service | `relay` |
+| Database | PostgreSQL 16 (local on EC2), `postgresql://relay:relay@127.0.0.1:5432/shugur?sslmode=disable` |
 | Relay port (internal) | `8080` |
 | Metrics port | `2112` |
 | Caddy | Reverse proxies HTTPS → localhost:8080 |
@@ -126,6 +127,8 @@ git add -A && git commit -m "description" && git push
 | `relay/internal/metrics/relay.go` | Prometheus metrics, atomic counters |
 | `relay/internal/application/node.go` | Application node, event processing |
 | `relay/internal/application/node_builder.go` | Node initialization |
+| `relay/internal/storage/schema.sql` | Embedded DDL — events table, btree/GIN indexes, `nostr_d_tag()` immutable function, partial unique indexes for replaceable/addressable events |
+| `relay/internal/storage/schema.go` | Schema init with fast-path (skips DDL when events table exists), `splitSQL()` helper for pgx single-statement execution, `VerifySchema()` |
 | `relay/internal/storage/queries.go` | PostgreSQL queries — `persistDeletion` (NIP-09 with `e`+`a` tag support), `persistVanish` (NIP-62 full pubkey wipe), `IsVanishedPubkey` |
 | `relay/internal/storage/event_processor.go` | Event processing worker pool — `QueueEvent`, `QueueDeletion`, `QueueVanish`, `processEvents` switch (ephemeral→vanish→deletion→replaceable→addressable→default) |
 | `deploy/config.yaml` | Production relay config (contact, description, etc.) |
@@ -141,6 +144,8 @@ git add -A && git commit -m "description" && git push
 - **NIP-70 Protected Events**: Events with `["-"]` tag are rejected with `auth-required` unless the author's pubkey is in the connection's `authedPubkeys`.
 - **NIP-62 Vanish pipeline**: Kind 62 → `IsVanishEvent` check in `event_processor.go` → `persistVanish` deletes ALL events from pubkey + gift-wrapped (kind 1059) events p-tagged to pubkey, then stores vanish request.
 - **NIP-09 Deletion**: `persistDeletion` supports both `"e"` tags (delete by event ID) and `"a"` tags (delete addressable events by `kind:pubkey:d-tag` up to `created_at`).
+- **Schema init fast-path**: `InitializeSchema` checks if the `events` table exists and skips all DDL if so. Without this, `CREATE INDEX IF NOT EXISTS` takes ~158s on 60K+ rows. The `splitSQL()` helper splits DDL at semicolons while respecting `$$` dollar-quoted function bodies, since pgx extended query protocol only supports single statements.
+- **Database**: PostgreSQL 16 running locally on EC2 (migrated from CockroachDB Cloud). Connection via `127.0.0.1:5432`, user `relay`, database `shugur`.
 
 ## Conventions
 
