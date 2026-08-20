@@ -59,7 +59,9 @@ func ValidateDeletionAuth(
 	for _, t := range tags {
 		if len(t) >= 2 && t[0] == "e" {
 			id := t[1]
-			if event, ok := lookup(id); ok && event.PubKey != deleter {
+			if event, ok := lookup(id); !ok {
+				return fmt.Errorf("deletion target event not found: %s", id)
+			} else if event.PubKey != deleter {
 				return fmt.Errorf("unauthorized delete of %s", id)
 			}
 		}
