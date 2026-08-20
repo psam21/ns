@@ -295,8 +295,10 @@ func Load(path string, log *zap.Logger) (*Config, error) {
 	if err := validate.Struct(cfg); err != nil {
 		return nil, formatValidationError(err)
 	}
-	// if err := crossValidate(&cfg); err != nil {
-	// 	return nil, err
+
+	// Cross-field validation (performed in init() via performCrossFieldValidation)
+	// TODO(finding #22): if err := crossValidate(&cfg); err != nil {
+	// 	return nil, fmt.Errorf("cross-field validation failed: %w", err)
 	// }
 
 	if log != nil {

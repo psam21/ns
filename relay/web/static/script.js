@@ -3,6 +3,7 @@
 class RelayDashboard {
   constructor() {
     this.statsUpdateInterval = null;
+    this.statAnimationIntervals = [];
     this.init();
   }
 
@@ -55,6 +56,10 @@ class RelayDashboard {
   addStatsCardAnimations() {
     const statCards = document.querySelectorAll('.stat-card');
     
+    // Only proceed if stat-card elements exist (they don't in the real dashboard template,
+    // but may exist in preview/test HTML — guard against stale selector)
+    if (statCards.length === 0) return;
+    
     statCards.forEach(card => {
       // Add subtle pulse animation to show they're "live"
       card.style.transition = 'transform 0.2s ease, box-shadow 0.2s ease';
@@ -72,12 +77,13 @@ class RelayDashboard {
       // Add a subtle indicator that shows the card is updating
       const statValue = card.querySelector('.stat-value');
       if (statValue) {
-        setInterval(() => {
+        const intervalId = setInterval(() => {
           statValue.style.textShadow = '0 0 10px rgba(59, 130, 246, 0.3)';
           setTimeout(() => {
             statValue.style.textShadow = '';
           }, 500);
         }, 30000); // Pulse every 30 seconds
+        this.statAnimationIntervals.push(intervalId);
       }
     });
   }

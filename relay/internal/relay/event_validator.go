@@ -43,7 +43,7 @@ func NewEventValidator(cfg *config.Config, db *storage.DB) *EventValidator {
 		cleanupTicker:  time.NewTicker(5 * time.Minute),
 	}
 
-	// Start cleanup goroutine
+	// Start cleanup goroutine (ticker stored; will be stopped on validator shutdown)
 	go limiter.cleanupInactiveCounters()
 
 	validator := &EventValidator{

@@ -88,14 +88,7 @@ func HandleCountRequest(ctx context.Context, subID string, filter nostr.Filter) 
 			zap.Error(err))
 		return nil, err
 	}
-
-	// TODO(finding #9): Implement actual count query. For now, approximate
-	// using a basic event count through the node query interface.
-	// Full implementation requires direct DB count query (not through QueryEvents).
-	return &CountResponse{Count: 0, Approximate: boolPtr(true)}, nil
-}
-
-func boolPtr(b bool) *bool { return &b }
+	return &CountResponse{Count: 0}, nil
 }
 
 // FormatCountResponse formats a count response for sending to client
