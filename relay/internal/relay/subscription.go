@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Shugur-Network/relay/internal/constants"
 	"github.com/Shugur-Network/relay/internal/logger"
 	"github.com/Shugur-Network/relay/internal/metrics"
 	"github.com/Shugur-Network/relay/internal/relay/nips"
@@ -112,6 +113,15 @@ func (c *WsConnection) handleRequest(ctx context.Context, arr []interface{}) {
 			c.sendClosed(subID, "auth-required: this query requires authentication")
 			return
 		}
+	}
+
+	// Enforce max subscription cap (finding #2)
+	if len(c.subscriptions) >= constants.MaxSubscriptions {
+		logger.Warn("Subscription cap reached",
+			zap.String("client", c.RemoteAddr()),
+			zap.Int("max", constants.MaxSubscriptions))
+		c.sendClosed(subID, "subscription-limit: too many active subscriptions")
+		return
 	}
 
 	// Store subscription
