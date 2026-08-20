@@ -2,6 +2,7 @@ package nips
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Shugur-Network/relay/internal/logger"
 	"github.com/Shugur-Network/relay/internal/relay/nips/common"
@@ -20,9 +21,16 @@ func ValidateEventDeletion(evt *nostr.Event) error {
 		5,                // Expected event kind
 		"event deletion", // Event name for logging
 		func(helper *common.ValidationHelper, event *nostr.Event) error {
-			// Must have at least one "e" tag referencing the event(s) to delete
-			if err := helper.ValidateRequiredTag(event, "e"); err != nil {
-				return helper.ErrorFormatter.FormatError("deletion event must reference at least one event with 'e' tag")
+			// Must have at least one "e" or "a" tag referencing events to delete (finding #7)
+			hasTag := false
+			for _, tag := range event.Tags {
+				if len(tag) >= 1 && (tag[0] == "e" || tag[0] == "a") {
+					hasTag = true
+					break
+				}
+			}
+			if !hasTag {
+				return helper.ErrorFormatter.FormatError("deletion event must reference at least one event with 'e' or 'a' tag")
 			}
 
 			// Validate event ID format in "e" tags and count them
@@ -35,6 +43,13 @@ func ValidateEventDeletion(evt *nostr.Event) error {
 							zap.String("deletion_event_id", event.ID),
 							zap.String("invalid_event_id", tag[1]))
 						return helper.FormatTagError("e", "invalid event ID: %v", err)
+					}
+				} else if len(tag) >= 2 && tag[0] == "a" {
+					eventCount++
+					// Addressable event reference format: kind:pubkey:d-tag
+					parts := strings.Split(tag[1], ":")
+					if len(parts) < 2 || len(parts) > 3 {
+						return helper.FormatTagError("a", "invalid addressable event reference: %s (expected kind:pubkey:d-tag)", tag[1])
 					}
 				}
 			}
@@ -63,6 +78,17 @@ func ValidateDeletionAuth(
 				return fmt.Errorf("deletion target event not found: %s", id)
 			} else if event.PubKey != deleter {
 				return fmt.Errorf("unauthorized delete of %s", id)
+			}
+		} else if len(t) >= 2 && t[0] == "a" {
+			// Addressable event reference: kind:pubkey:d-tag
+			// Authorization requires the event author matches the deleter
+			ref := t[1]
+			parts := strings.Split(ref, ":")
+			if len(parts) >= 2 {
+				author := parts[1]
+				if author != deleter {
+					return fmt.Errorf("unauthorized delete of addressable event %s (author %s != %s)", ref, author, deleter)
+				}
 			}
 		}
 	}
