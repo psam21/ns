@@ -167,6 +167,8 @@ func (cf *CompiledFilter) BuildQuery() (string, []interface{}, error) {
 	}
 
 	// Add search filter if present
+	// TODO(finding #11): ILIKE with leading wildcard prevents index usage.
+	// Full fix requires PostgreSQL GIN trigram index (gin_trgm_ops) on content.
 	if cf.Search != "" {
 		query.WriteString(fmt.Sprintf(" AND content ILIKE $%d", argIndex))
 		args = append(args, "%"+cf.Search+"%")

@@ -71,6 +71,8 @@ func BuildSearchQuery(search string, opts SearchOptions) (string, []string, erro
 		escapedTerm := strings.ReplaceAll(term, "%", "\\%")
 		escapedTerm = strings.ReplaceAll(escapedTerm, "_", "\\_")
 		escapedTerms[i] = escapedTerm
+		// TODO(finding #11): ILIKE with leading wildcard (%term%) prevents index usage.
+		// Full fix requires PostgreSQL GIN trigram index (gin_trgm_ops) on content.
 		queryParts[i] = fmt.Sprintf("content ILIKE $%d", i+1)
 	}
 
