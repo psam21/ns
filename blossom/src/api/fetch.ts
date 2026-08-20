@@ -1,5 +1,6 @@
 import { extname } from "node:path";
 import { PassThrough } from "node:stream";
+import { SplitStream } from "../helpers/stream.js";
 import dayjs from "dayjs";
 import mime from "mime";
 import HttpErrors from "http-errors";
@@ -74,20 +75,25 @@ router.get("/:hash", range, async (ctx, next) => {
           else if (search.type) ctx.type = search.type;
         }
 
-        const pass = (ctx.body = new PassThrough());
+        const pass = new PassThrough();
+        ctx.body = pass;
 
         // set the Content-Length since koa cannot set it from a stream
         ctx.length = pointer.size;
-        response.pipe(pass);
 
-        // save to cache
+        // Fork response to client stream + background save stream (finding #6)
+        const savePass = new PassThrough();
+        const split = new SplitStream(pass, savePass);
+        response.pipe(split);
+
+        // save to cache using the split save stream (not the original response)
         const rule = getFileRule(
           { type: pointer.type || search.type, pubkey: pointer.metadata?.pubkey },
           config.storage.rules,
         );
         if (rule) {
           // save the blob in the background (no await)
-          uploadModule.saveFromResponse(response).then(async (upload) => {
+          uploadModule.saveFromResponse(savePass).then(async (upload) => {
             if (upload.sha256 !== pointer.hash) return;
 
             // if the storage dose not have the blob. upload it
