@@ -18,7 +18,6 @@ func ValidateApplicationSpecificData(evt *nostr.Event) error {
 
 	// Must have "d" tag for addressable events
 	hasDTag := false
-	hasPTag := false
 
 	for _, tag := range evt.Tags {
 		if len(tag) >= 2 {
@@ -26,8 +25,8 @@ func ValidateApplicationSpecificData(evt *nostr.Event) error {
 			case "d":
 				hasDTag = true
 			case "p":
-				hasPTag = true
-				// Validate pubkey format
+				// "p" tag is optional per NIP-78 spec (finding #8, fixed)
+				// Validate pubkey format if present
 				if len(tag[1]) != 64 {
 					return fmt.Errorf("invalid pubkey in 'p' tag: %s", tag[1])
 				}
@@ -35,12 +34,9 @@ func ValidateApplicationSpecificData(evt *nostr.Event) error {
 		}
 	}
 
+	// Note: NIP-78 spec only requires "d" tag; "p" tag is optional (finding #8, fixed)
 	if !hasDTag {
 		return fmt.Errorf("application-specific data must have 'd' tag")
-	}
-
-	if !hasPTag {
-		return fmt.Errorf("application-specific data must have 'p' tag")
 	}
 
 	// Parse and validate JSON content
