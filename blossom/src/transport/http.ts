@@ -6,9 +6,29 @@ const { http, https } = followRedirects;
 import { HTTPPointer } from "../types.js";
 import { config } from "../config.js";
 
+// Block private/restricted IP ranges to prevent SSRF (finding #1)
+function isPrivateIP(hostname: string): boolean {
+  // Check for private/localhost/link-local ranges before resolving
+  const privatePatterns = [
+    /^127\./,
+    /^10\./,
+    /^192\.168\./,
+    /^172\.(1[6-9]|2[0-9]|3[01])\./,
+    /^169\.254\./,
+    /^::1$/,
+    /^fe80::/,
+    /^fc00::/,
+    /^::$/,
+  ];
+  return privatePatterns.some((p) => p.test(hostname));
+}
+
 export async function readHTTPPointer(pointer: HTTPPointer): Promise<IncomingMessage> {
   return new Promise((resolve, reject) => {
     const url = new URL(pointer.url);
+    if (isPrivateIP(url.hostname)) {
+      throw new Error(`SSRF blocked: cannot connect to private/restricted address: ${url.hostname}`);
+    }
     let agent: Agent | undefined = undefined;
 
     if (url.hostname.endsWith(".onion")) {

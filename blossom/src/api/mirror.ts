@@ -46,6 +46,14 @@ router.put<CommonState>("/mirror", async (ctx) => {
   if (!ctx.request.body?.url) throw new HttpErrors.BadRequest("Missing url");
   const downloadUrl = new URL(ctx.request.body.url);
 
+  // SSRF protection: block private/restricted addresses (finding #1)
+  const privatePatterns = [
+    /^127\./, /^10\./, /^192\.168\./, /^172\.(1[6-9]|2[0-9]|3[01])\./, /^169\.254\./,
+  ];
+  if (privatePatterns.some((p) => p.test(downloadUrl.hostname))) {
+    throw new HttpErrors.BadRequest("SSRF blocked: cannot mirror from private/restricted address");
+  }
+
   log(`Mirroring ${downloadUrl.toString()}`);
 
   const { response, controller } = await makeRequestWithAbort(downloadUrl);
