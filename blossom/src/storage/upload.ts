@@ -5,6 +5,7 @@ import path from "node:path";
 import { tmpdir } from "node:os";
 import { nanoid } from "nanoid";
 import { IncomingMessage } from "node:http";
+import { Readable } from "node:stream";
 import mime from "mime";
 
 import logger from "../logger.js";
@@ -80,11 +81,14 @@ export function saveFromUploadRequest(message: IncomingMessage) {
   });
 }
 
-export function saveFromResponse(response: IncomingMessage): Promise<UploadDetails> {
+export function saveFromResponse(response: Readable, type?: string): Promise<UploadDetails> {
   return new Promise<UploadDetails>((resolve, reject) => {
-    let type = response.headers["content-type"];
+    let fileType = type;
+    if (!fileType && "headers" in response) {
+      fileType = (response as IncomingMessage).headers["content-type"];
+    }
 
-    const tempFile = newTempFile(type);
+    const tempFile = newTempFile(fileType);
     const write = fs.createWriteStream(tempFile);
 
     const maxSize = config.upload.maxUploadSize;
@@ -104,14 +108,14 @@ export function saveFromResponse(response: IncomingMessage): Promise<UploadDetai
     response.on("error", (err) => reject(err));
 
     write.on("finish", async () => {
-      if (!type) type = (await fileTypeFromFile(tempFile))?.mime;
+      if (!fileType) fileType = (await fileTypeFromFile(tempFile))?.mime;
 
       const size = (await pfs.stat(tempFile)).size;
       const sha256 = await getFileHash(tempFile);
 
-      log(sha256, size, type);
+      log(sha256, size, fileType);
 
-      resolve({ type, tempFile, sha256, size });
+      resolve({ type: fileType, tempFile, sha256, size });
     });
   });
 }

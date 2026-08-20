@@ -93,7 +93,7 @@ router.get("/:hash", range, async (ctx, next) => {
         );
         if (rule) {
           // save the blob in the background (no await)
-          uploadModule.saveFromResponse(savePass).then(async (upload) => {
+          uploadModule.saveFromResponse(savePass, pointer.type || search.type).then(async (upload) => {
             if (upload.sha256 !== pointer.hash) return;
 
             // if the storage dose not have the blob. upload it
