@@ -489,6 +489,10 @@ func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 	case 30017, 30018, 30019, 30020, 1021, 1022:
 		return nips.ValidateMarketplaceEvent(event)
 	case 30023:
+		// NIP-21: nostr: URI scheme - validate inline nostr: URIs in content
+		if err := nips.ValidateNIP21Content(event); err != nil {
+			return err
+		}
 		// NIP-27: Text Note References - validate inline nostr: URI references
 		if err := nips.ValidateNIP27References(event); err != nil {
 			return err
@@ -497,6 +501,10 @@ func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 	case 1:
 		// NIP-10: Text Notes and Threads - validate reply threading
 		if err := nips.ValidateNIP10Reply(event); err != nil {
+			return err
+		}
+		// NIP-21: nostr: URI scheme - validate inline nostr: URIs in content
+		if err := nips.ValidateNIP21Content(event); err != nil {
 			return err
 		}
 		// NIP-27: Text Note References - validate inline nostr: URI references
