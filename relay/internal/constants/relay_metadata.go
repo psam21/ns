@@ -26,6 +26,7 @@ const (
 var DefaultSupportedNIPs = []interface{}{
 	1,  // NIP-01: Basic protocol flow description
 	2,  // NIP-02: Follow List
+	5,  // NIP-05: Mapping Nostr keys to DNS-based internet identifiers
 	9,  // NIP-09: Event Deletion Request
 	11, // NIP-11: Relay Information Document
 	13, // NIP-13: Proof of Work

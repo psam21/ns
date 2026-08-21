@@ -449,6 +449,9 @@ func (pv *PluginValidator) ValidateEvent(ctx context.Context, event nostr.Event)
 // validateWithDedicatedNIPs validates events using dedicated NIP validation functions
 func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 	switch event.Kind {
+	case 0:
+		// NIP-05: Validate nip05 identifier in user metadata
+		return nips.ValidateNIP05Metadata(event)
 	case 3:
 		return nips.ValidateFollowList(event)
 	case 4:
