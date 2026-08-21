@@ -26,18 +26,15 @@ const (
 var DefaultSupportedNIPs = []interface{}{
 	1,  // NIP-01: Basic protocol flow description
 	2,  // NIP-02: Follow List
-	3,  // NIP-03: OpenTimestamps Attestations for Events
 	9,  // NIP-09: Event Deletion Request
 	11, // NIP-11: Relay Information Document
 	13, // NIP-13: Proof of Work
-	15, // NIP-15: Nostr Marketplace (for resilient marketplaces)
 	17, // NIP-17: Private Direct Messages
 	18, // NIP-18: Reposts
 	22, // NIP-22: Comment
 	23, // NIP-23: Long-form Content
 	24, // NIP-24: Extra metadata fields and tags
 	25, // NIP-25: Reactions
-	28, // NIP-28: Public Chat
 	29, // NIP-29: Relay-based Groups
 	30, // NIP-30: Custom Emoji
 	32, // NIP-32: Labeling
@@ -70,7 +67,6 @@ var DefaultSupportedNIPs = []interface{}{
 	69, // NIP-69: Peer-to-peer Order Events
 	70, // NIP-70: Protected Events
 	71, // NIP-71: Video Events
-	72, // NIP-72: Moderated Communities
 	75, // NIP-75: Zap Goals
 	77, // NIP-77: Negentropy Syncing
 	78, // NIP-78: Application-specific data
@@ -80,7 +76,6 @@ var DefaultSupportedNIPs = []interface{}{
 	87, // NIP-87: Ecash Mint Discoverability
 	88, // NIP-88: Polls
 	89, // NIP-89: Recommended Application Handlers
-	90, // NIP-90: Data Vending Machine
 	94, // NIP-94: File Metadata
 	99, // NIP-99: Classified Listings
 	"7D", // NIP-7D: Threads
@@ -90,7 +85,6 @@ var DefaultSupportedNIPs = []interface{}{
 	"C0", // NIP-C0: Code Snippets
 	"C7", // NIP-C7: Chats
 	"B7", // NIP-B7: Blossom Server List
-	"EE", // NIP-EE: MLS E2EE Messaging
 }
 
 // CustomNIP represents a custom NIP implementation
