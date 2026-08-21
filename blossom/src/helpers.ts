@@ -9,7 +9,7 @@ export function safeDecode(str: string) {
     return nip19.decode(str);
   } catch (e) {}
 }
-export function getPubkeyFromDecodeResult(result?: nip19.DecodeResult) {
+export function getPubkeyFromDecodeResult(result?: nip19.DecodedResult) {
   if (!result) return;
   switch (result.type) {
     case "naddr":

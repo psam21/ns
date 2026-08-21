@@ -4,6 +4,7 @@
     "target": "es2020",
     "moduleResolution": "NodeNext",
     "outDir": "build",
+    "rootDir": "src",
     "skipLibCheck": true,
     "strict": true,
     "sourceMap": true

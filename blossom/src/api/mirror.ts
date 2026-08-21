@@ -43,8 +43,11 @@ router.put<CommonState>("/mirror", async (ctx) => {
     if (ctx.state.authType !== "upload") throw new HttpErrors.Unauthorized("Auth event should be 'upload'");
   }
 
-  if (!ctx.request.body?.url) throw new HttpErrors.BadRequest("Missing url");
-  const downloadUrl = new URL(ctx.request.body.url);
+  if (!ctx.request.body || typeof ctx.request.body !== "object" || !("url" in ctx.request.body)) {
+    throw new HttpErrors.BadRequest("Missing url");
+  }
+  const body = ctx.request.body as { url: string };
+  const downloadUrl = new URL(body.url);
 
   // SSRF protection: block private/restricted addresses (finding #1)
   const privatePatterns = [
