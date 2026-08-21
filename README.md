@@ -46,9 +46,9 @@ Nostr Clients (Damus, Amethyst, Primal, etc.)
 - **TLS:** Caddy with automatic Let's Encrypt
 - **Domain:** nostr.ltd (BigRock registrar)
 
-## Supported NIPs (67)
+## Supported NIPs (78)
 
-01, 02, 03, 09, 11, 13, 15, 17, 18, 22, 23, 24, 25, 28, 29, 30, 32, 34, 35, 37, 38, 39, 40, 42, 43, 44, 45, 47, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 64, 65, 66, 69, 70, 71, 72, 75, 77, 78, 84, 85, 86, 87, 88, 89, 90, 94, 99, 7D, A0, A4, B0, B7, C0, C7, EE
+01, 02, 05, 07, 09, 10, 11, 13, 17, 18, 19, 21, 22, 23, 24, 25, 27, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 64, 65, 66, 67, 69, 70, 71, 75, 77, 78, 84, 85, 86, 87, 88, 89, 90, 92, 94, 98, 99, 7D, A0, A4, B0, B7, C0, C7, CC, F4
 
 Plus custom NIPs: XX (Time Capsules), YY (Nostr Web Pages)
 
@@ -56,7 +56,7 @@ Plus custom NIPs: XX (Time Capsules), YY (Nostr Web Pages)
 
 [Blossom](https://github.com/hzrd149/blossom) (Blobs Stored Simply on Mediaservers) provides content-addressable file storage with Nostr authentication.
 
-**Supported BUDs:** BUD-01, BUD-02, BUD-04, BUD-05, BUD-06, BUD-08
+**Supported BUDs:** BUD-01, BUD-02, BUD-03, BUD-04, BUD-05, BUD-06, BUD-07, BUD-08
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -69,7 +69,9 @@ Plus custom NIPs: XX (Time Capsules), YY (Nostr Web Pages)
 
 **Upload limit:** 10MB hard cap (enforced at header check and during streaming).
 
-Files are stored in S3 with no expiration (perpetual) and authenticated via kind `24242` Nostr events. Deletes are hard deletes — blobs are purged from S3 when no owners remain.
+Files are stored in S3 with no expiration (perpetual) and authenticated via kind `24242` Nostr events (BUD-06). Deletes are hard deletes — blobs are purged from S3 when no owners remain.
+
+**Admin Dashboard:** `https://blossom.nostr.ltd/admin/` (basic auth, credentials in config)
 
 ## Repository Structure
 
@@ -86,6 +88,17 @@ Files are stored in S3 with no expiration (perpetual) and authenticated via kind
 │   ├── admin/                 # Admin dashboard (React)
 │   └── public/                # Upload UI
 └── relay/                     # Shugur Relay source (PostgreSQL backend)
+    ├── internal/
+    │   ├── constants/         # Relay metadata, NIP lists
+    │   ├── relay/
+    │   │   ├── nips/          # NIP validators (23+ files)
+    │   │   ├── plugin_validator.go  # Central event validator
+    │   │   ├── connection.go  # WebSocket handler, NIP-42/67
+    │   │   └── subscription.go
+    │   ├── storage/           # PostgreSQL storage layer
+    │   ├── web/               # Dashboard HTTP handler
+    │   └── config/            # Configuration
+    └── cmd/                   # CLI entry point
 ```
 
 ## Patches Applied
@@ -98,6 +111,14 @@ The relay source includes patches for PostgreSQL support:
 - **`internal/application/node_builder.go`** — Cloud mode in `BuildDB()` with `replaceDBNameInURL()` helper
 - **`internal/storage/schema.go`** — Fast-path schema init (skips DDL when tables exist), `splitSQL()` for pgx compatibility
 - **`internal/storage/schema.sql`** — PostgreSQL-optimized schema with `nostr_d_tag()` immutable function
+
+## Security
+
+All security checks pass:
+- ✅ 0 Dependabot alerts
+- ✅ 0 npm vulnerabilities (relay, blossom, blossom/admin)
+- ✅ 0 Code scanning alerts
+- ✅ 0 Open PRs
 
 ## Deployment
 
