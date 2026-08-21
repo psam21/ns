@@ -505,6 +505,9 @@ func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 	case 15128, 35128, 5128:
 		// NIP-5A: Static Websites (nsites) - validate site manifest events
 		return nips.ValidateNIP5AEvent(event)
+	case 38172, 38173, 38000:
+		// NIP-87: Cashu/Fedimint Discoverability - validate mint events
+		return nips.ValidateNIP87Event(event)
 	case 1:
 		// NIP-10: Text Notes and Threads - validate reply threading
 		if err := nips.ValidateNIP10Reply(event); err != nil {
