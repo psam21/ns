@@ -22,6 +22,7 @@ type RelayConfig struct {
 	EventCacheSize   int              `mapstructure:"EVENT_CACHE_SIZE"   json:"event_cache_size"  validate:"required,min=100,max=1000000"`
 	MinPowDifficulty int              `mapstructure:"MIN_POW_DIFFICULTY" json:"min_pow_difficulty" validate:"min=0,max=64"`
 	ThrottlingConfig ThrottlingConfig `mapstructure:"THROTTLING"        json:"throttling"        validate:"required"`
+	Roles            map[string]string `mapstructure:"ROLES"            json:"roles"`
 }
 
 // ThrottlingConfig holds rate limiting settings.

@@ -66,6 +66,9 @@ var nip86SupportedMethods = []string{
 	"blockip",
 	"unblockip",
 	"listblockedips",
+	"addrelayrole",
+	"removerelayrole",
+	"listrelayroles",
 }
 
 // handleManagementAPI handles NIP-86 JSON-RPC management requests.
@@ -270,6 +273,12 @@ func (s *Server) dispatchManagementMethod(method string, params []string) (inter
 		return s.mgmtUnblockIP(params)
 	case "listblockedips":
 		return s.mgmtListBlockedIPs()
+	case "addrelayrole":
+		return s.mgmtAddRelayRole(params)
+	case "removerelayrole":
+		return s.mgmtRemoveRelayRole(params)
+	case "listrelayroles":
+		return s.mgmtListRelayRoles()
 	default:
 		return nil, fmt.Sprintf("unknown method: %s", method)
 	}
@@ -549,6 +558,79 @@ func (s *Server) mgmtListBlockedIPs() (interface{}, string) {
 	}
 	sort.Strings(ips)
 	return ips, ""
+}
+
+// --- Relay Role Management ---
+
+// mgmtAddRelayRole adds a new relay role.
+func (s *Server) mgmtAddRelayRole(params []string) (interface{}, string) {
+	if len(params) < 2 {
+		return nil, "missing role name and description parameters"
+	}
+	roleName := params[0]
+	roleDesc := params[1]
+
+	if roleName == "" || roleDesc == "" {
+		return nil, "role name and description cannot be empty"
+	}
+
+	gs := GetGroupStore()
+	if gs == nil {
+		return nil, "relay key not initialized"
+	}
+
+	// Add role to the group store's role definitions
+	gs.mu.Lock()
+	if gs.groups == nil {
+		gs.groups = make(map[string]*Group)
+	}
+	// For now, store in a special config key
+	if s.fullCfg.Relay.Roles == nil {
+		s.fullCfg.Relay.Roles = make(map[string]string)
+	}
+	s.fullCfg.Relay.Roles[roleName] = roleDesc
+	gs.mu.Unlock()
+
+	logger.New("nip86").Info("Relay role added via management API",
+		zap.String("role", roleName),
+		zap.String("description", roleDesc))
+
+	return true, ""
+}
+
+func (s *Server) mgmtRemoveRelayRole(params []string) (interface{}, string) {
+	if len(params) < 1 {
+		return nil, "missing role name parameter"
+	}
+	roleName := params[0]
+
+	if s.fullCfg.Relay.Roles == nil {
+		return nil, "role not found"
+	}
+
+	if _, exists := s.fullCfg.Relay.Roles[roleName]; !exists {
+		return nil, "role not found"
+	}
+
+	delete(s.fullCfg.Relay.Roles, roleName)
+
+	logger.New("nip86").Info("Relay role removed via management API",
+		zap.String("role", roleName))
+
+	return true, ""
+}
+
+func (s *Server) mgmtListRelayRoles() (interface{}, string) {
+	if s.fullCfg.Relay.Roles == nil {
+		return map[string]string{}, ""
+	}
+
+	// Return a copy to avoid race conditions
+	roles := make(map[string]string)
+	for k, v := range s.fullCfg.Relay.Roles {
+		roles[k] = v
+	}
+	return roles, ""
 }
 
 // --- Response Helpers ---
