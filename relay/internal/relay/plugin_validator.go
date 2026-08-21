@@ -199,6 +199,7 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			11126: true, // Entrypoint
 			// NIP-43 Relay Access Metadata
 			13534: true, // Membership list (relay-signed)
+			13535: true, // Relay roles (relay-signed, replaceable) - NEW (2 months ago)
 			8000:  true, // Add user (relay-signed)
 			8001:  true, // Remove user (relay-signed)
 			28934: true, // Join request (user-sent)
