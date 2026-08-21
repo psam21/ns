@@ -101,7 +101,7 @@ export async function pruneStorage() {
             owners.pubkey IN (${Array.from(rule.pubkeys).fill("?").join(", ")})
         `,
         )
-        .all(rule.type.replace("*", "%"), ...rule.pubkeys) as (BlobMetadata & {
+        .all(rule.type.replace(/\*/g, "%"), ...rule.pubkeys) as (BlobMetadata & {
         pubkey: string;
         accessed: number | null;
       })[];
@@ -117,7 +117,7 @@ export async function pruneStorage() {
             blobs.type LIKE ?
         `,
         )
-        .all(rule.type.replace("*", "%")) as (BlobMetadata & {
+        .all(rule.type.replace(/\*/g, "%")) as (BlobMetadata & {
         pubkey: string;
         accessed: number | null;
       })[];

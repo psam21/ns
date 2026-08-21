@@ -65,7 +65,7 @@ if (config.dashboard.enabled) {
   app.use(mount("/admin", serve(path.resolve(__dirname, "../admin/dist"))));
 
   // only log the password if it was generated
-  logger(`Dashboard started with ${config.dashboard.username} ${config.dashboard.password ? "" : password}`);
+  logger(`Dashboard started with ${config.dashboard.username} ${config.dashboard.password ? "" : "(generated password)"}`);
 }
 
 try {
