@@ -568,6 +568,9 @@ func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 		return nips.ValidateComment(event)
 	case 4550:
 		return nips.ValidateApprovalEvent(event)
+	// NIP-69 P2P Order Events validation
+	case 38383:
+		return nips.ValidateP2POrder(event)
 	// NIP-EE MLS E2EE Messaging validation
 	case 443:
 		return nips.ValidateKeyPackageEvent(event)
