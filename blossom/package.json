@@ -28,7 +28,7 @@
     "blossom-server-sdk": "^0.8.0",
     "dayjs": "^1.11.13",
     "debug": "^4.4.0",
-    "file-type": "^19.6.0",
+    "file-type": "^21.3.2",
     "fluent-ffmpeg": "^2.1.3",
     "follow-redirects": "^1.15.9",
     "generate-password": "^1.7.1",
@@ -45,7 +45,7 @@
     "mkdirp": "^3.0.1",
     "nanoid": "^5.0.9",
     "nostr-tools": "^2.10.4",
-    "sharp": "^0.33.5",
+    "sharp": "^0.35.0",
     "socks-proxy-agent": "^8.0.5",
     "ws": "^8.18.0",
     "yaml": "^2.6.1"
