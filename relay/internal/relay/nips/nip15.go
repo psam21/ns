@@ -10,6 +10,10 @@ import (
 
 // NIP-15: Nostr Marketplace (for resilient marketplaces)
 // https://github.com/nostr-protocol/nips/blob/master/15.md
+//
+// DEPRECATED: This NIP is marked as unrecommended in the official NIPs repository:
+// "too complicated, try NIP-99 instead"
+// This implementation is kept for backwards compatibility but NIP-99 should be used for new deployments.
 
 // ValidateMarketplaceEvent validates NIP-15 marketplace events
 func ValidateMarketplaceEvent(evt *nostr.Event) error {

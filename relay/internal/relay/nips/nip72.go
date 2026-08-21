@@ -12,6 +12,10 @@ import (
 
 // NIP-72: Moderated Communities (Reddit-style Nostr Communities)
 //
+// DEPRECATED: This NIP is marked as unrecommended in the official NIPs repository:
+// "try NIP-29 instead"
+// This implementation is kept for backwards compatibility but NIP-29 should be used for new deployments.
+//
 // Event Kinds:
 //   - 34550: Community Definition
 //   - 1111: Community Post

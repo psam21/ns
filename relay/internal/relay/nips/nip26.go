@@ -12,6 +12,13 @@ import (
 	nostr "github.com/nbd-wtf/go-nostr"
 )
 
+// NIP-26: Delegated Event Signing
+// https://github.com/nostr-protocol/nips/blob/master/26.md
+//
+// DEPRECATED: This NIP is marked as unrecommended in the official NIPs repository:
+// "adds unnecessary burden for little gain"
+// This implementation is kept for backwards compatibility but should not be used for new deployments.
+
 // DelegationInfo holds the parsed delegation data
 type DelegationInfo struct {
 	MasterPubkey string

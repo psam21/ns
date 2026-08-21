@@ -12,6 +12,10 @@ import (
 // NIP-EE: E2EE Messaging using the Messaging Layer Security (MLS) Protocol
 // https://nips.nostr.com/EE
 //
+// DEPRECATED: This NIP is marked as unrecommended in the official NIPs repository:
+// "superseded by the Marmot Protocol"
+// This implementation is kept for backwards compatibility but Marmot Protocol should be used for new deployments.
+//
 // Event kinds:
 //   - 443:   KeyPackage Event — advertises MLS key material for async group invites
 //   - 444:   Welcome Event — sent via NIP-59 gift wrap to new group members (unsigned inner event)

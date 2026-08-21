@@ -7,8 +7,12 @@ import (
 	nostr "github.com/nbd-wtf/go-nostr"
 )
 
-// NIP-04: Encrypted Direct Message (deprecated, use NIP-17)
+// NIP-04: Encrypted Direct Message
 // https://github.com/nostr-protocol/nips/blob/master/04.md
+//
+// DEPRECATED: This NIP is marked as unrecommended in the official NIPs repository:
+// "deprecated in favor of NIP-17"
+// This implementation is kept for backwards compatibility but NIP-17 should be used for new deployments.
 
 // ValidateEncryptedDirectMessage validates kind 4 events - handles both NIP-04 and NIP-44
 func ValidateEncryptedDirectMessage(evt *nostr.Event) error {

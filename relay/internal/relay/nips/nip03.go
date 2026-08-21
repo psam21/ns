@@ -9,6 +9,10 @@ import (
 
 // NIP-03: OpenTimestamps Attestations for Events
 // https://github.com/nostr-protocol/nips/blob/master/03.md
+//
+// DEPRECATED: This NIP is marked as unrecommended in the official NIPs repository:
+// "vulnerable to one specific attack, needs update"
+// This implementation is kept for backwards compatibility but should not be used for new deployments.
 
 // ValidateOpenTimestampsAttestation validates NIP-03 OpenTimestamps attestation events (kind 1040)
 func ValidateOpenTimestampsAttestation(evt *nostr.Event) error {

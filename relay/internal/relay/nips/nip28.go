@@ -13,6 +13,10 @@ import (
 // NIP-28: Public Chat
 // https://github.com/nostr-protocol/nips/blob/master/28.md
 //
+// DEPRECATED: This NIP is marked as unrecommended in the official NIPs repository:
+// "try NIP-29 instead"
+// This implementation is kept for backwards compatibility but NIP-29 should be used for new deployments.
+//
 // Event kinds:
 // - 40: channel create
 // - 41: channel metadata
