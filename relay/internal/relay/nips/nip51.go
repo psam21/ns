@@ -12,6 +12,8 @@ import (
 // NIP-51: Lists
 // https://github.com/nostr-protocol/nips/blob/master/51.md
 //
+// SPEC UPDATE (last month): Added kind:10011 (favorite follow sets)
+//
 // Standard lists (single list per kind):
 // - 3: Follow list (NIP-02)
 // - 10000: Mute list
@@ -23,6 +25,7 @@ import (
 // - 10006: Blocked relays
 // - 10007: Search relays
 // - 10009: Simple groups
+// - 10011: Favorite follow sets (NEW)
 // - 10012: Relay feeds
 // - 10015: Interests
 // - 10020: Media follows
@@ -93,6 +96,9 @@ func validateStandardList(evt *nostr.Event) error {
 		return validateSearchRelays(evt)
 	case 10009:
 		return validateSimpleGroups(evt)
+	case 10011:
+		// Favorite follow sets (NIP-51 spec update)
+		return validateFavoriteFollowSets(evt)
 	case 10012:
 		return validateRelayFeeds(evt)
 	case 10015:
@@ -420,6 +426,26 @@ func validateGoodWikiRelays(evt *nostr.Event) error {
 			}
 		}
 	}
+	return nil
+}
+
+// validateFavoriteFollowSets validates kind 10011 favorite follow sets
+// NIP-51 spec update: Added kind:10011 for favorite follow sets
+func validateFavoriteFollowSets(evt *nostr.Event) error {
+	// Must contain "p" tags with pubkeys
+	hasPTag := false
+	for _, tag := range evt.Tags {
+		if len(tag) >= 2 && tag[0] == "p" {
+			if len(tag[1]) != 64 || !isHexString51(tag[1]) {
+				return fmt.Errorf("invalid pubkey in favorite follow set: %s", tag[1])
+			}
+		}
+	}
+
+	if !hasPTag && evt.Content == "" {
+		return fmt.Errorf("favorite follow set must have pubkey references or encrypted content")
+	}
+
 	return nil
 }
 
