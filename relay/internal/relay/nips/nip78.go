@@ -9,6 +9,10 @@ import (
 
 // NIP-78: Application-specific data
 // https://github.com/nostr-protocol/nips/blob/master/78.md
+//
+// SPEC UPDATE (3 months ago): "a normal application-specific kind"
+// This clarifies that kind 30078 is a standard addressable event kind
+// with only "d" tag required (p tag is optional).
 
 // ValidateApplicationSpecificData validates NIP-78 application-specific data events (kind 30078)
 func ValidateApplicationSpecificData(evt *nostr.Event) error {
