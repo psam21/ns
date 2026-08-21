@@ -136,6 +136,10 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			10040: true, // NIP-85: Trusted Assertion Delegation
 			30402: true, // NIP-99: Classified Listings
 			30403: true, // NIP-99: Draft Classified Listing
+			// NIP-5A Static Websites (nsites)
+			15128: true, // Root site manifest
+			35128: true, // Named site manifest
+			5128:  true, // Manifest snapshot
 			// NIP-52 Calendar Events
 			31922: true, // Date-based Calendar Event
 			31923: true, // Time-based Calendar Event  
@@ -498,6 +502,9 @@ func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 			return err
 		}
 		return nips.ValidateLongFormContent(event)
+	case 15128, 35128, 5128:
+		// NIP-5A: Static Websites (nsites) - validate site manifest events
+		return nips.ValidateNIP5AEvent(event)
 	case 1:
 		// NIP-10: Text Notes and Threads - validate reply threading
 		if err := nips.ValidateNIP10Reply(event); err != nil {
