@@ -480,7 +480,14 @@ func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 	case 30017, 30018, 30019, 30020, 1021, 1022:
 		return nips.ValidateMarketplaceEvent(event)
 	case 30023:
+		// NIP-27: Text Note References - validate inline nostr: URI references
+		if err := nips.ValidateNIP27References(event); err != nil {
+			return err
+		}
 		return nips.ValidateLongFormContent(event)
+	case 1:
+		// NIP-27: Text Note References - validate inline nostr: URI references
+		return nips.ValidateNIP27References(event)
 	case 30078:
 		return nips.ValidateApplicationSpecificData(event)
 	case 13194:

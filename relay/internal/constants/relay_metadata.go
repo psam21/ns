@@ -35,6 +35,7 @@ var DefaultSupportedNIPs = []interface{}{
 	23, // NIP-23: Long-form Content
 	24, // NIP-24: Extra metadata fields and tags
 	25, // NIP-25: Reactions
+	27, // NIP-27: Text Note References
 	29, // NIP-29: Relay-based Groups
 	30, // NIP-30: Custom Emoji
 	32, // NIP-32: Labeling
