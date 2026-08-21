@@ -508,6 +508,12 @@ func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 	case 30078:
 		return nips.ValidateApplicationSpecificData(event)
 	case 13194:
+		// Kind 13194 is used by both NIP-47 (info event) and NIP-59 (gift wrap)
+		// Try NIP-47 first (has stricter requirements)
+		if err := nips.ValidateNIP47Info(event); err == nil {
+			return nil
+		}
+		// Fallback to NIP-59 gift wrap validation
 		return nips.ValidateGiftWrapEvent(event)
 	case 10002:
 		return nips.ValidateKind10002(*event)
@@ -575,6 +581,11 @@ func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 		return nips.ValidateComment(event)
 	case 4550:
 		return nips.ValidateApprovalEvent(event)
+	// NIP-47 Nostr Wallet Connect validation (request/response only - info handled above)
+	case 23194:
+		return nips.ValidateNIP47Request(event)
+	case 23195:
+		return nips.ValidateNIP47Response(event)
 	// NIP-69 P2P Order Events validation
 	case 38383:
 		return nips.ValidateP2POrder(event)
