@@ -145,6 +145,11 @@ func ValidateNIP46Response(evt *nostr.Event) error {
 }
 
 // NIP46RequestWithTimeout wraps a NIP-46 request with timeout handling
+// SPEC UPDATE (last month): Avoid silent timeouts
+// Per the spec update, remote-signers SHOULD always respond to requests,
+// even if the response is an error. Silent timeouts (where the remote-signer
+// simply doesn't respond) should be avoided. This function enforces a timeout
+// on the client side to detect such cases.
 func NIP46RequestWithTimeout(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -158,7 +163,8 @@ func NIP46RequestWithTimeout(ctx context.Context, timeout time.Duration, fn func
 	case err := <-done:
 		return err
 	case <-ctx.Done():
-		return fmt.Errorf("NIP-46 request timed out after %v", timeout)
+		// Per spec update: timeout indicates a silent timeout from remote-signer
+		return fmt.Errorf("NIP-46 silent timeout after %v (remote-signer did not respond)", timeout)
 	}
 }
 
