@@ -122,6 +122,14 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			1222:  true, // NIP-A0: Voice Messages
 			1244:  true, // NIP-A0: Voice Reply
 			1337:  true, // NIP-C0: Code Snippets
+			54:    true, // NIP-F4: Podcast Episode
+			10154: true, // NIP-F4: Podcast Metadata
+			10064: true, // NIP-F4: Authored Podcasts
+			10054: true, // NIP-F4: Favorite Podcasts
+			37516: true, // NIP-CC: Geocache Listing
+			37517: true, // NIP-CC: Geocache Curation List
+			7516:  true, // NIP-CC: Found Log
+			7517:  true, // NIP-CC: Verification Event
 			2003:  true, // NIP-35: Torrents
 			1018:  true, // NIP-88: Polls (response)
 			1068:  true, // NIP-88: Polls (poll event)
@@ -514,6 +522,24 @@ func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 	case 9:
 		// NIP-C7: Chats - validate chat message event
 		return nips.ValidateNIPC7Event(event)
+	case 1222, 1244:
+		// NIP-A0: Voice Messages - validate voice message event
+		return nips.ValidateNIPA0Event(event)
+	case 24:
+		// NIP-A4: Public Messages - validate public message event
+		return nips.ValidateNIPA4Event(event)
+	case 1337:
+		// NIP-C0: Code Snippets - validate code snippet event
+		return nips.ValidateNIPC0Event(event)
+	case 39701:
+		// NIP-B0: Web Bookmarks - validate web bookmark event
+		return nips.ValidateNIPB0Event(event)
+	case 54, 10154, 10064, 10054:
+		// NIP-F4: Podcasts - validate podcast events
+		return nips.ValidateNIPF4Event(event)
+	case 37516, 37517, 7516, 7517:
+		// NIP-CC: Geocaching - validate geocache events
+		return nips.ValidateNIPCCEvent(event)
 	case 1:
 		// NIP-10: Text Notes and Threads - validate reply threading
 		if err := nips.ValidateNIP10Reply(event); err != nil {

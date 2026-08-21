@@ -98,6 +98,8 @@ var DefaultSupportedNIPs = []interface{}{
 	"A4", // NIP-A4: Public Messages
 	"B0", // NIP-B0: Web Bookmarking
 	"C0", // NIP-C0: Code Snippets
+	"F4", // NIP-F4: Podcasts
+	"CC", // NIP-CC: Geocaching Events
 	"C7", // NIP-C7: Chats
 	"B7", // NIP-B7: Blossom Server List
 }
