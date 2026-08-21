@@ -354,67 +354,15 @@ func (c *WsConnection) handleCountRequest(ctx context.Context, arr []interface{}
 		countCtx, cancel := context.WithTimeout(ctx, nips.CountTimeout)
 		defer cancel()
 
-		// Validate the filter using NIP-45
-		_, err := nips.HandleCountRequest(countCtx, countCmd.SubID, countCmd.Filter)
+		// Use the new HandleCountRequest which handles validation, counting, and HLL
+		response, err := nips.HandleCountRequest(countCtx, countCmd.SubID, countCmd.Filter, c.node.DB())
 		if err != nil {
-			logger.Warn("COUNT filter validation failed",
+			logger.Warn("COUNT request failed",
 				zap.String("sub_id", countCmd.SubID),
 				zap.Error(err),
 				zap.String("client", c.RemoteAddr()))
 			c.sendNotice("Invalid COUNT filter: " + err.Error())
 			return
-		}
-
-		// Get count from database
-		start := time.Now()
-		count, err := c.node.DB().GetEventCount(countCtx, countCmd.Filter)
-		duration := time.Since(start)
-
-		// Check if client is still connected
-		if c.isClosed.Load() {
-			return
-		}
-
-		// Handle error
-		if err != nil {
-			logger.Error("COUNT request failed",
-				zap.String("sub_id", countCmd.SubID),
-				zap.Error(err),
-				zap.String("client", c.RemoteAddr()))
-			c.sendNotice("error: count operation failed")
-			return
-		}
-
-		// Log performance
-		logger.Debug("Count operation completed",
-			zap.String("sub_id", countCmd.SubID),
-			zap.Duration("duration", duration),
-			zap.Int64("count", count),
-			zap.String("client", c.RemoteAddr()))
-
-		// Build the count response (NIP-45 format)
-		response := &nips.CountResponse{Count: count}
-
-		// NIP-45 HyperLogLog: compute HLL if filter is eligible
-		if nips.IsHLLEligible(countCmd.Filter) {
-			offset, offsetErr := nips.ComputeHLLOffset(countCmd.Filter)
-			if offsetErr == nil {
-				pubkeys, pkErr := c.node.DB().GetEventPubkeys(countCtx, countCmd.Filter)
-				if pkErr == nil {
-					response.HLL = nips.ComputeHLL(pubkeys, offset)
-					approx := true
-					response.Approximate = &approx
-					logger.Debug("HLL computed for COUNT",
-						zap.String("sub_id", countCmd.SubID),
-						zap.Int("offset", offset),
-						zap.Int("unique_pubkeys", len(pubkeys)),
-						zap.String("client", c.RemoteAddr()))
-				} else {
-					logger.Warn("HLL pubkey fetch failed",
-						zap.String("sub_id", countCmd.SubID),
-						zap.Error(pkErr))
-				}
-			}
 		}
 
 		c.sendMessage("COUNT", countCmd.SubID, response)

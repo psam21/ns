@@ -14,6 +14,13 @@ import (
 	"go.uber.org/zap"
 )
 
+// CountDB defines the database interface needed for COUNT operations
+// This avoids import cycles with the storage package
+type CountDB interface {
+	GetEventCount(ctx context.Context, filter nostr.Filter) (int64, error)
+	GetEventPubkeys(ctx context.Context, filter nostr.Filter) ([]string, error)
+}
+
 // NIP-45: COUNT Command with HyperLogLog support
 // https://github.com/nostr-protocol/nips/blob/master/45.md
 
@@ -81,14 +88,55 @@ func ValidateCountFilter(filter nostr.Filter) error {
 }
 
 // HandleCountRequest validates and processes a COUNT request
-func HandleCountRequest(ctx context.Context, subID string, filter nostr.Filter) (*CountResponse, error) {
+// Implements NIP-45 COUNT with HyperLogLog support
+func HandleCountRequest(ctx context.Context, subID string, filter nostr.Filter, db CountDB) (*CountResponse, error) {
 	if err := ValidateCountFilter(filter); err != nil {
 		logger.Warn("COUNT filter validation failed",
 			zap.String("sub_id", subID),
 			zap.Error(err))
 		return nil, err
 	}
-	return &CountResponse{Count: 0}, nil
+
+	// Check if filter is eligible for HyperLogLog
+	approximate := false
+	var hll string
+
+	if IsHLLEligible(filter) {
+		approximate = true
+		// Get pubkeys matching the filter for HLL computation
+		pubkeys, err := db.GetEventPubkeys(ctx, filter)
+		if err != nil {
+			logger.Error("Failed to get pubkeys for HLL",
+				zap.String("sub_id", subID),
+				zap.Error(err))
+			return nil, err
+		}
+
+		offset, err := ComputeHLLOffset(filter)
+		if err != nil {
+			logger.Error("Failed to compute HLL offset",
+				zap.String("sub_id", subID),
+				zap.Error(err))
+			return nil, err
+		}
+
+		hll = ComputeHLL(pubkeys, offset)
+	}
+
+	// Get actual count from database
+	count, err := db.GetEventCount(ctx, filter)
+	if err != nil {
+		logger.Error("Failed to count events",
+			zap.String("sub_id", subID),
+			zap.Error(err))
+		return nil, err
+	}
+
+	return &CountResponse{
+		Count:       count,
+		Approximate: &approximate,
+		HLL:         hll,
+	}, nil
 }
 
 // FormatCountResponse formats a count response for sending to client
