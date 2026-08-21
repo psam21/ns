@@ -13,7 +13,14 @@ import (
 const (
 	NIP44Version1 = 1
 	NIP44Version2 = 2
-	V2NonceLength = 24 // bytes (XChaCha20-Poly1305 standard)
+	V2NonceLength = 32 // bytes (NIP-44 v2 spec: 32-byte nonce)
+	// MaxNIP44PayloadSize is the maximum payload size in bytes (4GB - 1).
+	// SPEC UPDATE (2 months ago): NIP-44 now allows encrypting payloads >65535 bytes.
+	// The theoretical maximum plaintext size is 2^32 - 1 bytes (~4 GB).
+	MaxNIP44PayloadSize = 4294967295 // 2^32 - 1
+	// ExtendedPrefixThreshold is the plaintext length threshold for using the
+	// 6-byte extended prefix (2 zero bytes + u32) instead of the 2-byte u16 prefix.
+	ExtendedPrefixThreshold = 65536
 )
 
 // NIP44PayloadV1 represents v1 structure
@@ -81,9 +88,11 @@ func ValidateNIP44Payload(event nostr.Event) error {
 		return nil // v1 valid
 	}
 
-	// Try v2: binary envelope ([2][24B nonce][N ciphertext])
-	if len(decoded) < 1+V2NonceLength+1 {
-		return fmt.Errorf("invalid NIP-44 v2 envelope: too short")
+	// Try v2: binary envelope ([2][32B nonce][N ciphertext][32B MAC])
+	// SPEC UPDATE (2 months ago): NIP-44 v2 now supports payloads >65535 bytes.
+	// Minimum decoded length: 1 (version) + 32 (nonce) + 1 (ciphertext) + 32 (MAC) = 66 bytes
+	if len(decoded) < 1+V2NonceLength+1+32 {
+		return fmt.Errorf("invalid NIP-44 v2 envelope: too short (min %d bytes)", 1+V2NonceLength+1+32)
 	}
 	if decoded[0] != NIP44Version2 {
 		return fmt.Errorf("unsupported NIP-44 version: %d", int(decoded[0]))
@@ -94,7 +103,11 @@ func ValidateNIP44Payload(event nostr.Event) error {
 	if len(ciphertext) == 0 {
 		return errors.New("invalid NIP-44 v2 envelope: missing ciphertext")
 	}
-	// (Optional: add more checks, e.g., nonce not all zeros, min ciphertext length, etc.)
+
+	// Check maximum payload size (4GB - 1 bytes per NIP-44 spec)
+	if len(decoded) > MaxNIP44PayloadSize {
+		return fmt.Errorf("NIP-44 v2 payload exceeds maximum size: %d > %d", len(decoded), MaxNIP44PayloadSize)
+	}
 
 	return nil // v2 valid
 }
@@ -111,7 +124,7 @@ func IsNIP44Payload(content string) bool {
 		return payloadV1.V == NIP44Version1 && payloadV1.Nonce != "" && payloadV1.Ciphertext != ""
 	}
 	// v2: version byte, correct minimum length
-	if len(decoded) >= 1+V2NonceLength+1 && decoded[0] == NIP44Version2 {
+	if len(decoded) >= 1+V2NonceLength+1+32 && decoded[0] == NIP44Version2 {
 		return true
 	}
 	return false
