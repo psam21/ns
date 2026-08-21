@@ -46,6 +46,7 @@ var DefaultSupportedNIPs = []interface{}{
 	32, // NIP-32: Labeling
 	34, // NIP-34: Git Stuff
 	35, // NIP-35: Torrents
+	36, // NIP-36: Sensitive Content / Content Warning
 	37, // NIP-37: Draft Wraps
 	38, // NIP-38: User Statuses
 	39, // NIP-39: External Identities in Profiles

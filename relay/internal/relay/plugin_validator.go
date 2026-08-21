@@ -511,6 +511,10 @@ func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 		if err := nips.ValidateNIP27References(event); err != nil {
 			return err
 		}
+		// NIP-36: Sensitive Content / Content Warning - validate content-warning tags
+		if err := nips.ValidateNIP36Event(event); err != nil {
+			return err
+		}
 		// NIP-92: Media Attachments (imeta) - validate imeta tags
 		return nips.ValidateNIP92Event(event)
 	case 30078:
