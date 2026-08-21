@@ -56,7 +56,8 @@ var DefaultSupportedNIPs = []interface{}{
 	44, // NIP-44: Encrypted Payloads (Versioned)
 	45, // NIP-45: Counting Events
 	46, // NIP-46: Nostr Remote Signing
-	47, // NIP-47: Nostr Wallet Connect (NWC)
+	47, // NIP-47: Nostr Wallet Connect
+	48, // NIP-48: Bridged Events (NWC)
 	50, // NIP-50: Search Capability
 	51, // NIP-51: Lists
 	52, // NIP-52: Calendar Events

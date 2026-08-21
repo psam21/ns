@@ -515,6 +515,10 @@ func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 		if err := nips.ValidateNIP36Event(event); err != nil {
 			return err
 		}
+		// NIP-48: Bridged Events - validate proxy tags
+		if err := nips.ValidateNIP48Event(event); err != nil {
+			return err
+		}
 		// NIP-92: Media Attachments (imeta) - validate imeta tags
 		return nips.ValidateNIP92Event(event)
 	case 30078:
