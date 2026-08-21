@@ -34,6 +34,7 @@ var DefaultSupportedNIPs = []interface{}{
 	13, // NIP-13: Proof of Work
 	17, // NIP-17: Private Direct Messages
 	18, // NIP-18: Reposts
+	19, // NIP-19: bech32-encoded entities (npub, nsec, note, nprofile, nevent, naddr)
 	21, // NIP-21: nostr: URI scheme
 	22, // NIP-22: Comment
 	23, // NIP-23: Long-form Content
