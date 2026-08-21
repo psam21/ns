@@ -176,18 +176,27 @@ func (gs *GroupStore) ValidateGroupEvent(evt *nostr.Event) (bool, string) {
 		return false, "invalid group ID format (must be a-z0-9-_)"
 	}
 
-	// Validate "previous" tag if present (NIP-29 spec update)
-	// The "previous" tag references a previous group event by its ID
-	prevTag := evt.Tags.GetFirst([]string{"previous", ""})
-	if prevTag != nil && len(*prevTag) >= 2 {
-		prevEventID := (*prevTag)[1]
-		if len(prevEventID) != 64 {
-			return false, "invalid 'previous' tag: event ID must be 64-char hex"
-		}
-		// Validate hex format
-		for _, c := range prevEventID {
-			if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
-				return false, "invalid 'previous' tag: event ID must be hex"
+	// Validate "previous" tag if present (NIP-29 spec update 2 weeks ago)
+	// The "previous" tag references previous group events by their first 8 hex chars
+	// (4 bytes) to prevent messages from being broadcasted out of context.
+	// Example: ["previous", "eb96c864", "2db75638", "b5d1065f"]
+	// Each value should be 8 hex characters (first 4 bytes of an event ID).
+	for _, tag := range evt.Tags {
+		if len(tag) >= 1 && tag[0] == "previous" {
+			if len(tag) < 2 {
+				return false, "invalid 'previous' tag: missing value"
+			}
+			// NIP-29 spec: "previous" tag values are 8 hex chars (first 4 bytes of event ID)
+			for _, prevVal := range tag[1:] {
+				if len(prevVal) != 8 {
+					return false, "invalid 'previous' tag: value must be 8 hex chars (first 4 bytes of event ID)"
+				}
+				// Validate hex format
+				for _, c := range prevVal {
+					if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+						return false, "invalid 'previous' tag: value must be hex"
+					}
+				}
 			}
 		}
 	}
