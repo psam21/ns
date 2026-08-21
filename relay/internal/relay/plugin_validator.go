@@ -472,6 +472,12 @@ func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 	case 9735:
 		return nips.ValidateZapReceipt(event)
 	case 24133:
+		// NIP-46 (Nostr Remote Signing) and NIP-20 (Command Result) both use kind 24133
+		// Try NIP-46 validation first (has stricter requirements including NIP-44 encryption)
+		if err := nips.ValidateNIP46Request(event); err == nil {
+			return nil
+		}
+		// Fallback to NIP-20 command result validation
 		return nips.ValidateCommandResult(event)
 	case 30008:
 		return nips.ValidateProfileBadges(event)
