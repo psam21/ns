@@ -138,6 +138,13 @@ func ValidateNutzapEvent(event *nostr.Event) error {
 					return fmt.Errorf("invalid kind value in nutzap k-tag: %s", tag[1])
 				}
 			}
+
+		case "unit":
+			// SPEC UPDATE (10 months ago): Added 'unit' tag to NutZap (kind 9321)
+			// Validates the base unit tag (e.g., "sat", "usd", "eur")
+			if err := validateBaseUnit(tag[1]); err != nil {
+				return fmt.Errorf("invalid unit in nutzap: %w", err)
+			}
 		}
 	}
 
