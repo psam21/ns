@@ -69,6 +69,12 @@ var nip86SupportedMethods = []string{
 	"addrelayrole",
 	"removerelayrole",
 	"listrelayroles",
+	// SPEC UPDATE (2 months ago): Added relay roles event management methods
+	"createrole",
+	"editrole",
+	"deleterole",
+	"assignrole",
+	"unassignrole",
 }
 
 // handleManagementAPI handles NIP-86 JSON-RPC management requests.
@@ -279,6 +285,17 @@ func (s *Server) dispatchManagementMethod(method string, params []string) (inter
 		return s.mgmtRemoveRelayRole(params)
 	case "listrelayroles":
 		return s.mgmtListRelayRoles()
+	// SPEC UPDATE (2 months ago): Added relay roles event management methods
+	case "createrole":
+		return s.mgmtCreateRole(params)
+	case "editrole":
+		return s.mgmtEditRole(params)
+	case "deleterole":
+		return s.mgmtDeleteRole(params)
+	case "assignrole":
+		return s.mgmtAssignRole(params)
+	case "unassignrole":
+		return s.mgmtUnassignRole(params)
 	default:
 		return nil, fmt.Sprintf("unknown method: %s", method)
 	}
@@ -631,6 +648,183 @@ func (s *Server) mgmtListRelayRoles() (interface{}, string) {
 		roles[k] = v
 	}
 	return roles, ""
+}
+
+// SPEC UPDATE (2 months ago): Added relay roles event management methods
+// https://github.com/nostr-protocol/nips/blob/master/86.md
+//
+// The NIP-86 spec was updated to add granular role management methods:
+//   - createrole: [id, label, description, color, order]
+//   - editrole: [id, label, description, color, order]
+//   - deleterole: [id]
+//   - assignrole: [pubkey, role-id]
+//   - unassignrole: [pubkey, role-id]
+
+// mgmtCreateRole creates a new relay role with full metadata.
+// params: [id, label, description, color, order]
+func (s *Server) mgmtCreateRole(params []string) (interface{}, string) {
+	if len(params) < 5 {
+		return nil, "missing parameters: expected [id, label, description, color, order]"
+	}
+	id, label, description, color, orderStr := params[0], params[1], params[2], params[3], params[4]
+
+	if id == "" || label == "" {
+		return nil, "role id and label cannot be empty"
+	}
+
+	if _, exists := s.fullCfg.Relay.Roles[id]; exists {
+		return nil, fmt.Sprintf("role '%s' already exists", id)
+	}
+
+	// Validate order is numeric
+	if _, err := strconv.Atoi(orderStr); err != nil {
+		return nil, fmt.Sprintf("invalid order value '%s': must be numeric", orderStr)
+	}
+
+	// Store as JSON-encoded metadata for full role info
+	roleMeta := fmt.Sprintf(`{"label":%q,"description":%q,"color":%q,"order":%q}`, label, description, color, orderStr)
+	s.fullCfg.Relay.Roles[id] = roleMeta
+
+	logger.New("nip86").Info("Relay role created via management API",
+		zap.String("role_id", id),
+		zap.String("label", label))
+
+	return true, ""
+}
+
+// mgmtEditRole edits an existing relay role.
+// params: [id, label, description, color, order]
+func (s *Server) mgmtEditRole(params []string) (interface{}, string) {
+	if len(params) < 5 {
+		return nil, "missing parameters: expected [id, label, description, color, order]"
+	}
+	id, label, description, color, orderStr := params[0], params[1], params[2], params[3], params[4]
+
+	if id == "" || label == "" {
+		return nil, "role id and label cannot be empty"
+	}
+
+	if _, exists := s.fullCfg.Relay.Roles[id]; !exists {
+		return nil, fmt.Sprintf("role '%s' not found", id)
+	}
+
+	if _, err := strconv.Atoi(orderStr); err != nil {
+		return nil, fmt.Sprintf("invalid order value '%s': must be numeric", orderStr)
+	}
+
+	roleMeta := fmt.Sprintf(`{"label":%q,"description":%q,"color":%q,"order":%q}`, label, description, color, orderStr)
+	s.fullCfg.Relay.Roles[id] = roleMeta
+
+	logger.New("nip86").Info("Relay role edited via management API",
+		zap.String("role_id", id),
+		zap.String("label", label))
+
+	return true, ""
+}
+
+// mgmtDeleteRole deletes a relay role.
+// params: [id]
+func (s *Server) mgmtDeleteRole(params []string) (interface{}, string) {
+	if len(params) < 1 {
+		return nil, "missing role id parameter"
+	}
+	id := params[0]
+
+	if id == "" {
+		return nil, "role id cannot be empty"
+	}
+
+	if _, exists := s.fullCfg.Relay.Roles[id]; !exists {
+		return nil, fmt.Sprintf("role '%s' not found", id)
+	}
+
+	delete(s.fullCfg.Relay.Roles, id)
+
+	logger.New("nip86").Info("Relay role deleted via management API",
+		zap.String("role_id", id))
+
+	return true, ""
+}
+
+// mgmtAssignRole assigns a role to a pubkey.
+// params: [pubkey, role-id]
+func (s *Server) mgmtAssignRole(params []string) (interface{}, string) {
+	if len(params) < 2 {
+		return nil, "missing parameters: expected [pubkey, role-id]"
+	}
+	pubkey := strings.ToLower(params[0])
+	roleID := params[1]
+
+	if len(pubkey) != 64 {
+		return nil, "invalid pubkey: must be 64 hex characters"
+	}
+
+	if _, exists := s.fullCfg.Relay.Roles[roleID]; !exists {
+		return nil, fmt.Sprintf("role '%s' not found", roleID)
+	}
+
+	if s.fullCfg.Relay.UserRoles == nil {
+		s.fullCfg.Relay.UserRoles = make(map[string][]string)
+	}
+
+	// Avoid duplicate assignments
+	for _, r := range s.fullCfg.Relay.UserRoles[pubkey] {
+		if r == roleID {
+			return true, ""
+		}
+	}
+	s.fullCfg.Relay.UserRoles[pubkey] = append(s.fullCfg.Relay.UserRoles[pubkey], roleID)
+
+	logger.New("nip86").Info("Role assigned via management API",
+		zap.String("pubkey", pubkey),
+		zap.String("role_id", roleID))
+
+	return true, ""
+}
+
+// mgmtUnassignRole removes a role from a pubkey.
+// params: [pubkey, role-id]
+func (s *Server) mgmtUnassignRole(params []string) (interface{}, string) {
+	if len(params) < 2 {
+		return nil, "missing parameters: expected [pubkey, role-id]"
+	}
+	pubkey := strings.ToLower(params[0])
+	roleID := params[1]
+
+	if len(pubkey) != 64 {
+		return nil, "invalid pubkey: must be 64 hex characters"
+	}
+
+	roles, exists := s.fullCfg.Relay.UserRoles[pubkey]
+	if !exists {
+		return nil, fmt.Sprintf("no roles assigned to pubkey")
+	}
+
+	filtered := roles[:0]
+	found := false
+	for _, r := range roles {
+		if r == roleID {
+			found = true
+			continue
+		}
+		filtered = append(filtered, r)
+	}
+
+	if !found {
+		return nil, fmt.Sprintf("role '%s' not assigned to pubkey", roleID)
+	}
+
+	if len(filtered) == 0 {
+		delete(s.fullCfg.Relay.UserRoles, pubkey)
+	} else {
+		s.fullCfg.Relay.UserRoles[pubkey] = filtered
+	}
+
+	logger.New("nip86").Info("Role unassigned via management API",
+		zap.String("pubkey", pubkey),
+		zap.String("role_id", roleID))
+
+	return true, ""
 }
 
 // --- Response Helpers ---

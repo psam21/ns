@@ -23,6 +23,7 @@ type RelayConfig struct {
 	MinPowDifficulty int              `mapstructure:"MIN_POW_DIFFICULTY" json:"min_pow_difficulty" validate:"min=0,max=64"`
 	ThrottlingConfig ThrottlingConfig `mapstructure:"THROTTLING"        json:"throttling"        validate:"required"`
 	Roles            map[string]string `mapstructure:"ROLES"            json:"roles"`
+	UserRoles        map[string][]string `mapstructure:"USER_ROLES"     json:"user_roles"`
 }
 
 // ThrottlingConfig holds rate limiting settings.
