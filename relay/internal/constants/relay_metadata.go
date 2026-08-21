@@ -75,6 +75,7 @@ var DefaultSupportedNIPs = []interface{}{
 	64, // NIP-64: Chess (PGN)
 	65, // NIP-65: Relay List Metadata
 	66, // NIP-66: Relay Discovery and Liveness Monitoring
+	67, // NIP-67: EOSE Completeness Hint
 	69, // NIP-69: Peer-to-peer Order Events
 	70, // NIP-70: Protected Events
 	71, // NIP-71: Video Events

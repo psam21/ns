@@ -444,8 +444,19 @@ func (c *WsConnection) sendOK(eventID string, accepted bool, message string) {
 }
 
 // sendEOSE sends an EOSE (End of Stored Events) message
-func (c *WsConnection) sendEOSE(subID string) {
-	c.sendMessage("EOSE", subID)
+// Per NIP-67, may include a third element with hint strings:
+//   - ["finish"]: relay has sent every stored event matching the subscription's filters
+//   - ["more"]: relay holds more matching stored events than it has sent
+//   - [] or omitted: legacy behavior
+func (c *WsConnection) sendEOSE(subID string, hints ...string) {
+	if len(hints) > 0 {
+		// NIP-67 EOSE with hints
+		msg := []interface{}{"EOSE", subID, hints}
+		data, _ := json.Marshal(msg)
+		c.SendMessage(data)
+	} else {
+		c.sendMessage("EOSE", subID)
+	}
 }
 
 // HandleMessages processes incoming messages from the client

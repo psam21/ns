@@ -212,8 +212,11 @@ func (c *WsConnection) processSubscription(ctx context.Context, subID string, f 
 		zap.String("client", c.RemoteAddr()))
 
 	// Send EOSE (End of Stored Events)
+	// Per NIP-67, include "finish" hint since the relay has sent every stored
+	// event matching the subscription's filters (no internal cap is applied
+	// beyond what the filter requested).
 	if !c.isClosed.Load() {
-		c.sendEOSE(subID)
+		c.sendEOSE(subID, "finish")
 	}
 }
 
