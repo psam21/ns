@@ -80,6 +80,7 @@ var DefaultSupportedNIPs = []interface{}{
 	89, // NIP-89: Recommended Application Handlers
 	92, // NIP-92: Media Attachments (imeta)
 	94, // NIP-94: File Metadata
+	98, // NIP-98: HTTP Auth
 	99, // NIP-99: Classified Listings
 	"7D", // NIP-7D: Threads
 	"A0", // NIP-A0: Voice Messages
