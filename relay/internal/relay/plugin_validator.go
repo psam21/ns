@@ -511,6 +511,9 @@ func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 	case 1063:
 		// NIP-94: File Metadata - validate file metadata event
 		return nips.ValidateNIP94Event(event)
+	case 9:
+		// NIP-C7: Chats - validate chat message event
+		return nips.ValidateNIPC7Event(event)
 	case 1:
 		// NIP-10: Text Notes and Threads - validate reply threading
 		if err := nips.ValidateNIP10Reply(event); err != nil {
