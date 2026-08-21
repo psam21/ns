@@ -737,6 +737,7 @@ func IsStandardListKind(kind int) bool {
 		10006: true, // Blocked relays
 		10007: true, // Search relays
 		10009: true, // Simple groups
+		10011: true, // Favorite follow sets (NEW - last month)
 		10012: true, // Relay feeds
 		10015: true, // Interests
 		10020: true, // Media follows
@@ -790,6 +791,8 @@ func GetListType(kind int) string {
 		return "search_relays"
 	case 10009:
 		return "simple_groups"
+	case 10011:
+		return "favorite_follow_sets"
 	case 10012:
 		return "relay_feeds"
 	case 10015:
