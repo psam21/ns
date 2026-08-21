@@ -508,6 +508,9 @@ func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 	case 38172, 38173, 38000:
 		// NIP-87: Cashu/Fedimint Discoverability - validate mint events
 		return nips.ValidateNIP87Event(event)
+	case 1063:
+		// NIP-94: File Metadata - validate file metadata event
+		return nips.ValidateNIP94Event(event)
 	case 1:
 		// NIP-10: Text Notes and Threads - validate reply threading
 		if err := nips.ValidateNIP10Reply(event); err != nil {
