@@ -110,6 +110,30 @@ git add -A && git commit -m "description" && git push
 | `relay/internal/relay/nip86.go` | NIP-86: Relay Management API (JSON-RPC, NIP-98 auth, 17 methods) |
 | `relay/internal/relay/nip29.go` | NIP-29: Relay-based Groups (group store, membership, moderation, relay-signed metadata) |
 | `relay/internal/relay/nip43.go` | NIP-43: Relay Access Metadata (membership store, invite codes, join/leave flow) |
+| `relay/internal/relay/nips/nip05.go` | NIP-05: DNS identifier mapping validator |
+| `relay/internal/relay/nips/nip07.go` | NIP-07: window.nostr capability documentation |
+| `relay/internal/relay/nips/nip10.go` | NIP-10: Text Notes and Threads validator |
+| `relay/internal/relay/nips/nip19.go` | NIP-19: bech32-encoded entities (npub, nsec, note, nprofile, nevent, naddr) |
+| `relay/internal/relay/nips/nip21.go` | NIP-21: nostr: URI scheme validator |
+| `relay/internal/relay/nips/nip27.go` | NIP-27: Text Note References validator |
+| `relay/internal/relay/nips/nip36.go` | NIP-36: Sensitive Content / Content Warning validator |
+| `relay/internal/relay/nips/nip44.go` | NIP-44: Encrypted Payloads (Versioned) validator |
+| `relay/internal/relay/nips/nip46.go` | NIP-46: Nostr Remote Signing validator |
+| `relay/internal/relay/nips/nip47.go` | NIP-47: Nostr Wallet Connect validators |
+| `relay/internal/relay/nips/nip48.go` | NIP-48: Bridged Events validator |
+| `relay/internal/relay/nips/nip49.go` | NIP-49: Private Key Encryption (ncryptsec) validator |
+| `relay/internal/relay/nips/nip5a.go` | NIP-5A: Static Websites (nsites) validator |
+| `relay/internal/relay/nips/nip67.go` | NIP-67: EOSE Completeness Hint (in connection.go/subscription.go) |
+| `relay/internal/relay/nips/nip87.go` | NIP-87: Cashu/Fedimint Discoverability validator |
+| `relay/internal/relay/nips/nip92.go` | NIP-92: Media Attachments (imeta) validator |
+| `relay/internal/relay/nips/nip94.go` | NIP-94: File Metadata validator |
+| `relay/internal/relay/nips/nipa0.go` | NIP-A0: Voice Messages validator |
+| `relay/internal/relay/nips/nipa4.go` | NIP-A4: Public Messages validator |
+| `relay/internal/relay/nips/nipb0.go` | NIP-B0: Web Bookmarks validator |
+| `relay/internal/relay/nips/nipc0.go` | NIP-C0: Code Snippets validator |
+| `relay/internal/relay/nips/nipc7.go` | NIP-C7: Chats validator |
+| `relay/internal/relay/nips/nipcc.go` | NIP-CC: Geocaching Events validator |
+| `relay/internal/relay/nips/nipf4.go` | NIP-F4: Podcasts validator |
 
 ### Web / Dashboard
 
@@ -146,6 +170,39 @@ git add -A && git commit -m "description" && git push
 - **NIP-09 Deletion**: `persistDeletion` supports both `"e"` tags (delete by event ID) and `"a"` tags (delete addressable events by `kind:pubkey:d-tag` up to `created_at`).
 - **Schema init fast-path**: `InitializeSchema` checks if the `events` table exists and skips all DDL if so. Without this, `CREATE INDEX IF NOT EXISTS` takes ~158s on 60K+ rows. The `splitSQL()` helper splits DDL at semicolons while respecting `$$` dollar-quoted function bodies, since pgx extended query protocol only supports single statements.
 - **Database**: PostgreSQL 16 running locally on EC2 (migrated from CockroachDB Cloud). Connection via `127.0.0.1:5432`, user `relay`, database `shugur`.
+
+## New NIP Validators Added (2026-08-21)
+
+All 45 GitHub issues for NIP implementations have been closed. The following validators were added:
+
+| NIP | File | Kinds | Description |
+|-----|------|-------|-------------|
+| NIP-05 | `nip05.go` | 0 | DNS identifier mapping |
+| NIP-07 | `nip07.go` | — | window.nostr capability docs |
+| NIP-10 | `nip10.go` | 1 | Text Notes and Threads |
+| NIP-19 | `nip19.go` | — | bech32 entities (npub, nsec, etc.) |
+| NIP-21 | `nip21.go` | 1, 30023 | nostr: URI scheme |
+| NIP-27 | `nip27.go` | 1, 30023 | Text Note References |
+| NIP-36 | `nip36.go` | 1 | Sensitive Content / Content Warning |
+| NIP-44 | `nip44.go` | — | Encrypted Payloads (updated v2 nonce=32) |
+| NIP-46 | `nip46.go` | — | Nostr Remote Signing (timeout fix) |
+| NIP-47 | `nip47.go` | 13194, 23194, 23195 | Nostr Wallet Connect |
+| NIP-48 | `nip48.go` | 1 | Bridged Events (proxy tags) |
+| NIP-49 | `nip49.go` | — | ncryptsec validation |
+| NIP-5A | `nip5a.go` | 15128, 35128, 5128 | Static Websites (nsites) |
+| NIP-67 | `connection.go` | — | EOSE Completeness Hint (finish hint) |
+| NIP-87 | `nip87.go` | 38172, 38173, 38000 | Cashu/Fedimint Discovery |
+| NIP-92 | `nip92.go` | 1 | Media Attachments (imeta) |
+| NIP-94 | `nip94.go` | 1063 | File Metadata |
+| NIP-A0 | `nipa0.go` | 1222, 1244 | Voice Messages |
+| NIP-A4 | `nipa4.go` | 24 | Public Messages |
+| NIP-B0 | `nipb0.go` | 39701 | Web Bookmarks |
+| NIP-C0 | `nipc0.go` | 1337 | Code Snippets |
+| NIP-C7 | `nipc7.go` | 9 | Chats |
+| NIP-CC | `nipcc.go` | 37516, 37517, 7516, 7517 | Geocaching Events |
+| NIP-F4 | `nipf4.go` | 54, 10154, 10064, 10054 | Podcasts |
+
+All validators are registered in `plugin_validator.go` switch statement and advertised in `DefaultSupportedNIPs` in `relay_metadata.go`.
 
 ## Blossom Media Server
 
@@ -186,8 +243,8 @@ git add -A && git commit -m "description" && git push
 - The `temp/` directory is gitignored (used for scratch work like cloning NIP specs)
 - Contact: `epochshield@proton.me`
 
-## Current NIP Support (67 NIPs)
+## Current NIP Support (78 NIPs)
 
-01, 02, 03, 09, 11, 13, 15, 17, 18, 22, 23, 24, 25, 28, 29, 30, 32, 34, 35, 37, 38, 39, 40, 42, 43, 44, 45, 47, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 64, 65, 66, 69, 70, 71, 72, 75, 77, 78, 84, 85, 86, 87, 88, 89, 90, 94, 99, 7D, A0, A4, B0, B7, C0, C7, EE
+01, 02, 05, 07, 09, 10, 11, 13, 17, 18, 19, 21, 22, 23, 24, 25, 27, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 64, 65, 66, 67, 69, 70, 71, 75, 77, 78, 84, 85, 86, 87, 88, 89, 90, 92, 94, 98, 99, 7D, A0, A4, B0, B7, C0, C7, CC, F4
 
 Plus custom NIPs: XX (Time Capsules), YY (Nostr Web Pages)
