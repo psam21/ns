@@ -29,6 +29,7 @@ var DefaultSupportedNIPs = []interface{}{
 	5,  // NIP-05: Mapping Nostr keys to DNS-based internet identifiers
 	7,  // NIP-07: window.nostr capability for web browsers
 	9,  // NIP-09: Event Deletion Request
+	10, // NIP-10: Text Notes and Threads
 	11, // NIP-11: Relay Information Document
 	13, // NIP-13: Proof of Work
 	17, // NIP-17: Private Direct Messages

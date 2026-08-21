@@ -495,6 +495,10 @@ func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 		}
 		return nips.ValidateLongFormContent(event)
 	case 1:
+		// NIP-10: Text Notes and Threads - validate reply threading
+		if err := nips.ValidateNIP10Reply(event); err != nil {
+			return err
+		}
 		// NIP-27: Text Note References - validate inline nostr: URI references
 		if err := nips.ValidateNIP27References(event); err != nil {
 			return err
