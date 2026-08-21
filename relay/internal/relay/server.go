@@ -122,6 +122,9 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 			case r.URL.Path == "/api/cluster":
 				// Serve cluster information API with validation
 				web.SecureValidatedAPIHandlerFunc(s.webHandler.HandleClusterAPI)(w, r)
+			case r.URL.Path == "/events":
+				// Serve events breakdown page with validation
+				web.SecureValidatedHandlerFunc(s.webHandler.HandleEvents)(w, r)
 			case r.URL.Path == "/health":
 				// Serve health check endpoint - no validation needed for basic health checks
 				s.healthChecker.HandleHealth(w, r)

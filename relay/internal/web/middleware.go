@@ -164,6 +164,7 @@ func DefaultInputValidation() *InputValidation {
 	// Compile safe path patterns for our endpoints
 	pathPatterns := []*regexp.Regexp{
 		regexp.MustCompile(`^/$`),                                // Root path
+		regexp.MustCompile(`^/events$`),                          // Events breakdown page
 		regexp.MustCompile(`^/api/info$`),                        // API info endpoint
 		regexp.MustCompile(`^/api/stats$`),                       // API stats endpoint
 		regexp.MustCompile(`^/api/metrics$`),                     // API metrics endpoint

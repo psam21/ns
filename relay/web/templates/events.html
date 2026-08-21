@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Event Breakdown - nostr.ltd</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
+    <link href="/static/style.css" rel="stylesheet" />
+    <link rel="icon" href="/static/favicon.ico" type="image/x-icon" />
+    <style>
+      .events-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .events-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+      }
+      .events-header h1 {
+        margin: 0;
+        font-size: 1.8rem;
+      }
+      .back-link {
+        color: var(--accent);
+        text-decoration: none;
+        font-size: 0.9rem;
+      }
+      .back-link:hover {
+        text-decoration: underline;
+      }
+      .year-table-container {
+        margin-bottom: 40px;
+      }
+      .year-table-container h2 {
+        font-size: 1.3rem;
+        margin-bottom: 15px;
+        color: var(--text);
+        border-bottom: 2px solid var(--accent);
+        padding-bottom: 8px;
+        display: inline-block;
+      }
+      .events-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+        background: var(--card-bg);
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      }
+      .events-table th,
+      .events-table td {
+        padding: 8px 10px;
+        text-align: center;
+        border: 1px solid var(--border);
+      }
+      .events-table th {
+        background: var(--header-bg);
+        color: var(--accent);
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+      .events-table th.kind-col {
+        text-align: left;
+        min-width: 200px;
+        position: sticky;
+        left: 0;
+        z-index: 20;
+      }
+      .events-table td.kind-col {
+        text-align: left;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.8rem;
+      }
+      .events-table td.kind-name {
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        text-align: left;
+        padding-left: 8px;
+      }
+      .events-table td.total-col {
+        font-weight: 700;
+        background: var(--total-bg);
+        color: var(--accent);
+      }
+      .events-table tr.total-row {
+        background: var(--total-bg);
+        font-weight: 700;
+      }
+      .events-table tr.total-row td {
+        color: var(--accent);
+      }
+      .events-table tr.total-row td.kind-col {
+        text-align: left;
+      }
+      .events-table tr:hover td {
+        background: var(--hover-bg);
+      }
+      .events-table tr.total-row:hover td {
+        background: var(--total-bg);
+      }
+      .sort-controls {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+        align-items: center;
+      }
+      .sort-controls label {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+      }
+      .sort-controls select {
+        padding: 6px 10px;
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 0.85rem;
+      }
+      .count-zero {
+        color: var(--text-muted);
+      }
+      .count-nonzero {
+        color: var(--text);
+        font-weight: 500;
+      }
+      .count-high {
+        color: var(--accent);
+        font-weight: 700;
+      }
+      .no-data {
+        text-align: center;
+        padding: 40px;
+        color: var(--text-muted);
+      }
+      @media (max-width: 900px) {
+        .events-table {
+          display: block;
+          overflow-x: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="events-container">
+        <div class="events-header">
+          <h1><i class="fas fa-chart-bar"></i> Event Breakdown</h1>
+          <a href="/" class="back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+        </div>
+
+        {{if .Years}}
+          {{range .Years}}
+          <div class="year-table-container">
+            <h2>{{.Year}} <span style="font-size:0.8rem;color:var(--text-muted);font-weight:400;">({{.GrandTotal}} events)</span></h2>
+            
+            <div class="sort-controls">
+              <label for="sort-{{.Year}}">Sort by:</label>
+              <select id="sort-{{.Year}}" onchange="sortTable({{.Year}}, this.value)">
+                <option value="kind">NIP / Kind</option>
+                <option value="volume">Volume (Row Total)</option>
+              </select>
+            </div>
+
+            <table class="events-table" id="table-{{.Year}}">
+              <thead>
+                <tr>
+                  <th class="kind-col">NIP / Kind</th>
+                  {{range .Months}}
+                  <th>{{.}}</th>
+                  {{end}}
+                  <th class="total-col">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{range .Rows}}
+                <tr data-kind="{{.Kind}}" data-total="{{.RowTotal}}">
+                  <td class="kind-col">{{formatNIP .Kind}}</td>
+                  <td class="kind-name">{{.KindName}}</td>
+                  {{range $i, $count := .MonthCounts}}
+                    <td class="{{if eq $count 0}}count-zero{{else if gt $count 100}}count-high{{else}}count-nonzero{{end}}">{{$count}}</td>
+                  {{end}}
+                  <td class="total-col">{{.RowTotal}}</td>
+                </tr>
+                {{end}}
+                <tr class="total-row">
+                  <td class="kind-col">Total</td>
+                  <td class="kind-name"></td>
+                  {{range .ColumnTotals}}
+                    <td>{{.}}</td>
+                  {{end}}
+                  <td class="total-col">{{.GrandTotal}}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          {{end}}
+        {{else}}
+          <div class="no-data">
+            <i class="fas fa-database" style="font-size:3rem;margin-bottom:15px;display:block;"></i>
+            <p>No event data available for 2026 or later.</p>
+          </div>
+        {{end}}
+      </div>
+    </div>
+
+    <script>
+      function sortTable(year, sortBy) {
+        const table = document.getElementById('table-' + year);
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr:not(.total-row)'));
+        
+        rows.sort((a, b) => {
+          if (sortBy === 'kind') {
+            return parseInt(a.dataset.kind) - parseInt(b.dataset.kind);
+          } else if (sortBy === 'volume') {
+            return parseInt(a.dataset.total) - parseInt(b.dataset.total);
+          }
+          return 0;
+        });
+        
+        // Re-append sorted rows
+        rows.forEach(row => tbody.appendChild(row));
+      }
+    </script>
+    <script src="/static/script.js"></script>
+  </body>
+</html>

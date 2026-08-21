@@ -172,6 +172,19 @@ a:hover { text-decoration: underline; }
   transition: color .3s, text-shadow .5s;
 }
 
+.stat-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  transition: color .3s, text-shadow .5s;
+}
+
+.stat-link:hover {
+  color: var(--accent);
+  text-shadow: 0 0 8px var(--accent-glow);
+  text-decoration: none;
+}
+
 .stat-lbl {
   display: block;
   font-size: 0.7rem;

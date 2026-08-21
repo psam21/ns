@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -77,6 +78,8 @@ type Handler struct {
 		GetTotalEventCount(ctx context.Context) (int64, error)
 		GetDatabaseInfo(ctx context.Context) (*storage.DatabaseInfo, error)
 		GetClusterHealth(ctx context.Context) (map[string]interface{}, error)
+		GetYearsWithEvents(ctx context.Context) ([]int, error)
+		GetEventCountsByKindMonth(ctx context.Context, year int) ([]storage.EventCountByKindMonth, error)
 	} // Database interface
 }
 
@@ -605,6 +608,153 @@ func (h *Handler) HandleClusterAPI(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
+	}
+}
+
+// EventBreakdownData represents the data for the events breakdown page
+type EventBreakdownData struct {
+	Years []YearEventData
+}
+
+// YearEventData represents event data for a single year
+type YearEventData struct {
+	Year        int
+	Months      []string
+	Rows        []NIPRowData
+	ColumnTotals []int64
+	GrandTotal  int64
+}
+
+// NIPRowData represents a single NIP/kind row in the table
+type NIPRowData struct {
+	Kind       int
+	KindName   string
+	MonthCounts []int64
+	RowTotal   int64
+}
+
+// HandleEvents serves the events breakdown page
+func (h *Handler) HandleEvents(w http.ResponseWriter, r *http.Request) {
+	// Apply security headers
+	dashboardHeaders := DefaultSecurityHeaders()
+	dashboardHeaders.Apply(w)
+
+	if h.db == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), constants.HealthCheckTimeout*time.Second)
+	defer cancel()
+
+	// Get years with events
+	years, err := h.db.GetYearsWithEvents(ctx)
+	if err != nil {
+		h.logger.Error("Failed to get years with events", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Filter years >= 2026
+	var validYears []int
+	for _, y := range years {
+		if y >= 2026 {
+			validYears = append(validYears, y)
+		}
+	}
+
+	// Build data for each year
+	var yearData []YearEventData
+	months := []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+
+	for _, year := range validYears {
+		counts, err := h.db.GetEventCountsByKindMonth(ctx, year)
+		if err != nil {
+			h.logger.Error("Failed to get event counts for year", zap.Int("year", year), zap.Error(err))
+			continue
+		}
+
+		// Build map of kind -> month counts
+		kindMap := make(map[int]*NIPRowData)
+		for _, c := range counts {
+			if _, ok := kindMap[c.Kind]; !ok {
+				kindMap[c.Kind] = &NIPRowData{
+					Kind:        c.Kind,
+					KindName:    c.KindName,
+					MonthCounts: make([]int64, 12),
+				}
+			}
+			if c.Month >= 1 && c.Month <= 12 {
+				kindMap[c.Kind].MonthCounts[c.Month-1] = c.Count
+			}
+		}
+
+		// Convert to sorted slice
+		var rows []NIPRowData
+		for _, row := range kindMap {
+			// Calculate row total
+			var total int64
+			for _, count := range row.MonthCounts {
+				total += count
+			}
+			row.RowTotal = total
+			rows = append(rows, *row)
+		}
+
+		// Sort by kind (numeric)
+		sort.Slice(rows, func(i, j int) bool {
+			return rows[i].Kind < rows[j].Kind
+		})
+
+		// Calculate column totals
+		var colTotals [12]int64
+		var grandTotal int64
+		for _, row := range rows {
+			for m := 0; m < 12; m++ {
+				colTotals[m] += row.MonthCounts[m]
+			}
+			grandTotal += row.RowTotal
+		}
+
+		yearData = append(yearData, YearEventData{
+			Year:         year,
+			Months:       months,
+			Rows:         rows,
+			ColumnTotals: colTotals[:],
+			GrandTotal:   grandTotal,
+		})
+	}
+
+	// Load template
+	tmplPath := filepath.Join("web", "templates", "events.html")
+	funcMap := template.FuncMap{
+		"formatNIP": func(v interface{}) string {
+			switch val := v.(type) {
+			case int:
+				return fmt.Sprintf("%02d", val)
+			case string:
+				return val
+			default:
+				return fmt.Sprintf("%v", val)
+			}
+		},
+	}
+
+	tmpl, err := template.New("events.html").Funcs(funcMap).ParseFiles(tmplPath)
+	if err != nil {
+		h.logger.Error("Failed to parse events template", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	data := EventBreakdownData{
+		Years: yearData,
+	}
+
+	if err := tmpl.Execute(w, data); err != nil {
+		h.logger.Error("Failed to execute events template", zap.Error(err))
+		// Don't call http.Error after template execution started
+		return
 	}
 }
 

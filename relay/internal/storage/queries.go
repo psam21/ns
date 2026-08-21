@@ -727,7 +727,90 @@ func (db *DB) IsVanishedPubkey(ctx context.Context, pubkey string) (bool, error)
 	}
 	return count > 0, nil
 }
+// EventCountByKindMonth represents event counts grouped by kind and month
+type EventCountByKindMonth struct {
+	Kind      int
+	Year      int
+	Month     int
+	Count     int64
+	KindName  string
+}
 
+// GetEventCountsByKindMonth returns event counts grouped by kind and month for a given year
+func (db *DB) GetEventCountsByKindMonth(ctx context.Context, year int) ([]EventCountByKindMonth, error) {
+	if !db.isConnected() {
+		return nil, fmt.Errorf("database is not connected")
+	}
+
+	startOfYear := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
+	endOfYear := time.Date(year+1, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
+
+	query := `
+		SELECT kind, EXTRACT(MONTH FROM to_timestamp(created_at)) as month, COUNT(*) as count
+		FROM events
+		WHERE created_at >= $1 AND created_at < $2
+		GROUP BY kind, month
+		ORDER BY kind, month
+	`
+
+	rows, err := db.Pool.Query(ctx, query, startOfYear, endOfYear)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query event counts: %w", err)
+	}
+	defer rows.Close()
+
+	var results []EventCountByKindMonth
+	for rows.Next() {
+		var kind int
+		var month int
+		var count int64
+		if err := rows.Scan(&kind, &month, &count); err != nil {
+			logger.Warn("Row scan failed", zap.Error(err))
+			continue
+		}
+		kindName := constants.GetNIPName(kind)
+		results = append(results, EventCountByKindMonth{
+			Kind:     kind,
+			Year:     year,
+			Month:    month,
+			Count:    count,
+			KindName: kindName,
+		})
+	}
+
+	return results, nil
+}
+
+// GetYearsWithEvents returns all years that have at least one event
+func (db *DB) GetYearsWithEvents(ctx context.Context) ([]int, error) {
+	if !db.isConnected() {
+		return nil, fmt.Errorf("database is not connected")
+	}
+
+	query := `
+		SELECT DISTINCT EXTRACT(YEAR FROM to_timestamp(created_at)) as year
+		FROM events
+		ORDER BY year
+	`
+
+	rows, err := db.Pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query years: %w", err)
+	}
+	defer rows.Close()
+
+	var years []int
+	for rows.Next() {
+		var year int
+		if err := rows.Scan(&year); err != nil {
+			logger.Warn("Row scan failed", zap.Error(err))
+			continue
+		}
+		years = append(years, year)
+	}
+
+	return years, nil
+}
 // GetTotalEventCount returns the total number of events stored in the database
 func (db *DB) GetTotalEventCount(ctx context.Context) (int64, error) {
 	if !db.isConnected() {
