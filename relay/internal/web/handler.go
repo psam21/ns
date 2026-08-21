@@ -76,6 +76,7 @@ type Handler struct {
 	liveSince time.Time
 	db        interface {
 		GetTotalEventCount(ctx context.Context) (int64, error)
+		GetTotalEventCount2026Plus(ctx context.Context) (int64, error)
 		GetDatabaseInfo(ctx context.Context) (*storage.DatabaseInfo, error)
 		GetClusterHealth(ctx context.Context) (map[string]interface{}, error)
 		GetYearsWithEvents(ctx context.Context) ([]int, error)
@@ -450,14 +451,14 @@ func (h *Handler) getDashboardData(host string) *DashboardData {
 func (h *Handler) getStatsData() *StatsData {
 	var eventsStored int64
 
-	// Get events stored from database if available
+	// Get events stored from database if available (2026+ only)
 	if h.db != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), constants.HealthCheckTimeout*time.Second)
 		defer cancel()
 
-		count, err := h.db.GetTotalEventCount(ctx)
+		count, err := h.db.GetTotalEventCount2026Plus(ctx)
 		if err != nil {
-			h.logger.Warn("Failed to get total event count", zap.Error(err))
+			h.logger.Warn("Failed to get total event count from 2026", zap.Error(err))
 			eventsStored = 0
 		} else {
 			eventsStored = count

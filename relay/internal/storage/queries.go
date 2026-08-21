@@ -811,6 +811,24 @@ func (db *DB) GetYearsWithEvents(ctx context.Context) ([]int, error) {
 
 	return years, nil
 }
+
+// GetTotalEventCount2026Plus returns the total number of events stored in the database from 2026 onwards
+func (db *DB) GetTotalEventCount2026Plus(ctx context.Context) (int64, error) {
+	if !db.isConnected() {
+		return 0, fmt.Errorf("database is not connected")
+	}
+
+	startOf2026 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
+
+	var count int64
+	err := db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM events WHERE created_at >= $1", startOf2026).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get total event count from 2026: %w", err)
+	}
+
+	return count, nil
+}
+
 // GetTotalEventCount returns the total number of events stored in the database
 func (db *DB) GetTotalEventCount(ctx context.Context) (int64, error) {
 	if !db.isConnected() {
