@@ -58,6 +58,7 @@ var DefaultSupportedNIPs = []interface{}{
 	46, // NIP-46: Nostr Remote Signing
 	47, // NIP-47: Nostr Wallet Connect
 	48, // NIP-48: Bridged Events (NWC)
+	49, // NIP-49: Private Key Encryption (ncryptsec)
 	50, // NIP-50: Search Capability
 	51, // NIP-51: Lists
 	52, // NIP-52: Calendar Events
