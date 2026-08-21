@@ -170,6 +170,7 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 				"51": "Lists",
 				"52": "Calendar Events",
 				"53": "Live Activities",
+				"5A": "Static Websites",
 				"54": "Wiki",
 				"56": "Reporting",
 				"57": "Lightning Zaps",
