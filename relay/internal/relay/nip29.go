@@ -176,6 +176,22 @@ func (gs *GroupStore) ValidateGroupEvent(evt *nostr.Event) (bool, string) {
 		return false, "invalid group ID format (must be a-z0-9-_)"
 	}
 
+	// Validate "previous" tag if present (NIP-29 spec update)
+	// The "previous" tag references a previous group event by its ID
+	prevTag := evt.Tags.GetFirst([]string{"previous", ""})
+	if prevTag != nil && len(*prevTag) >= 2 {
+		prevEventID := (*prevTag)[1]
+		if len(prevEventID) != 64 {
+			return false, "invalid 'previous' tag: event ID must be 64-char hex"
+		}
+		// Validate hex format
+		for _, c := range prevEventID {
+			if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+				return false, "invalid 'previous' tag: event ID must be hex"
+			}
+		}
+	}
+
 	gs.mu.RLock()
 	group := gs.groups[groupID]
 	gs.mu.RUnlock()
