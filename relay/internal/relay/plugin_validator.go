@@ -493,7 +493,11 @@ func (pv *PluginValidator) validateWithDedicatedNIPs(event *nostr.Event) error {
 		return nips.ValidateLongFormContent(event)
 	case 1:
 		// NIP-27: Text Note References - validate inline nostr: URI references
-		return nips.ValidateNIP27References(event)
+		if err := nips.ValidateNIP27References(event); err != nil {
+			return err
+		}
+		// NIP-92: Media Attachments (imeta) - validate imeta tags
+		return nips.ValidateNIP92Event(event)
 	case 30078:
 		return nips.ValidateApplicationSpecificData(event)
 	case 13194:
