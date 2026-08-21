@@ -6,7 +6,7 @@ require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.5
 	github.com/go-playground/validator/v10 v10.28.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/jackc/pgx/v5 v5.7.4
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/nbd-wtf/go-nostr v0.52.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.1
@@ -71,7 +71,7 @@ require (
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/arch v0.21.0 // indirect
-	golang.org/x/crypto v0.51.0 // indirect
+	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/exp v0.0.0-20250911091902-df9299821621 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
