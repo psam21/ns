@@ -17,6 +17,8 @@ import (
 // NIP-43: Relay Access Metadata and Requests
 // https://github.com/nostr-protocol/nips/blob/master/43.md
 //
+// SPEC UPDATE (2 months ago): Added relay roles event
+//
 // Event kinds:
 //   13534 — Membership list (relay-signed, replaceable)
 //    8000 — Add user (relay-signed)
@@ -25,6 +27,7 @@ import (
 //   28935 — Invite request (ephemeral, relay-generated on the fly)
 //   28936 — Leave request (user-sent)
 //   10010 — Relay membership list (user-signed, replaceable)
+//   13535 — Relay roles (relay-signed, replaceable) - NEW
 
 // MembershipStore manages NIP-43 relay membership and invite codes.
 type MembershipStore struct {
@@ -184,7 +187,7 @@ func (ms *MembershipStore) CleanExpired() int {
 // IsNIP43Event returns true if the event kind is a NIP-43 kind.
 func IsNIP43Event(evt *nostr.Event) bool {
 	switch evt.Kind {
-	case 13534, 8000, 8001, 28934, 28935, 28936, 10010:
+	case 13534, 8000, 8001, 28934, 28935, 28936, 10010, 13535:
 		return true
 	}
 	return false
@@ -206,7 +209,7 @@ func (ms *MembershipStore) HandleNIP43Event(evt *nostr.Event) (bool, string, []*
 	case 10010:
 		// User's relay membership list — just accept and store
 		return true, "", nil
-	case 13534, 8000, 8001:
+	case 13534, 8000, 8001, 13535:
 		// Relay-signed events — only accept from relay's own pubkey
 		if strings.ToLower(evt.PubKey) != strings.ToLower(gs.GetRelayPubkey()) {
 			return false, "restricted: only relay can publish kind " + fmt.Sprintf("%d", evt.Kind), nil
@@ -263,7 +266,7 @@ func (ms *MembershipStore) handleJoinRequest(evt *nostr.Event, gs *GroupStore) (
 	logger.New("nip43").Info("New member joined via invite code",
 		zap.String("pubkey", pubkey))
 
-	// Generate relay-signed events: kind 8000 (add user) + updated kind 13534 (membership list)
+	// Generate relay-signed events: kind 8000 (add user) + updated kind 13534 (membership list) + kind 13535 (roles)
 	var relayEvents []*nostr.Event
 
 	addEvt := ms.createAddUserEvent(pubkey, gs)
@@ -274,6 +277,11 @@ func (ms *MembershipStore) handleJoinRequest(evt *nostr.Event, gs *GroupStore) (
 	memberListEvt := ms.createMembershipListEvent(gs)
 	if memberListEvt != nil {
 		relayEvents = append(relayEvents, memberListEvt)
+	}
+
+	rolesEvt := ms.createRelayRolesEvent(gs)
+	if rolesEvt != nil {
+		relayEvents = append(relayEvents, rolesEvt)
 	}
 
 	return true, "info: welcome!", relayEvents
@@ -313,6 +321,11 @@ func (ms *MembershipStore) handleLeaveRequest(evt *nostr.Event, gs *GroupStore) 
 	memberListEvt := ms.createMembershipListEvent(gs)
 	if memberListEvt != nil {
 		relayEvents = append(relayEvents, memberListEvt)
+	}
+
+	rolesEvt := ms.createRelayRolesEvent(gs)
+	if rolesEvt != nil {
+		relayEvents = append(relayEvents, rolesEvt)
 	}
 
 	return true, "", relayEvents
@@ -420,6 +433,42 @@ func (ms *MembershipStore) createMembershipListEvent(gs *GroupStore) *nostr.Even
 
 	if err := evt.Sign(gs.relayPrivateKey); err != nil {
 		logger.New("nip43").Error("Failed to sign membership list event", zap.Error(err))
+		return nil
+	}
+
+	return evt
+}
+
+// createRelayRolesEvent creates a kind 13535 relay-signed roles event.
+// NIP-43 spec update: relay roles event for defining member roles.
+func (ms *MembershipStore) createRelayRolesEvent(gs *GroupStore) *nostr.Event {
+	if gs.relayPrivateKey == "" {
+		return nil
+	}
+
+	// Define standard relay roles
+	roles := map[string]string{
+		"admin":      "Full relay administration access",
+		"moderator":  "Can moderate content and manage users",
+		"member":     "Standard relay member",
+		"writer":     "Can publish events to the relay",
+	}
+
+	tags := nostr.Tags{{"-"}}
+	for roleName, roleDesc := range roles {
+		tags = append(tags, nostr.Tag{"role", roleName, roleDesc})
+	}
+
+	evt := &nostr.Event{
+		Kind:      13535,
+		PubKey:    gs.relayPubkey,
+		CreatedAt: nostr.Timestamp(time.Now().Unix()),
+		Tags:      tags,
+		Content:   "",
+	}
+
+	if err := evt.Sign(gs.relayPrivateKey); err != nil {
+		logger.New("nip43").Error("Failed to sign relay roles event", zap.Error(err))
 		return nil
 	}
 
