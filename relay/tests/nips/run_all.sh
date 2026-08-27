@@ -146,10 +146,9 @@ for test_file in "${tests[@]}"; do
 	test_name=$(basename "$test_file")
 	printf '\n=== %s ===\n' "$test_name"
 	run_relay_url="$test_relay_url"
-	if [[ "$test_name" == "test_nip17.sh" || "$test_name" == "test_nip59.sh" ]]; then
-		# These tests query recipient-private events and must authenticate as the
-		# generated recipient, so do not hide the upstream session behind the
-		# bridge signer.
+	if [[ "$test_name" == "test_nip17.sh" || "$test_name" == "test_nip42.sh" || "$test_name" == "test_nip59.sh" ]]; then
+		# These tests must authenticate directly with their generated or probe
+		# identity, so do not hide the upstream session behind the bridge signer.
 		run_relay_url="$RELAY_URL"
 	fi
 	if RELAY_URL="$run_relay_url" HTTP_URL="$HTTP_URL" \
