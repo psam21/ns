@@ -39,6 +39,7 @@ type DashboardData struct {
 	Limitation    *LimitationData       `json:"limitation"`
 	Stats         *StatsData            `json:"stats"`
 	TopKinds      []EventKindSummary    `json:"top_kinds"`
+	EventKinds    []EventKindSummary    `json:"event_kinds"`
 	LiveSince     string                `json:"live_since"`
 	Cluster       *storage.DatabaseInfo `json:"cluster"`
 }
@@ -460,10 +461,11 @@ func (h *Handler) getDashboardData(host string) *DashboardData {
 			AuthRequired:     metadata.Limitation.AuthRequired,
 			PaymentRequired:  metadata.Limitation.PaymentRequired,
 		},
-		Stats:     h.getStatsData(),
-		TopKinds:  h.getTopEventKinds(6),
-		LiveSince: h.liveSince.Format("Jan 2, 2006"),
-		Cluster:   clusterInfo,
+		Stats:      h.getStatsData(),
+		TopKinds:   h.getTopEventKinds(6),
+		EventKinds: h.getTopEventKinds(65536),
+		LiveSince:  h.liveSince.Format("Jan 2, 2006"),
+		Cluster:    clusterInfo,
 	}
 }
 

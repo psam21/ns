@@ -12,6 +12,7 @@ class RelayDashboard {
     this.setupEventListeners();
     this.startStatsUpdates();
     this.startTelemetryUpdates();
+    this.startClock();
   }
 
   // Setup event listeners
@@ -36,6 +37,17 @@ class RelayDashboard {
         const query = nipSearch.value.trim().toLowerCase();
         document.querySelectorAll('[data-nip-search]').forEach((item) => {
           const matches = !query || item.dataset.nipSearch.toLowerCase().includes(query);
+          item.classList.toggle('is-filtered', !matches);
+        });
+      });
+    }
+
+    const kindSearch = document.getElementById('kind-search');
+    if (kindSearch) {
+      kindSearch.addEventListener('input', () => {
+        const query = kindSearch.value.trim().toLowerCase();
+        document.querySelectorAll('[data-kind-search]').forEach((item) => {
+          const matches = !query || item.dataset.kindSearch.toLowerCase().includes(query);
           item.classList.toggle('is-filtered', !matches);
         });
       });
@@ -123,6 +135,24 @@ class RelayDashboard {
     }
   }
 
+  renderKindRows(container, items, total) {
+    if (!container) return;
+    container.replaceChildren();
+    items.forEach((item) => {
+      const share = item.count / total * 100;
+      const row = document.createElement('div');
+      row.className = 'kind-row';
+      row.dataset.kindSearch = `${item.kind} ${item.kindName}`;
+      row.innerHTML = `<div class="kind-name"><strong></strong><span></span></div><div class="kind-count"></div><div class="kind-share"><span class="kind-bar"><i></i></span><small></small></div>`;
+      row.querySelector('.kind-name strong').textContent = item.kind;
+      row.querySelector('.kind-name span').textContent = item.kindName;
+      row.querySelector('.kind-count').textContent = item.count.toLocaleString();
+      row.querySelector('.kind-bar i').style.width = `${share.toFixed(2)}%`;
+      row.querySelector('.kind-share small').textContent = `${share.toFixed(1)}%`;
+      container.appendChild(row);
+    });
+  }
+
   async updateEventKinds() {
     const container = document.getElementById('top-kinds');
     if (!container) return;
@@ -145,22 +175,26 @@ class RelayDashboard {
       const items = allItems.slice(0, 6);
       if (!total) return;
 
-      container.replaceChildren();
-      items.forEach((item) => {
-        const share = item.count / total * 100;
-        const row = document.createElement('div');
-        row.className = 'kind-row';
-        row.innerHTML = `<div class="kind-name"><strong></strong><span></span></div><div class="kind-count"></div><div class="kind-share"><span class="kind-bar"><i></i></span><small></small></div>`;
-        row.querySelector('.kind-name strong').textContent = item.kind;
-        row.querySelector('.kind-name span').textContent = item.kindName;
-        row.querySelector('.kind-count').textContent = item.count.toLocaleString();
-        row.querySelector('.kind-bar i').style.width = `${share.toFixed(2)}%`;
-        row.querySelector('.kind-share small').textContent = `${share.toFixed(1)}%`;
-        container.appendChild(row);
-      });
+      this.renderKindRows(document.getElementById('top-kinds'), items, total);
+      this.renderKindRows(document.getElementById('kind-registry'), allItems, total);
     } catch (error) {
       console.warn('Failed to update event kinds:', error);
     }
+  }
+
+  startClock() {
+    const clock = document.getElementById('nav-clock');
+    if (!clock) return;
+    const update = () => {
+      clock.textContent = `${new Date().toISOString().slice(11, 19)} UTC`;
+    };
+    update();
+    setInterval(update, 1000);
+  }
+
+  setText(id, value) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
   }
 
   // Update statistics by fetching from API
@@ -176,6 +210,17 @@ class RelayDashboard {
       // Update all the stats with real data
       if (data.stats) {
         this.updateStatElement('active-connections', data.stats.active_connections);
+        this.setText('active-connections-gauge', this.formatStatValue(data.stats.active_connections));
+        this.setText('events-per-second', Number(data.stats.events_per_second || 0).toFixed(2));
+        this.setText('response-time', Number(data.stats.average_response_time_ms || 0).toFixed(1));
+        this.setText('error-rate', `${Number(data.stats.error_rate || 0).toFixed(2)}%`);
+        this.setText('load-percentage', `${Number(data.stats.load_percentage || 0).toFixed(1)}%`);
+        this.setText('load-reading', `${Number(data.stats.load_percentage || 0).toFixed(1)} / 100%`);
+        const loadBar = document.getElementById('load-bar');
+        if (loadBar) loadBar.style.width = `${Math.min(100, Math.max(0, Number(data.stats.load_percentage || 0)))}%`;
+        this.setText('messages-processed', this.formatStatValue(data.stats.messages_processed || 0));
+        this.setText('messages-sent', this.formatStatValue(data.stats.messages_sent || 0));
+        this.setText('active-subscriptions', this.formatStatValue(data.stats.active_subscriptions || 0));
         if (data.stats.events_stored_ready) {
           this.updateStatElement('events-stored', data.stats.events_stored);
           document.getElementById('events-stored')?.classList.remove('stat-loading');

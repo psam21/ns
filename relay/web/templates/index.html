@@ -2,118 +2,72 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="nostr.ltd is an open public Nostr relay for signed events, portable identity, and transparent infrastructure." />
-    <title>{{.Name}} — Nostr Relay</title>
+    <meta name="description" content="nostr.ltd public Nostr relay operations dashboard." />
+    <title>{{.Name}} — Relay Operations</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
     <link href="/static/style.css" rel="stylesheet" />
     <link rel="icon" href="/static/favicon.ico" type="image/x-icon" />
   </head>
-  <body class="dashboard-page">
-    <div class="page-glow page-glow--one" aria-hidden="true"></div>
-    <div class="page-glow page-glow--two" aria-hidden="true"></div>
+  <body class="dashboard-page cockpit-page">
     <div class="container dashboard-container">
-      <header class="site-nav">
-        <a href="/" class="brand" aria-label="nostr.ltd home">
-          <span class="brand-mark">n</span>
-          <span>nostr<span class="brand-dot">.</span>ltd</span>
-        </a>
-        <nav class="site-nav-links" aria-label="Primary navigation">
-          <a class="nav-active" href="#dashboard">Dashboard</a>
-          <a href="/events">Events</a>
-          <a href="https://github.com/psam21/ns" target="_blank" rel="noopener noreferrer">Source <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a>
-          <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark mode" aria-pressed="false"><i id="theme-icon" class="fas fa-moon" aria-hidden="true"></i><span id="theme-toggle-label">Dark</span></button>
-        </nav>
+      <header class="site-nav cockpit-nav">
+        <a href="/" class="brand" aria-label="nostr.ltd operations home"><span class="brand-mark">n</span><span>nostr<span class="brand-dot">.</span>ltd <em>OPS</em></span></a>
+        <div class="cockpit-nav-meta"><span class="nav-clock" id="nav-clock">--:--:-- UTC</span><span class="nav-divider"></span><a href="/events">Event archive <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a><a href="https://github.com/psam21/ns" target="_blank" rel="noopener noreferrer">Source <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a><button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark mode" aria-pressed="false"><i id="theme-icon" class="fas fa-moon" aria-hidden="true"></i><span id="theme-toggle-label">Dark</span></button></div>
       </header>
 
       <main id="dashboard">
-        <section class="dashboard-hero">
-          <div class="dashboard-hero-copy">
-            <div class="hero-status hero-status--left">
-              <span class="pulse-dot"></span>
-              <span class="status-indicator"><span class="status-dot online"></span><span class="status-text">Public relay · online</span></span>
-            </div>
-            <h1 class="dashboard-title">Open infrastructure<br /><span>for the Nostr network.</span></h1>
-            <p class="dashboard-lede">A transparent public relay for signed events, portable identity, and clients that connect on your terms.</p>
-            <div class="hero-utility-row">
-              <div class="endpoint-card endpoint-card--compact">
-                <span class="endpoint-label">WebSocket endpoint</span>
-                <div class="endpoint-value-row"><code id="websocket-url">wss://{{.Host}}</code><button class="copy-btn copy-btn--visible" onclick="copyToClipboard('websocket-url')" title="Copy relay URL" aria-label="Copy relay URL"><i class="fas fa-copy" aria-hidden="true"></i></button></div>
-              </div>
-              <button class="button button-primary" onclick="copyToClipboard('websocket-url')"><i class="fas fa-link" aria-hidden="true"></i> Add relay</button>
-            </div>
-          </div>
-          <div class="snapshot-card">
-            <div class="snapshot-heading"><span class="section-kicker">RELAY SNAPSHOT</span><span class="snapshot-live"><span class="live-dot"></span> LIVE</span></div>
-            <code class="snapshot-endpoint">wss://{{.Host}}</code>
-            <div class="snapshot-grid">
-              <div><span class="snapshot-label">software</span><strong>{{.Version}}</strong></div>
-              <div><span class="snapshot-label">access</span><strong class="value-accent">public</strong></div>
-              <div><span class="snapshot-label">supported NIPs</span><strong>{{len .SupportedNIPs}}</strong></div>
-              <div><span class="snapshot-label">media</span><strong>Blossom</strong></div>
-            </div>
-            <a class="snapshot-link" href="https://nostr.ltd" target="_blank" rel="noopener noreferrer">Read NIP-11 metadata <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a>
-          </div>
+        <section class="instrument-head" aria-label="Relay operational status">
+          <div class="instrument-title"><div class="eyebrow"><span class="status-dot online"></span><span class="status-indicator"><span class="status-text">SYSTEM ONLINE</span></span><span class="eyebrow-separator">/</span><span>PUBLIC RELAY</span></div><h1>{{.Host}}</h1><p>Relay operations console · Nostr event transport and storage</p></div>
+          <div class="instrument-actions"><div class="endpoint-readout"><span class="readout-label">WEBSOCKET</span><code id="websocket-url">wss://{{.Host}}</code><button class="copy-btn copy-btn--visible" onclick="copyToClipboard('websocket-url')" title="Copy relay URL" aria-label="Copy relay URL"><i class="fas fa-copy" aria-hidden="true"></i></button></div><button class="button button-primary button-small" onclick="copyToClipboard('websocket-url')"><i class="fas fa-link" aria-hidden="true"></i> Connect</button></div>
         </section>
 
-        <section class="stats stats--dashboard" aria-label="Live relay statistics">
-          <div class="stat stat--dashboard"><span class="stat-overline">CONNECTIONS</span><span class="stat-val" id="active-connections">{{.Stats.ActiveConnections}}</span><span class="stat-lbl">active now</span></div>
-          <div class="stat stat--dashboard"><a href="/events" class="stat-link"><span class="stat-overline">STORAGE</span><span class="stat-val{{if not .Stats.EventsStoredReady}} stat-loading{{end}}" id="events-stored">{{if .Stats.EventsStoredReady}}{{.Stats.EventsStored}}{{else}}Loading…{{end}}</span><span class="stat-lbl">events stored · 2026+</span></a></div>
-          <div class="stat stat--dashboard"><span class="stat-overline">UPTIME</span><span class="stat-val" id="live-since">{{.LiveSince}}</span><span class="stat-lbl">live since</span></div>
-          <div class="stat stat--dashboard stat--status"><span class="stat-overline">POLICY</span><span class="stat-val value-accent"><span class="pulse-dot pulse-dot--small"></span> open</span><span class="stat-lbl">no account required</span></div>
+        <section class="metric-strip" aria-label="Primary relay metrics">
+          <div class="metric-cell metric-cell--health"><span class="metric-label">HEALTH</span><strong class="metric-value value-accent"><span class="health-led"></span> nominal</strong><span class="metric-sub">database <b>{{if .Cluster.IsHealthy}}healthy{{else}}degraded{{end}}</b></span></div>
+          <div class="metric-cell"><span class="metric-label">ACTIVE CONNECTIONS</span><strong class="metric-value" id="active-connections">{{.Stats.ActiveConnections}}</strong><span class="metric-sub"><span id="load-percentage">{{printf "%.1f" .Stats.LoadPercentage}}%</span> capacity used</span></div>
+          <div class="metric-cell"><span class="metric-label">EVENTS STORED</span><a href="/events" class="metric-link"><strong class="metric-value{{if not .Stats.EventsStoredReady}} stat-loading{{end}}" id="events-stored">{{if .Stats.EventsStoredReady}}{{.Stats.EventsStored}}{{else}}Loading…{{end}}</strong><span class="metric-sub">2026+ · inspect archive <i class="fas fa-arrow-right" aria-hidden="true"></i></span></a></div>
+          <div class="metric-cell"><span class="metric-label">UPTIME / SINCE</span><strong class="metric-value metric-value--small" id="live-since">{{.LiveSince}}</strong><span class="metric-sub">process start date</span></div>
+          <div class="metric-cell metric-cell--policy"><span class="metric-label">POLICY</span><strong class="metric-value value-accent">OPEN</strong><span class="metric-sub">read/write · no auth</span></div>
         </section>
 
-        <section class="dashboard-grid dashboard-grid--top">
-          <article class="panel compact-panel protocol-panel" id="about">
-            <div class="panel-heading"><div><span class="section-kicker">PROTOCOL / NOSTR</span><h2 class="compact-title">A signed event network, not a single platform.</h2></div><span class="panel-index">01</span></div>
-            <p class="compact-copy">Nostr is an open protocol where users create signed events and clients exchange them through independent relays. Your keypair is your identity; your client decides which relays to use.</p>
-            <div class="protocol-points">
-              <div class="protocol-point"><span class="point-mark">01</span><div><strong>Signed events</strong><span>Authorship is verified cryptographically.</span></div></div>
-              <div class="protocol-point"><span class="point-mark">02</span><div><strong>Many clients</strong><span>Use the interface and workflow you prefer.</span></div></div>
-              <div class="protocol-point"><span class="point-mark">03</span><div><strong>Independent relays</strong><span>Choose where you publish and read.</span></div></div>
-            </div>
-            <div class="panel-footer"><a class="text-link" href="https://nips.nostr.com/1" target="_blank" rel="noopener noreferrer">NIP-01 specification <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a><a class="text-link text-link--muted" href="https://nostr.org/" target="_blank" rel="noopener noreferrer">Nostr overview <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></div>
+        <section class="cockpit-grid cockpit-grid--primary">
+          <article class="console-panel traffic-panel">
+            <div class="console-heading"><div><span class="panel-kicker">01 / TRAFFIC</span><h2>Throughput and load</h2></div><span class="console-status"><span class="pulse-dot pulse-dot--small"></span> live</span></div>
+            <div class="gauge-row"><div class="gauge"><span class="gauge-label">ACTIVE CONNECTIONS</span><strong id="active-connections-gauge">{{.Stats.ActiveConnections}}</strong><span class="gauge-unit">sessions</span></div><div class="gauge"><span class="gauge-label">EVENTS / SEC</span><strong id="events-per-second">{{printf "%.2f" .Stats.EventsPerSecond}}</strong><span class="gauge-unit">ingest rate</span></div><div class="gauge"><span class="gauge-label">RESPONSE</span><strong id="response-time">{{printf "%.1f" .Stats.AverageResponseTime}}</strong><span class="gauge-unit">ms avg</span></div><div class="gauge"><span class="gauge-label">ERROR RATE</span><strong id="error-rate">{{printf "%.2f" .Stats.ErrorRate}}%</strong><span class="gauge-unit">recent window</span></div></div>
+            <div class="signal-panel"><div class="signal-header"><span>CONNECTION LOAD</span><span id="load-reading">{{printf "%.1f" .Stats.LoadPercentage}} / 100%</span></div><div class="signal-track"><i id="load-bar" style="width: {{printf "%.1f" .Stats.LoadPercentage}}%"></i></div><div class="signal-scale"><span>0</span><span>nominal</span><span>throttle</span><span>100%</span></div></div>
+            <div class="traffic-foot"><span><b id="messages-processed">{{.Stats.MessagesProcessed}}</b> messages processed</span><span><b id="messages-sent">{{.Stats.MessagesSent}}</b> messages sent</span><span><b id="active-subscriptions">{{.Stats.ActiveSubscriptions}}</b> subscriptions</span></div>
           </article>
 
-          <article class="panel compact-panel connect-panel" id="connect">
-            <div class="panel-heading"><div><span class="section-kicker">CONNECTION / QUICK START</span><h2 class="compact-title">Connect in your client.</h2></div><span class="panel-index">02</span></div>
-            <div class="connect-code"><span class="code-prompt">$</span><code>wss://{{.Host}}</code><button class="copy-btn copy-btn--visible" onclick="copyToClipboard('websocket-url')" title="Copy relay URL" aria-label="Copy relay URL"><i class="fas fa-copy" aria-hidden="true"></i></button></div>
-            <ol class="connect-list"><li><span>01</span><div><strong>Open relay settings</strong><small>Find relays, network, or connection settings in your client.</small></div></li><li><span>02</span><div><strong>Paste the endpoint</strong><small>Add the WebSocket URL above alongside your existing relays.</small></div></li><li><span>03</span><div><strong>Publish and query</strong><small>Use your client normally; the relay handles the event flow.</small></div></li></ol>
-            <div class="panel-footer"><a class="button button-primary button-small" href="/events">View live events <i class="fas fa-arrow-right" aria-hidden="true"></i></a><a class="text-link text-link--muted" href="https://nostrapps.com/" target="_blank" rel="noopener noreferrer">Browse clients <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></div>
+          <article class="console-panel snapshot-panel">
+            <div class="console-heading"><div><span class="panel-kicker">02 / NODE</span><h2>Relay identity</h2></div><span class="node-badge">{{.Version}}</span></div>
+            <div class="identity-readout"><span class="readout-label">RELAY ENDPOINT</span><code>wss://{{.Host}}</code></div>
+            <div class="identity-grid"><div><span>software</span><strong>{{.Software}}</strong></div><div><span>protocol surface</span><strong>{{len .SupportedNIPs}} NIPs</strong></div><div><span>access model</span><strong class="value-accent">public</strong></div><div><span>media transport</span><strong>Blossom</strong></div></div>
+            <div class="node-footer"><span>live since <b>{{.LiveSince}}</b></span><a href="https://nostr.ltd" target="_blank" rel="noopener noreferrer">NIP-11 metadata <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></div>
           </article>
         </section>
 
-        <section class="dashboard-grid dashboard-grid--bottom">
-          <article class="panel compact-panel live-panel">
-            <div class="panel-heading"><div><span class="section-kicker">OBSERVABILITY / LIVE</span><h2 class="compact-title">Relay activity</h2></div><a class="panel-action" href="/events">Open events <i class="fas fa-arrow-right" aria-hidden="true"></i></a></div>
-            <div class="activity-row"><div class="activity-graph" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><div><strong>Inspectable by design</strong><small>Event totals and yearly breakdowns are refreshed in the background.</small></div></div>
-            <div class="mini-metrics"><div><span>endpoint</span><code>wss://{{.Host}}</code></div><div><span>policy</span><strong>public read/write</strong></div></div>
-          </article>
-          <article class="panel compact-panel config-panel">
-            <div class="panel-heading"><div><span class="section-kicker">RUNTIME / LIMITS</span><h2 class="compact-title">Configuration</h2></div><span class="panel-index">03</span></div>
-            <div class="config-grid config-grid--compact"><div class="cfg"><span class="cfg-k">max_msg_length</span><span class="cfg-v">{{.Limitation.MaxMessageLength}}</span></div><div class="cfg"><span class="cfg-k">max_connections</span><span class="cfg-v">{{.Limitation.MaxConnections}}</span></div><div class="cfg"><span class="cfg-k">max_subscriptions</span><span class="cfg-v">{{.Limitation.MaxSubscriptions}}</span></div><div class="cfg"><span class="cfg-k">max_event_tags</span><span class="cfg-v">{{.Limitation.MaxEventTags}}</span></div><div class="cfg"><span class="cfg-k">auth_required</span><span class="cfg-v {{if .Limitation.AuthRequired}}val-on{{else}}val-off{{end}}">{{if .Limitation.AuthRequired}}true{{else}}false{{end}}</span></div><div class="cfg"><span class="cfg-k">payment_required</span><span class="cfg-v {{if .Limitation.PaymentRequired}}val-on{{else}}val-off{{end}}">{{if .Limitation.PaymentRequired}}true{{else}}false{{end}}</span></div></div>
-          </article>
-        </section>
-
-        <section class="dashboard-grid dashboard-grid--telemetry">
-          <article class="panel compact-panel kinds-panel">
-            <div class="panel-heading"><div><span class="section-kicker">TELEMETRY / EVENT KINDS</span><h2 class="compact-title">Top event kinds</h2></div><span class="panel-index">04</span></div>
+        <section class="cockpit-grid cockpit-grid--secondary">
+          <article class="console-panel kinds-panel">
+            <div class="console-heading"><div><span class="panel-kicker">03 / EVENT STREAM</span><h2>Top event kinds</h2></div><div class="panel-tools"><input id="kind-search" class="console-search" type="search" placeholder="filter kinds" aria-label="Filter event kinds" /><a href="/events" class="panel-link">all years <i class="fas fa-arrow-right" aria-hidden="true"></i></a></div></div>
             <div class="kind-table-head"><span>KIND / MEANING</span><span>EVENTS</span><span>SHARE</span></div>
-            {{if .TopKinds}}
-            <div class="kind-list" id="top-kinds" aria-label="Top event kinds">
-              {{range .TopKinds}}<div class="kind-row"><div class="kind-name"><strong>{{.Kind}}</strong><span>{{.KindName}}</span></div><div class="kind-count">{{.Count}}</div><div class="kind-share"><span class="kind-bar"><i style="width: {{printf "%.2f" .Share}}%"></i></span><small>{{printf "%.1f" .Share}}%</small></div></div>{{end}}
-            </div>
-            {{else}}<div class="kind-list" id="top-kinds" aria-label="Top event kinds"><div class="telemetry-empty"><span class="pulse-dot"></span> Waiting for event cache refresh…</div></div>{{end}}
+            {{if .TopKinds}}<div class="kind-list" id="top-kinds" aria-label="Top event kinds">{{range .TopKinds}}<div class="kind-row" data-kind-search="{{.Kind}} {{.KindName}}"><div class="kind-name"><strong>{{.Kind}}</strong><span>{{.KindName}}</span></div><div class="kind-count">{{.Count}}</div><div class="kind-share"><span class="kind-bar"><i style="width: {{printf "%.2f" .Share}}%"></i></span><small>{{printf "%.1f" .Share}}%</small></div></div>{{end}}</div>{{else}}<div class="telemetry-empty"><span class="pulse-dot"></span> Event cache warming…</div>{{end}}
+            <details class="kind-registry"><summary>All observed event kinds <span class="muted-count">({{len .EventKinds}})</span></summary><div class="kind-list kind-list--registry" id="kind-registry" aria-label="All observed event kinds">{{range .EventKinds}}<div class="kind-row" data-kind-search="{{.Kind}} {{.KindName}}"><div class="kind-name"><strong>{{.Kind}}</strong><span>{{.KindName}}</span></div><div class="kind-count">{{.Count}}</div><div class="kind-share"><span class="kind-bar"><i style="width: {{printf "%.2f" .Share}}%"></i></span><small>{{printf "%.1f" .Share}}%</small></div></div>{{end}}</div></details>
           </article>
-          <article class="panel compact-panel nip-registry-panel" id="protocols">
-            <div class="panel-heading"><div><span class="section-kicker">PROTOCOL SURFACE</span><h2 class="compact-title">NIP registry <span class="nip-count">({{len .SupportedNIPs}})</span></h2></div><div class="registry-tools"><input id="nip-search" class="nip-search" type="search" placeholder="filter NIPs…" aria-label="Filter supported NIPs" /><a class="panel-action" href="https://nips.nostr.com/" target="_blank" rel="noopener noreferrer">Specs <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></div></div>
-            <div class="nips-grid nips-grid--dashboard" aria-label="Supported NIPs">
-              {{range .SupportedNIPs}}<a href="https://nips.nostr.com/{{formatNIP .}}" target="_blank" rel="noopener noreferrer" class="nip-item" data-nip-search="{{formatNIP .}} {{nipDescription .}}"><span class="nip-num">{{formatNIP .}}</span><span class="nip-desc">{{nipDescription .}}</span></a>{{end}}
-            </div>
+
+          <article class="console-panel nips-panel">
+            <div class="console-heading"><div><span class="panel-kicker">04 / PROTOCOL</span><h2>Supported NIPs <span class="muted-count">({{len .SupportedNIPs}})</span></h2></div><div class="panel-tools"><input id="nip-search" class="console-search" type="search" placeholder="filter NIPs" aria-label="Filter supported NIPs" /><a href="https://nips.nostr.com/" target="_blank" rel="noopener noreferrer" class="panel-link">specs <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></div></div>
+            <div class="nips-grid nips-grid--cockpit" aria-label="Supported NIPs">{{range .SupportedNIPs}}<a href="https://nips.nostr.com/{{formatNIP .}}" target="_blank" rel="noopener noreferrer" class="nip-item" data-nip-search="{{formatNIP .}} {{nipDescription .}}"><span class="nip-num">{{formatNIP .}}</span><span class="nip-desc">{{nipDescription .}}</span></a>{{end}}</div>
+            <div class="protocol-foot"><span><b>nostr</b> = signed events + independent relays</span><a href="https://nips.nostr.com/1" target="_blank" rel="noopener noreferrer">NIP-01 <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></div>
           </article>
+        </section>
+
+        <section class="cockpit-grid cockpit-grid--footer-panels">
+          <article class="console-panel compact-console connection-panel"><div class="console-heading"><div><span class="panel-kicker">05 / CONNECTION</span><h2>Quick connect</h2></div><span class="console-status">WS</span></div><div class="connect-line"><span>$</span><code>wss://{{.Host}}</code><button class="copy-btn copy-btn--visible" onclick="copyToClipboard('websocket-url')" aria-label="Copy relay URL"><i class="fas fa-copy" aria-hidden="true"></i></button></div><div class="connect-caption">Add this endpoint to any Nostr client’s relay settings.</div></article>
+          <article class="console-panel compact-console limits-panel"><div class="console-heading"><div><span class="panel-kicker">06 / LIMITS</span><h2>Runtime envelope</h2></div><span class="console-status">CONFIG</span></div><div class="limits-grid"><span>max message <b>{{.Limitation.MaxMessageLength}}</b></span><span>max connections <b>{{.Limitation.MaxConnections}}</b></span><span>max subscriptions <b>{{.Limitation.MaxSubscriptions}}</b></span><span>event tags <b>{{.Limitation.MaxEventTags}}</b></span></div></article>
+          <article class="console-panel compact-console source-panel"><div class="console-heading"><div><span class="panel-kicker">07 / ACCESS</span><h2>Open by design</h2></div><span class="console-status value-accent">OK</span></div><p>Inspect the protocol surface, event archive, and source. No account required.</p><div class="source-links"><a href="/events">Events <i class="fas fa-arrow-right" aria-hidden="true"></i></a><a href="https://github.com/psam21/ns" target="_blank" rel="noopener noreferrer">GitHub <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></div></article>
         </section>
       </main>
 
-      <footer class="foot foot--dashboard"><span><strong>nostr.ltd</strong> · open infrastructure for Nostr</span><span class="footer-links"><a href="/events">Events</a><a href="https://blossom.nostr.ltd" target="_blank" rel="noopener noreferrer">Blossom</a><a href="https://github.com/psam21/ns" target="_blank" rel="noopener noreferrer">Source</a></span></footer>
+      <footer class="foot foot--cockpit"><span><strong>nostr.ltd</strong> / relay operations console</span><span>public WebSocket infrastructure · {{.Version}}</span></footer>
     </div>
     <script src="/static/script.js"></script>
   </body>
