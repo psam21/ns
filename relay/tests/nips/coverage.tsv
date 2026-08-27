@@ -1,0 +1,78 @@
+# id	area	execution	evidence	notes
+NIP-01	relay-event	integration	test_nip01.sh	Core event and relay flow
+NIP-02	relay-event	integration	test_nip02.sh	Follow lists and petnames
+NIP-05	relay-event	contract	registry-contract	Kind 0 NIP-05 field validation
+NIP-07	client-ecosystem	manual	manual	Browser signer capability; not relay-enforced
+NIP-09	relay-event	integration	test_nip09.sh	Deletion requests
+NIP-10	relay-event	contract	registry-contract	Thread and reply tag validation
+NIP-11	relay-control	integration	test_nip11.sh	Relay information document
+NIP-13	relay-event	contract	registry-contract	Proof-of-work acceptance
+NIP-17	relay-event	integration	test_nip17.sh	Private direct-message event flow
+NIP-18	relay-event	contract	registry-contract	Repost event validation
+NIP-19	client-ecosystem	contract	registry-contract	Bech32 entity validation helpers
+NIP-21	relay-event	contract	registry-contract	Nostr URI references
+NIP-22	relay-event	integration	test_nip22.sh	Comment events and timestamp limits
+NIP-23	relay-event	integration	test_nip23.sh	Long-form content
+NIP-24	relay-event	contract	registry-contract	Metadata fields and tags
+NIP-25	relay-event	integration	test_nip25.sh	Reaction events
+NIP-27	relay-event	contract	registry-contract	Text-note references
+NIP-29	relay-control	contract	registry-contract	Relay-based groups
+NIP-30	relay-event	contract	registry-contract	Custom emoji references
+NIP-32	relay-event	contract	registry-contract	Labeling events
+NIP-34	relay-event	contract	registry-contract	Git-related events
+NIP-35	relay-event	contract	registry-contract	Torrent events
+NIP-36	relay-event	contract	registry-contract	Sensitive-content tags
+NIP-37	relay-event	contract	registry-contract	Draft wrap events
+NIP-38	relay-event	contract	registry-contract	User status events
+NIP-39	relay-event	contract	registry-contract	External identity fields
+NIP-40	relay-event	integration	test_nip40.sh	Expiration timestamps
+NIP-42	relay-control	contract	registry-contract	Client authentication
+NIP-43	relay-control	contract	registry-contract	Relay access metadata
+NIP-44	relay-event	integration	test_nip44.sh	Versioned encrypted payloads
+NIP-45	relay-control	integration	test_nip45.sh	COUNT requests
+NIP-46	client-ecosystem	contract	registry-contract	Remote signing event validation
+NIP-47	relay-event	integration	test_nip47.sh	Nostr Wallet Connect events
+NIP-48	relay-event	contract	registry-contract	Bridged event tags
+NIP-49	client-ecosystem	contract	registry-contract	Encrypted private-key representation
+NIP-50	relay-control	integration	test_nip50.sh	Search capability
+NIP-51	relay-event	integration	test_nip51.sh	List events
+NIP-52	relay-event	integration	test_nip52.sh	Calendar events
+NIP-53	relay-event	integration	test_nip53.sh	Live activities
+NIP-5A	relay-event	contract	registry-contract	Static website event validation
+NIP-54	relay-event	integration	test_nip54.sh	Wiki events
+NIP-56	relay-event	integration	test_nip56.sh	Reporting events
+NIP-57	relay-event	integration	test_nip57.sh	Lightning zap events
+NIP-58	relay-event	integration	test_nip58.sh	Badge events
+NIP-59	relay-event	integration	test_nip59.sh	Gift wrapping
+NIP-60	relay-event	integration	test_nip60.sh	Cashu wallet events
+NIP-61	relay-event	integration	test_nip61.sh	Nutzap events
+NIP-62	relay-control	contract	registry-contract	Request to vanish
+NIP-64	relay-event	contract	registry-contract	Chess events
+NIP-65	relay-event	integration	test_nip65.sh	Relay list metadata
+NIP-66	client-ecosystem	manual	manual	Relay discovery and liveness ecosystem behavior
+NIP-67	relay-control	contract	registry-contract	EOSE completeness hints
+NIP-69	relay-event	contract	registry-contract	Peer-to-peer order events
+NIP-70	relay-control	contract	registry-contract	Protected events
+NIP-71	relay-event	contract	registry-contract	Video events
+NIP-75	relay-event	contract	registry-contract	Zap goals
+NIP-77	relay-control	contract	registry-contract	Negentropy synchronization
+NIP-78	relay-event	integration	test_nip78.sh	Application-specific data
+NIP-7D	relay-event	contract	registry-contract	Forum thread events
+NIP-84	relay-event	contract	registry-contract	Highlight events
+NIP-85	relay-event	contract	registry-contract	Trusted assertion events
+NIP-86	relay-control	contract	registry-contract	Relay management API
+NIP-87	relay-event	contract	registry-contract	Cashu and Fedimint discovery
+NIP-88	relay-event	contract	registry-contract	Poll events
+NIP-89	client-ecosystem	manual	manual	Application-handler discovery is client-facing
+NIP-92	relay-event	contract	registry-contract	Media attachment tags
+NIP-94	relay-event	contract	registry-contract	File metadata events
+NIP-98	relay-control	contract	registry-contract	HTTP authentication
+NIP-99	relay-event	contract	registry-contract	Classified listing events
+NIP-A0	relay-event	contract	registry-contract	Voice message events
+NIP-A4	relay-event	contract	registry-contract	Public message events
+NIP-B0	relay-event	contract	registry-contract	Web bookmark events
+NIP-B7	blossom	external	manual	Blossom media service protocol; run service-level tests
+NIP-C0	relay-event	contract	registry-contract	Code snippet events
+NIP-C7	relay-event	contract	registry-contract	Chat events
+NIP-CC	relay-event	contract	registry-contract	Geocaching events
+NIP-F4	relay-event	contract	registry-contract	Podcast events

@@ -50,6 +50,25 @@ HTTP_URL=http://localhost:8080 \
 
 `run_all.sh` checks prerequisites, runs each `test_nip*.sh` script in sorted order, prints a pass/fail summary, and exits non-zero if any script fails. The suite is intentionally not part of the default unit-test command because it needs a live relay and mutates test data.
 
+### Validate all 77 advertised identifiers
+
+[`coverage.tsv`](coverage.tsv) is the one-row-per-identifier coverage contract. [`run_coverage.sh`](run_coverage.sh) validates that the matrix has exactly 77 unique rows, matches `DefaultSupportedNIPs` in source, points every integration row at an executable script, checks every shell script and the dashboard JavaScript, and runs the Go test suite including the registry-contract test.
+
+Run the safe static validator from `relay/`:
+
+```bash
+./tests/nips/run_coverage.sh --static
+```
+
+Run live checks only against a disposable or explicitly authorized relay:
+
+```bash
+RELAY_URL=ws://localhost:8080 HTTP_URL=http://localhost:8080 \
+  ./tests/nips/run_coverage.sh --live
+```
+
+Static validation marks client-only and external-service NIPs as intentional `manual` coverage. Live validation additionally compares the relay’s NIP-11 registry with all 77 matrix identifiers and runs the mutating integration suite.
+
 Run one test directly when debugging:
 
 ```bash

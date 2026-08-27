@@ -40,6 +40,7 @@ DOCKER_TAG ?= $(VERSION)
 TEST_FLAGS := -v -race
 NIP_RELAY_URL ?= ws://localhost:8080
 NIP_HTTP_URL ?= http://localhost:8080
+NIP_COVERAGE_MODE ?= --static
 COVERAGE_FILE := coverage.out
 COVERAGE_HTML := coverage.html
 
@@ -180,12 +181,16 @@ test-coverage:
 	@echo "Coverage report generated: $(COVERAGE_HTML)"
 
 # Run NIP integration tests against an already running relay
-.PHONY: test-integration test-nips
+.PHONY: test-integration test-nips test-nip-coverage
 test-integration: test-nips
 
 test-nips:
 	@echo "Running NIP integration tests against $(NIP_RELAY_URL)..."
 	@RELAY_URL="$(NIP_RELAY_URL)" HTTP_URL="$(NIP_HTTP_URL)" ./tests/nips/run_all.sh
+
+test-nip-coverage:
+	@echo "Validating complete 77-NIP coverage matrix ($(NIP_COVERAGE_MODE))..."
+	@RELAY_URL="$(NIP_RELAY_URL)" HTTP_URL="$(NIP_HTTP_URL)" ./tests/nips/run_coverage.sh $(NIP_COVERAGE_MODE)
 
 # Module management
 .PHONY: tidy
@@ -348,7 +353,8 @@ help:
 	@echo "Testing:"
 	@echo "  test            - Run unit tests"
 	@echo "  test-coverage   - Run tests with coverage"
-	@echo "  test-integration - Run integration tests"
+	@echo "  test-integration - Run live NIP integration tests"
+	@echo "  test-nip-coverage - Validate all 77 NIP coverage rows (static by default)"
 	@echo "  bench           - Run benchmarks"
 	@echo ""
 	@echo "Code Quality:"

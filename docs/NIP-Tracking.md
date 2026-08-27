@@ -56,6 +56,26 @@ The current scripts are listed in [`relay/tests/nips/README.md`](../relay/tests/
 
 The suite is not a conformance certificate. For example, some scripts exercise event acceptance and round trips but do not cover every validator branch, storage invariant, authorization path, or negative case in the related specification.
 
+## Full-registry coverage contract
+
+[`relay/tests/nips/coverage.tsv`](../relay/tests/nips/coverage.tsv) contains one row for each advertised identifier. Each row classifies the appropriate evidence as relay integration, registry-contract coverage, client/ecosystem review, or Blossom/service review. [`relay/tests/nips/run_coverage.sh`](../relay/tests/nips/run_coverage.sh) verifies that the matrix exactly matches `DefaultSupportedNIPs`, validates all test-script syntax, runs the dashboard JavaScript check and Go test suite, and can optionally perform live NIP-11 and integration checks.
+
+Use static validation during normal development:
+
+```bash
+cd relay
+./tests/nips/run_coverage.sh --static
+```
+
+Use live validation only against a disposable or explicitly authorized relay because the integration scripts publish and delete events:
+
+```bash
+RELAY_URL=ws://localhost:8080 HTTP_URL=http://localhost:8080 \
+  ./tests/nips/run_coverage.sh --live
+```
+
+A successful static run means all 77 identifiers have an explicit coverage disposition and all automated evidence is structurally runnable. It does not turn client-only or external-service NIPs into relay conformance tests; those rows remain intentionally marked for manual or service-level review.
+
 ## Current implementation areas
 
 The following areas have direct relay code or operational coverage and should remain synchronized with the advertised list:
@@ -78,7 +98,7 @@ The following areas have direct relay code or operational coverage and should re
 
 ### Priority 1: maintain truthful advertising and repeatable tests
 
-1. Keep `DefaultSupportedNIPs`, NIP-11 output, the dashboard registry, and the exact-count regression test synchronized.
+1. Keep `DefaultSupportedNIPs`, NIP-11 output, the dashboard registry, the coverage matrix, and the exact-count regression test synchronized.
 2. Keep all integration scripts on the shared `RELAY_URL` and `HTTP_URL` variables, with local `ws://localhost:8080` and `http://localhost:8080` defaults.
 3. Run `relay/tests/nips/run_all.sh` only against a disposable or authorized test relay, and preserve its non-zero exit status when a script fails.
 4. Add negative cases for validator rejection, authorization failures, malformed filters, tag limits, and rate limits before calling a NIP behavior complete.
@@ -110,12 +130,12 @@ go vet ./...
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bin/relay-arm64 ./cmd
 node --check web/static/script.js
 
-# NIP shell syntax checks
-for test in tests/nips/test_nip*.sh; do bash -n "$test"; done
+# Full 77-row static coverage validation
+./tests/nips/run_coverage.sh --static
 
-# Authorized integration run against a disposable relay
+# Authorized live validation against a disposable relay
 RELAY_URL=ws://localhost:8080 HTTP_URL=http://localhost:8080 \
-  ./tests/nips/run_all.sh
+  ./tests/nips/run_coverage.sh --live
 ```
 
 From the repository root, the relay smoke test is:

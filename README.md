@@ -59,6 +59,19 @@ The current registry includes: NIP-01, NIP-02, NIP-05, NIP-07, NIP-09, NIP-10, N
 
 In addition to the standard registry, the relay contains two project-specific protocol extensions: **XX — Time Capsules** and **YY — Nostr Web Pages**. Their implementation is under [`relay/internal/relay/nips`](relay/internal/relay/nips).
 
+For full coverage, use [`relay/tests/nips/coverage.tsv`](relay/tests/nips/coverage.tsv) and the registry validator:
+
+```bash
+cd relay
+./tests/nips/run_coverage.sh --static
+
+# Add --live only with a disposable or explicitly authorized relay.
+RELAY_URL=ws://localhost:8080 HTTP_URL=http://localhost:8080 \
+  ./tests/nips/run_coverage.sh --live
+```
+
+The matrix contains one row for every advertised identifier and marks whether the evidence is a relay integration test, registry-contract coverage, client/ecosystem review, or Blossom/service review. This is the honest way to cover all 77 NIPs: client-only specifications and external media protocols cannot be meaningfully validated by pretending they are relay event tests.
+
 ## Blossom media service
 
 The companion [Blossom](https://github.com/hzrd149/blossom-server) service provides content-addressable media storage with Nostr authentication.
@@ -97,7 +110,7 @@ The configured upload limit is 10 MB. Files are stored in S3, authenticated with
     │   ├── relay/               # WebSocket handling and validation
     │   ├── storage/             # PostgreSQL storage layer
     │   └── web/                 # Dashboard handlers, templates, and assets
-    ├── tests/nips/              # NIP integration scripts and runner
+    ├── tests/nips/              # Full registry matrix, integration scripts, and runners
     └── cmd/                     # CLI entry point
 ```
 
@@ -140,7 +153,7 @@ HTTP_URL=http://localhost:8080 \
 RELAY_URL=ws://localhost:8080 ./tests/nips/test_nip01.sh
 ```
 
-The runner stops using the old hard-coded public endpoints, passes a shared `RELAY_URL` and `HTTP_URL` to each script, reports pass/fail totals, and exits non-zero if any script fails. See [`relay/tests/nips/README.md`](relay/tests/nips/README.md) for prerequisites and the coverage matrix.
+The runner stops using the old hard-coded public endpoints, passes a shared `RELAY_URL` and `HTTP_URL` to each script, reports pass/fail totals, and exits non-zero if any script fails. For all 77 advertised identifiers, run `./tests/nips/run_coverage.sh --static`; use `--live` only against an isolated or authorized relay. See [`relay/tests/nips/README.md`](relay/tests/nips/README.md) and [`relay/tests/nips/coverage.tsv`](relay/tests/nips/coverage.tsv) for the complete matrix.
 
 ## Production deployment
 

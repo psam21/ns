@@ -106,15 +106,23 @@ curl https://nostr.ltd/api/events
 
 The NIP integration scripts live under `relay/tests/nips/`. They publish and sometimes delete events, so run them only against a disposable local relay or an explicitly authorized test relay. The suite currently contains 35 shell scripts plus project-specific tests.
 
-From `relay/`, after starting a test relay on port 8080:
+The complete advertised registry is governed by `relay/tests/nips/coverage.tsv`, with one row for each of the 77 advertised identifiers. Each row records whether evidence is an integration test, registry-contract coverage, client/ecosystem review, or Blossom/service review. This avoids pretending that client-only or external media protocols can be tested as relay event validators.
+
+From `relay/`, static validation is safe and should run in every change:
 
 ```bash
-for test in tests/nips/test_nip*.sh; do bash -n "$test"; done
-RELAY_URL=ws://localhost:8080 HTTP_URL=http://localhost:8080 \
-  ./tests/nips/run_all.sh
+./tests/nips/run_coverage.sh --static
+make test-nip-coverage
 ```
 
-Use `./tests/nips/test_nip01.sh` for a single test. The runner shares `RELAY_URL` and `HTTP_URL`, reports totals, and exits non-zero on failure. Some scripts require additional tools such as `nak`, `jq`, Python, or `openssl`; see `relay/tests/nips/README.md` before running the complete suite.
+After starting a disposable test relay on port 8080, run the live registry and integration checks:
+
+```bash
+RELAY_URL=ws://localhost:8080 HTTP_URL=http://localhost:8080 \
+  ./tests/nips/run_coverage.sh --live
+```
+
+Use `./tests/nips/test_nip01.sh` for a single test or `./tests/nips/run_all.sh` for the 35 mutating integration scripts. The runners share `RELAY_URL` and `HTTP_URL`, report totals, and exit non-zero on failure. Some scripts require additional tools such as `nak`, `jq`, Python, or `openssl`; see `relay/tests/nips/README.md` before running the complete suite.
 
 ## Key source files
 
@@ -133,7 +141,7 @@ Use `./tests/nips/test_nip01.sh` for a single test. The runner shares `RELAY_URL
 | `relay/web/templates/index.html` | Public operations console markup |
 | `relay/web/static/style.css` | Dashboard styles and theme system |
 | `relay/web/static/script.js` | Dashboard hydration, filtering, refresh, and interactions |
-| `relay/tests/nips/` | NIP integration scripts and suite runner |
+| `relay/tests/nips/` | Full 77-row coverage matrix, integration scripts, and suite runners |
 | `docs/NIP-Tracking.md` | Current advertised registry, test coverage, and upgrade backlog |
 
 ## Blossom service
