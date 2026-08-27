@@ -31,11 +31,11 @@ type Server struct {
 // NewServer constructs a new Server with the given RelayConfig and NodeInterface.
 func NewServer(relayCfg config.RelayConfig, node domain.NodeInterface, fullCfg *config.Config) *Server {
 	webHandler := web.NewHandler(fullCfg, logger.New("web"), node)
-	
+
 	// Create adapters for health checker
 	dbAdapter := &dbHealthAdapter{db: node.DB()}
 	nodeAdapter := &nodeHealthAdapter{node: node}
-	
+
 	// Create health checker
 	healthChecker := health.NewHealthChecker(
 		dbAdapter,
@@ -119,6 +119,10 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 			case r.URL.Path == "/api/metrics":
 				// Serve real-time metrics API with validation
 				web.SecureValidatedAPIHandlerFunc(s.webHandler.HandleMetricsAPI)(w, r)
+			case r.URL.Path == "/api/events":
+				// Serve cached event breakdown API with validation
+				web.SecureValidatedAPIHandlerFunc(s.webHandler.HandleEventsAPI)(w, r)
+
 			case r.URL.Path == "/api/cluster":
 				// Serve cluster information API with validation
 				web.SecureValidatedAPIHandlerFunc(s.webHandler.HandleClusterAPI)(w, r)
@@ -189,7 +193,7 @@ func (d *dbHealthAdapter) GetClusterHealth(ctx context.Context) (map[string]inte
 	return d.db.GetClusterHealth(ctx)
 }
 
-// nodeHealthAdapter adapts domain.NodeInterface to health.NodeInterface  
+// nodeHealthAdapter adapts domain.NodeInterface to health.NodeInterface
 type nodeHealthAdapter struct {
 	node domain.NodeInterface
 }

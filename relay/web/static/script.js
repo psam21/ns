@@ -109,7 +109,13 @@ class RelayDashboard {
       // Update all the stats with real data
       if (data.stats) {
         this.updateStatElement('active-connections', data.stats.active_connections);
-        this.updateStatElement('events-stored', data.stats.events_stored);
+        if (data.stats.events_stored_ready) {
+          this.updateStatElement('events-stored', data.stats.events_stored);
+          document.getElementById('events-stored')?.classList.remove('stat-loading');
+        } else {
+          this.updateStatElement('events-stored', 'Loading…');
+          document.getElementById('events-stored')?.classList.add('stat-loading');
+        }
       }
 
       // Update live since

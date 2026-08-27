@@ -360,3 +360,10 @@ a:focus, button:focus {
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-mute); }
+
+
+.stat-loading {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  letter-spacing: 0.02em;
+}

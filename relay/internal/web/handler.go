@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Shugur-Network/relay/internal/config"
@@ -24,20 +25,20 @@ import (
 
 // DashboardData represents the data passed to the dashboard template
 type DashboardData struct {
-	Name          string                        `json:"name"`
-	Description   string                        `json:"description"`
-	Software      string                        `json:"software"`
-	Version       string                        `json:"version"`
-	Contact       string                        `json:"contact"`
-	Icon          string                        `json:"icon"`
-	Host          string                        `json:"host"`
-	Pubkey        string                        `json:"pubkey"`
-	RelayID       string                        `json:"relay_id"`
-	SupportedNIPs []interface{}                 `json:"supported_nips"`
-	CustomNIPs    []constants.CustomNIP         `json:"custom_nips"`
-	Limitation    *LimitationData               `json:"limitation"`
-	Stats         *StatsData                    `json:"stats"`
-	LiveSince     string                        `json:"live_since"`
+	Name          string                `json:"name"`
+	Description   string                `json:"description"`
+	Software      string                `json:"software"`
+	Version       string                `json:"version"`
+	Contact       string                `json:"contact"`
+	Icon          string                `json:"icon"`
+	Host          string                `json:"host"`
+	Pubkey        string                `json:"pubkey"`
+	RelayID       string                `json:"relay_id"`
+	SupportedNIPs []interface{}         `json:"supported_nips"`
+	CustomNIPs    []constants.CustomNIP `json:"custom_nips"`
+	Limitation    *LimitationData       `json:"limitation"`
+	Stats         *StatsData            `json:"stats"`
+	LiveSince     string                `json:"live_since"`
 	Cluster       *storage.DatabaseInfo `json:"cluster"`
 }
 
@@ -58,6 +59,7 @@ type StatsData struct {
 	TotalConnections     int64            `json:"total_connections"`
 	MessagesProcessed    int64            `json:"messages_processed"`
 	EventsStored         int64            `json:"events_stored"`
+	EventsStoredReady    bool             `json:"events_stored_ready"`
 	ActiveSubscriptions  int64            `json:"active_subscriptions"`
 	MessagesSent         int64            `json:"messages_sent"`
 	EventsPerSecond      float64          `json:"events_per_second"`
@@ -81,8 +83,16 @@ type Handler struct {
 		GetClusterHealth(ctx context.Context) (map[string]interface{}, error)
 		GetYearsWithEvents(ctx context.Context) ([]int, error)
 		GetEventCountsByKindMonth(ctx context.Context, year int) ([]storage.EventCountByKindMonth, error)
+		GetEventCountsByKindMonthFromYear(ctx context.Context, startYear int) ([]storage.EventCountByKindMonth, error)
 	} // Database interface
+	eventsCacheMu         sync.RWMutex
+	eventsCache           EventBreakdownData
+	eventsCacheUpdatedAt  time.Time
+	eventsCacheRefreshing bool
+	eventsCacheLastErr    error
 }
+
+const eventBreakdownCacheTTL = 30 * time.Second
 
 // NewHandler creates a new web handler
 func NewHandler(cfg *config.Config, logger *zap.Logger, node interface{}) *Handler {
@@ -108,7 +118,7 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 	// Apply security headers for dashboard
 	dashboardHeaders := DefaultSecurityHeaders()
 	dashboardHeaders.Apply(w)
-	
+
 	// Load template with custom functions
 	tmplPath := filepath.Join("web", "templates", "index.html")
 	funcMap := template.FuncMap{
@@ -244,13 +254,13 @@ func (h *Handler) HandleStatic(w http.ResponseWriter, r *http.Request) {
 	// Apply security headers for static files
 	staticHeaders := DefaultSecurityHeaders()
 	staticHeaders.Apply(w)
-	
+
 	// Serve static files safely, preventing path traversal
 	root := filepath.Join("web", "static")
 
 	// Extract and validate the requested path
 	requestedPath := strings.TrimPrefix(r.URL.Path, "/static/")
-	
+
 	// Use our new sanitization function
 	sanitizedPath, err := SanitizePath(requestedPath)
 	if err != nil {
@@ -286,7 +296,7 @@ func (h *Handler) HandleStatsAPI(w http.ResponseWriter, r *http.Request) {
 	// Apply security headers for API endpoints
 	apiHeaders := APISecurityHeaders()
 	apiHeaders.Apply(w)
-	
+
 	// Set headers
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -331,7 +341,7 @@ func (h *Handler) HandleMetricsAPI(w http.ResponseWriter, r *http.Request) {
 	// Apply security headers for API endpoints
 	apiHeaders := APISecurityHeaders()
 	apiHeaders.Apply(w)
-	
+
 	// Set headers
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -449,24 +459,7 @@ func (h *Handler) getDashboardData(host string) *DashboardData {
 
 // getStatsData retrieves current statistics
 func (h *Handler) getStatsData() *StatsData {
-	var eventsStored int64
-
-	// Get events stored from database if available (2026+ only)
-	if h.db != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), constants.HealthCheckTimeout*time.Second)
-		defer cancel()
-
-		count, err := h.db.GetTotalEventCount2026Plus(ctx)
-		if err != nil {
-			h.logger.Warn("Failed to get total event count from 2026", zap.Error(err))
-			eventsStored = 0
-		} else {
-			eventsStored = count
-		}
-
-		// Update the metrics gauge with current count
-		metrics.EventsStored.Set(float64(eventsStored))
-	}
+	eventsStored, eventsStoredReady := h.getCachedEventCount()
 
 	// Get memory usage
 	memUsage := getMemoryUsage()
@@ -489,6 +482,7 @@ func (h *Handler) getStatsData() *StatsData {
 		TotalConnections:     metrics.GetTotalConnectionsCount(),
 		MessagesProcessed:    metrics.GetMessagesProcessedCount(),
 		EventsStored:         eventsStored,
+		EventsStoredReady:    eventsStoredReady,
 		ActiveSubscriptions:  metrics.GetActiveSubscriptionsCount(),
 		MessagesSent:         metrics.GetMessagesSentCount(),
 		EventsPerSecond:      metrics.GetEventsPerSecond(),
@@ -529,7 +523,7 @@ func (h *Handler) HandleClusterAPI(w http.ResponseWriter, r *http.Request) {
 	// Apply security headers for API endpoints
 	apiHeaders := APISecurityHeaders()
 	apiHeaders.Apply(w)
-	
+
 	// Set headers
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -544,7 +538,7 @@ func (h *Handler) HandleClusterAPI(w http.ResponseWriter, r *http.Request) {
 	// Only allow GET requests
 	if r.Method != "GET" {
 		// Use new error handling system
-		methodErr := errors.ValidationError("METHOD_NOT_ALLOWED", 
+		methodErr := errors.ValidationError("METHOD_NOT_ALLOWED",
 			"Only GET requests are allowed for this endpoint").
 			WithUserMessage("Method not allowed.")
 		errors.HandleHTTPError(w, r, methodErr)
@@ -570,7 +564,7 @@ func (h *Handler) HandleClusterAPI(w http.ResponseWriter, r *http.Request) {
 		// Only allow specific values
 		if requestType != "health" && requestType != "info" {
 			// Use new error handling system
-			validationErr := errors.ValidationError("INVALID_TYPE_PARAMETER", 
+			validationErr := errors.ValidationError("INVALID_TYPE_PARAMETER",
 				"Type parameter must be 'health' or 'info'").
 				WithUserMessage("Invalid type parameter. Use 'health' or 'info'.")
 			errors.HandleHTTPError(w, r, validationErr)
@@ -614,29 +608,157 @@ func (h *Handler) HandleClusterAPI(w http.ResponseWriter, r *http.Request) {
 
 // EventBreakdownData represents the data for the events breakdown page
 type EventBreakdownData struct {
-	Years []YearEventData
+	Years []YearEventData `json:"years"`
 }
 
 // YearEventData represents event data for a single year
 type YearEventData struct {
-	Year        int
-	Months      []string
-	Rows        []NIPRowData
-	ColumnTotals []int64
-	GrandTotal  int64
+	Year         int          `json:"year"`
+	Months       []string     `json:"months"`
+	Rows         []NIPRowData `json:"rows"`
+	ColumnTotals []int64      `json:"column_totals"`
+	GrandTotal   int64        `json:"grand_total"`
 }
 
 // NIPRowData represents a single NIP/kind row in the table
 type NIPRowData struct {
-	Kind       int
-	KindName   string
-	MonthCounts []int64
-	RowTotal   int64
+	Kind        int     `json:"kind"`
+	KindName    string  `json:"kind_name"`
+	MonthCounts []int64 `json:"month_counts"`
+	RowTotal    int64   `json:"row_total"`
 }
 
-// HandleEvents serves the events breakdown page
+// getCachedEventCount returns the latest event total without making a request wait for the database.
+func (h *Handler) getCachedEventCount() (int64, bool) {
+	h.eventsCacheMu.RLock()
+	count := h.eventsCacheGrandTotalLocked()
+	ready := !h.eventsCacheUpdatedAt.IsZero()
+	updatedAt := h.eventsCacheUpdatedAt
+	h.eventsCacheMu.RUnlock()
+
+	if !ready || time.Since(updatedAt) >= eventBreakdownCacheTTL {
+		h.requestEventBreakdownRefresh()
+	}
+	return count, ready
+}
+
+func (h *Handler) eventsCacheGrandTotalLocked() int64 {
+	var total int64
+	for _, year := range h.eventsCache.Years {
+		total += year.GrandTotal
+	}
+	return total
+}
+
+// requestEventBreakdownRefresh starts at most one background refresh at a time.
+func (h *Handler) requestEventBreakdownRefresh() {
+	if h.db == nil {
+		return
+	}
+
+	h.eventsCacheMu.Lock()
+	if h.eventsCacheRefreshing {
+		h.eventsCacheMu.Unlock()
+		return
+	}
+	h.eventsCacheRefreshing = true
+	h.eventsCacheMu.Unlock()
+
+	go h.refreshEventBreakdown()
+}
+
+func (h *Handler) refreshEventBreakdown() {
+	ctx, cancel := context.WithTimeout(context.Background(), constants.HealthCheckTimeout*time.Second)
+	defer cancel()
+
+	counts, err := h.db.GetEventCountsByKindMonthFromYear(ctx, 2026)
+	if err != nil {
+		h.logger.Warn("Failed to refresh event breakdown cache", zap.Error(err))
+		h.eventsCacheMu.Lock()
+		h.eventsCacheRefreshing = false
+		h.eventsCacheLastErr = err
+		h.eventsCacheMu.Unlock()
+		return
+	}
+
+	data := buildEventBreakdownData(counts)
+	h.eventsCacheMu.Lock()
+	h.eventsCache = data
+	h.eventsCacheUpdatedAt = time.Now()
+	h.eventsCacheRefreshing = false
+	h.eventsCacheLastErr = nil
+	h.eventsCacheMu.Unlock()
+
+	metrics.EventsStored.Set(float64(eventBreakdownGrandTotal(data)))
+}
+
+func eventBreakdownGrandTotal(data EventBreakdownData) int64 {
+	var total int64
+	for _, year := range data.Years {
+		total += year.GrandTotal
+	}
+	return total
+}
+
+func buildEventBreakdownData(counts []storage.EventCountByKindMonth) EventBreakdownData {
+	months := []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+	byYear := make(map[int]map[int]*NIPRowData)
+
+	for _, count := range counts {
+		if count.Year < 2026 || count.Month < 1 || count.Month > 12 {
+			continue
+		}
+		if _, ok := byYear[count.Year]; !ok {
+			byYear[count.Year] = make(map[int]*NIPRowData)
+		}
+		if _, ok := byYear[count.Year][count.Kind]; !ok {
+			byYear[count.Year][count.Kind] = &NIPRowData{
+				Kind:        count.Kind,
+				KindName:    count.KindName,
+				MonthCounts: make([]int64, 12),
+			}
+		}
+		byYear[count.Year][count.Kind].MonthCounts[count.Month-1] = count.Count
+	}
+
+	years := make([]int, 0, len(byYear))
+	for year := range byYear {
+		years = append(years, year)
+	}
+	sort.Ints(years)
+
+	data := EventBreakdownData{Years: make([]YearEventData, 0, len(years))}
+	for _, year := range years {
+		rows := make([]NIPRowData, 0, len(byYear[year]))
+		for _, row := range byYear[year] {
+			for _, count := range row.MonthCounts {
+				row.RowTotal += count
+			}
+			rows = append(rows, *row)
+		}
+		sort.Slice(rows, func(i, j int) bool { return rows[i].Kind < rows[j].Kind })
+
+		columnTotals := make([]int64, 12)
+		var grandTotal int64
+		for _, row := range rows {
+			for month := range row.MonthCounts {
+				columnTotals[month] += row.MonthCounts[month]
+			}
+			grandTotal += row.RowTotal
+		}
+		data.Years = append(data.Years, YearEventData{
+			Year:         year,
+			Months:       months,
+			Rows:         rows,
+			ColumnTotals: columnTotals,
+			GrandTotal:   grandTotal,
+		})
+	}
+	return data
+}
+
+// HandleEvents serves the events breakdown page.
 func (h *Handler) HandleEvents(w http.ResponseWriter, r *http.Request) {
-	// Apply security headers
 	dashboardHeaders := DefaultSecurityHeaders()
 	dashboardHeaders.Apply(w)
 
@@ -645,88 +767,16 @@ func (h *Handler) HandleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), constants.HealthCheckTimeout*time.Second)
-	defer cancel()
+	h.eventsCacheMu.RLock()
+	data := h.eventsCache
+	ready := !h.eventsCacheUpdatedAt.IsZero()
+	updatedAt := h.eventsCacheUpdatedAt
+	h.eventsCacheMu.RUnlock()
 
-	// Get years with events
-	years, err := h.db.GetYearsWithEvents(ctx)
-	if err != nil {
-		h.logger.Error("Failed to get years with events", zap.Error(err))
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
+	if !ready || time.Since(updatedAt) >= eventBreakdownCacheTTL {
+		h.requestEventBreakdownRefresh()
 	}
 
-	// Filter years >= 2026
-	var validYears []int
-	for _, y := range years {
-		if y >= 2026 {
-			validYears = append(validYears, y)
-		}
-	}
-
-	// Build data for each year
-	var yearData []YearEventData
-	months := []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
-
-	for _, year := range validYears {
-		counts, err := h.db.GetEventCountsByKindMonth(ctx, year)
-		if err != nil {
-			h.logger.Error("Failed to get event counts for year", zap.Int("year", year), zap.Error(err))
-			continue
-		}
-
-		// Build map of kind -> month counts
-		kindMap := make(map[int]*NIPRowData)
-		for _, c := range counts {
-			if _, ok := kindMap[c.Kind]; !ok {
-				kindMap[c.Kind] = &NIPRowData{
-					Kind:        c.Kind,
-					KindName:    c.KindName,
-					MonthCounts: make([]int64, 12),
-				}
-			}
-			if c.Month >= 1 && c.Month <= 12 {
-				kindMap[c.Kind].MonthCounts[c.Month-1] = c.Count
-			}
-		}
-
-		// Convert to sorted slice
-		var rows []NIPRowData
-		for _, row := range kindMap {
-			// Calculate row total
-			var total int64
-			for _, count := range row.MonthCounts {
-				total += count
-			}
-			row.RowTotal = total
-			rows = append(rows, *row)
-		}
-
-		// Sort by kind (numeric)
-		sort.Slice(rows, func(i, j int) bool {
-			return rows[i].Kind < rows[j].Kind
-		})
-
-		// Calculate column totals
-		var colTotals [12]int64
-		var grandTotal int64
-		for _, row := range rows {
-			for m := 0; m < 12; m++ {
-				colTotals[m] += row.MonthCounts[m]
-			}
-			grandTotal += row.RowTotal
-		}
-
-		yearData = append(yearData, YearEventData{
-			Year:         year,
-			Months:       months,
-			Rows:         rows,
-			ColumnTotals: colTotals[:],
-			GrandTotal:   grandTotal,
-		})
-	}
-
-	// Load template
 	tmplPath := filepath.Join("web", "templates", "events.html")
 	funcMap := template.FuncMap{
 		"formatNIP": func(v interface{}) string {
@@ -748,14 +798,89 @@ func (h *Handler) HandleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := EventBreakdownData{
-		Years: yearData,
+	lastUpdated := ""
+	if ready {
+		lastUpdated = updatedAt.UTC().Format(time.RFC3339)
+	}
+	pageData := struct {
+		EventBreakdownData
+		Loading     bool
+		LastUpdated string
+	}{
+		EventBreakdownData: data,
+		Loading:            !ready,
+		LastUpdated:        lastUpdated,
+	}
+	if err := tmpl.Execute(w, pageData); err != nil {
+		h.logger.Error("Failed to execute events template", zap.Error(err))
+	}
+}
+
+// HandleEventsAPI returns the cached event breakdown and starts a refresh when the cache is cold or stale.
+func (h *Handler) HandleEventsAPI(w http.ResponseWriter, r *http.Request) {
+	apiHeaders := APISecurityHeaders()
+	apiHeaders.Apply(w)
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.db == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
 	}
 
-	if err := tmpl.Execute(w, data); err != nil {
-		h.logger.Error("Failed to execute events template", zap.Error(err))
-		// Don't call http.Error after template execution started
-		return
+	h.eventsCacheMu.RLock()
+	data := h.eventsCache
+	ready := !h.eventsCacheUpdatedAt.IsZero()
+	updatedAt := h.eventsCacheUpdatedAt
+	refreshing := h.eventsCacheRefreshing
+	lastErr := h.eventsCacheLastErr
+	h.eventsCacheMu.RUnlock()
+
+	if !ready || time.Since(updatedAt) >= eventBreakdownCacheTTL {
+		h.requestEventBreakdownRefresh()
+		refreshing = true
+	}
+
+	status := "ready"
+	if !ready {
+		status = "loading"
+	}
+	updatedAtString := ""
+	if ready {
+		updatedAtString = updatedAt.UTC().Format(time.RFC3339)
+	}
+	response := struct {
+		Status     string             `json:"status"`
+		Refreshing bool               `json:"refreshing"`
+		UpdatedAt  string             `json:"updated_at,omitempty"`
+		Error      string             `json:"error,omitempty"`
+		Data       EventBreakdownData `json:"data"`
+	}{
+		Status:     status,
+		Refreshing: refreshing,
+		UpdatedAt:  updatedAtString,
+		Data:       data,
+	}
+	if lastErr != nil && !ready {
+		response.Error = "Event data is temporarily unavailable; retrying."
+	}
+	if status == "loading" {
+		w.WriteHeader(http.StatusAccepted)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logger.Error("Failed to encode events response", zap.Error(err))
 	}
 }
 
