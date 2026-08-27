@@ -176,6 +176,7 @@ func DefaultInputValidation() *InputValidation {
 	allowedQueryParams := map[string]bool{
 		"type":   true, // For cluster API type parameter
 		"format": true, // For potential future formatting options
+		"v":      true, // Cache-busting version for static assets
 	}
 
 	return &InputValidation{

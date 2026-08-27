@@ -55,6 +55,18 @@ func TestSupportedNIPRegistryCount(t *testing.T) {
 	}
 }
 
+func TestStaticAssetVersionQueryValidation(t *testing.T) {
+	validation := DefaultInputValidation()
+	versioned := httptest.NewRequest(http.MethodGet, "/static/style.css?v=20260827-3", nil)
+	if err := validation.ValidateRequest(versioned); err != nil {
+		t.Fatalf("versioned static asset should validate: %v", err)
+	}
+	unexpected := httptest.NewRequest(http.MethodGet, "/static/style.css?unexpected=value", nil)
+	if err := validation.ValidateRequest(unexpected); err == nil {
+		t.Fatal("unexpected static query parameter should be rejected")
+	}
+}
+
 func TestDashboardTemplateParses(t *testing.T) {
 	path := filepath.Join("..", "..", "web", "templates", "index.html")
 	_, err := template.New("index.html").Funcs(template.FuncMap{
