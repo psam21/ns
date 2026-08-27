@@ -153,32 +153,69 @@ class RelayDashboard {
     });
   }
 
+  setEventTelemetryState(status, message) {
+    const normalizedStatus = status || 'warming';
+    const state = document.getElementById('kind-state');
+    if (state) {
+      state.textContent = normalizedStatus;
+      state.className = `panel-state state-${normalizedStatus}`;
+    }
+    const empty = document.getElementById('top-kinds-empty');
+    if (!empty) return;
+    empty.dataset.status = normalizedStatus;
+    const title = empty.querySelector('strong');
+    const detail = empty.querySelector('small');
+    if (title) title.textContent = normalizedStatus.replace(/-/g, ' ');
+    if (detail) detail.textContent = message || 'Telemetry is not available yet.';
+    empty.classList.remove('is-hidden');
+  }
+
   async updateEventKinds() {
     const container = document.getElementById('top-kinds');
     if (!container) return;
     try {
-      const response = await fetch('/api/events', { headers: { Accept: 'application/json' } });
-      if (!response.ok) return;
+      const response = await fetch('/api/events', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+      if (!response.ok) {
+        this.setEventTelemetryState('unavailable', `Telemetry request failed (HTTP ${response.status}).`);
+        return;
+      }
       const payload = await response.json();
-      if (payload.status !== 'ready' || !payload.data || !Array.isArray(payload.data.years)) return;
-
-      const byKind = new Map();
-      payload.data.years.forEach((year) => {
-        (year.rows || []).forEach((row) => {
-          const current = byKind.get(row.kind) || { kind: row.kind, kindName: row.kind_name || 'Unknown kind', count: 0 };
-          current.count += Number(row.row_total) || 0;
-          byKind.set(row.kind, current);
+      let allItems = [];
+      if (Array.isArray(payload.event_kinds) && payload.event_kinds.length > 0) {
+        allItems = payload.event_kinds.map((item) => ({
+          kind: Number(item.kind),
+          kindName: item.kind_name || 'Unknown kind',
+          count: Number(item.count) || 0,
+        }));
+      } else if (payload.data && Array.isArray(payload.data.years)) {
+        const byKind = new Map();
+        payload.data.years.forEach((year) => {
+          (year.rows || []).forEach((row) => {
+            const current = byKind.get(row.kind) || { kind: row.kind, kindName: row.kind_name || 'Unknown kind', count: 0 };
+            current.count += Number(row.row_total) || 0;
+            byKind.set(row.kind, current);
+          });
         });
-      });
-      const allItems = Array.from(byKind.values()).sort((a, b) => b.count - a.count || a.kind - b.kind);
+        allItems = Array.from(byKind.values());
+      }
+      allItems.sort((a, b) => b.count - a.count || a.kind - b.kind);
       const total = allItems.reduce((sum, item) => sum + item.count, 0);
-      const items = allItems.slice(0, 6);
-      if (!total) return;
+      if (!total) {
+        container.replaceChildren();
+        const registry = document.getElementById('kind-registry');
+        if (registry) registry.replaceChildren();
+        this.setEventTelemetryState(payload.status || 'warming', payload.message || payload.error || 'No event-kind rows are available yet.');
+        return;
+      }
 
-      this.renderKindRows(document.getElementById('top-kinds'), items, total);
+      this.renderKindRows(container, allItems.slice(0, 6), total);
       this.renderKindRows(document.getElementById('kind-registry'), allItems, total);
+      document.getElementById('top-kinds-empty')?.classList.add('is-hidden');
+      this.setEventTelemetryState(payload.status || 'ready', payload.message || 'Archive telemetry is current.');
+      document.getElementById('top-kinds-empty')?.classList.add('is-hidden');
     } catch (error) {
       console.warn('Failed to update event kinds:', error);
+      this.setEventTelemetryState('unavailable', 'The archive service is not responding; live relay metrics remain active.');
     }
   }
 
@@ -221,12 +258,15 @@ class RelayDashboard {
         this.setText('messages-processed', this.formatStatValue(data.stats.messages_processed || 0));
         this.setText('messages-sent', this.formatStatValue(data.stats.messages_sent || 0));
         this.setText('active-subscriptions', this.formatStatValue(data.stats.active_subscriptions || 0));
-        if (data.stats.events_stored_ready) {
-          this.updateStatElement('events-stored', data.stats.events_stored);
-          document.getElementById('events-stored')?.classList.remove('stat-loading');
-        } else {
-          this.updateStatElement('events-stored', 'Loading…');
-          document.getElementById('events-stored')?.classList.add('stat-loading');
+        const eventsReady = Boolean(data.stats.events_stored_ready);
+        const eventsStatus = data.stats.events_stored_status || (eventsReady ? 'ready' : 'warming');
+        const eventsCell = document.querySelector('.metric-cell--events');
+        if (eventsCell) eventsCell.dataset.eventsStatus = eventsStatus;
+        this.updateStatElement('events-stored', eventsReady ? data.stats.events_stored : '—');
+        document.getElementById('events-stored')?.classList.toggle('stat-loading', !eventsReady);
+        const eventsMeta = document.getElementById('events-stored-meta');
+        if (eventsMeta) {
+          eventsMeta.textContent = eventsReady ? '2026+ · live total' : (data.stats.events_stored_message || 'Event total is not available yet.');
         }
       }
 

@@ -1,10 +1,15 @@
 package web
 
 import (
+	"encoding/json"
+	"errors"
 	"html/template"
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/Shugur-Network/relay/internal/constants"
 	"github.com/Shugur-Network/relay/internal/storage"
@@ -82,5 +87,92 @@ func TestGetTopEventKinds(t *testing.T) {
 	}
 	if math.Abs(items[0].Share-68.18181818181819) > 0.000001 || math.Abs(items[1].Share-22.727272727272727) > 0.000001 {
 		t.Fatalf("unexpected shares: %#v", items)
+	}
+}
+
+func TestEventCacheState(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name       string
+		updatedAt  time.Time
+		refreshing bool
+		lastErr    error
+		wantStatus string
+	}{
+		{name: "pending", wantStatus: "pending"},
+		{name: "warming", refreshing: true, wantStatus: "warming"},
+		{name: "unavailable", lastErr: errors.New("database unavailable"), wantStatus: "unavailable"},
+		{name: "ready", updatedAt: now, wantStatus: "ready"},
+		{name: "refreshing", updatedAt: now, refreshing: true, wantStatus: "refreshing"},
+		{name: "stale", updatedAt: now, lastErr: errors.New("query timeout"), wantStatus: "stale"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status, message := eventCacheState(tt.updatedAt, tt.refreshing, tt.lastErr)
+			if status != tt.wantStatus {
+				t.Fatalf("status = %q, want %q", status, tt.wantStatus)
+			}
+			if message == "" {
+				t.Fatal("expected a non-empty operator message")
+			}
+		})
+	}
+}
+
+func TestFormatEventCacheTime(t *testing.T) {
+	if got := formatEventCacheTime(time.Time{}); got != "" {
+		t.Fatalf("zero timestamp = %q, want empty string", got)
+	}
+	value := time.Date(2026, time.August, 27, 7, 0, 0, 0, time.FixedZone("IST", 19800))
+	if got := formatEventCacheTime(value); got != "2026-08-27T01:30:00Z" {
+		t.Fatalf("formatted timestamp = %q", got)
+	}
+}
+
+func TestEventTotalState(t *testing.T) {
+	status, message := eventTotalState(time.Time{}, false, errors.New("database unavailable"))
+	if status != "unavailable" || message == "" {
+		t.Fatalf("unexpected unavailable total state: %q %q", status, message)
+	}
+	status, _ = eventTotalState(time.Now(), true, nil)
+	if status != "refreshing" {
+		t.Fatalf("unexpected refreshing total state: %q", status)
+	}
+}
+
+func TestEventsAPIIncludesDirectTotalWhileBreakdownWarms(t *testing.T) {
+	now := time.Now()
+	h := &Handler{
+		db:                    &storage.DB{},
+		eventsCacheRefreshing: true,
+		eventsTotal:           42,
+		eventsTotalUpdatedAt:  now,
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/events", nil)
+	h.HandleEventsAPI(recorder, request)
+
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("status code = %d, want %d while breakdown warms", recorder.Code, http.StatusAccepted)
+	}
+	var response struct {
+		Status      string `json:"status"`
+		TotalEvents int64  `json:"total_events"`
+		TotalReady  bool   `json:"total_ready"`
+		Message     string `json:"message"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Status != "warming" {
+		t.Fatalf("status = %q, want warming", response.Status)
+	}
+	if !response.TotalReady || response.TotalEvents != 42 {
+		t.Fatalf("direct total = %d ready=%v, want 42 and ready", response.TotalEvents, response.TotalReady)
+	}
+	if response.Message == "" {
+		t.Fatal("expected a non-empty warming message")
 	}
 }

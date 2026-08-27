@@ -17,8 +17,23 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        gap: 1rem;
         margin-bottom: 30px;
       }
+      .events-header-actions {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+      }
+      .events-header-actions .theme-toggle { min-height: 2rem; }
+      .events-state strong { display: block; margin-bottom: .7rem; color: var(--text); font-size: 1.05rem; }
+      .events-state p { margin: .45rem auto 0; max-width: 42rem; }
+      .events-direct-total { color: var(--text-dim); font-family: var(--mono); font-size: .78rem; }
+      .events-direct-total b { color: var(--accent); font-size: 1rem; }
+      .events-state--unavailable { border: 1px solid rgba(192,57,43,.35); border-radius: .65rem; background: var(--accent-dim); }
+      .events-state--unavailable i { color: var(--red); }
+      .events-state--stale { border: 1px solid var(--border-hi); border-radius: .65rem; background: var(--bg-raised); }
+
       .events-header h1 {
         margin: 0;
         font-size: 1.8rem;
@@ -46,7 +61,7 @@
         width: 100%;
         border-collapse: collapse;
         font-size: 0.85rem;
-        background: var(--card-bg);
+        background: var(--bg-card);
         border-radius: 8px;
         overflow: hidden;
         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
@@ -58,7 +73,7 @@
         border: 1px solid var(--border);
       }
       .events-table th {
-        background: var(--header-bg);
+        background: var(--bg-raised);
         color: var(--accent);
         font-weight: 600;
         position: sticky;
@@ -78,18 +93,18 @@
         font-size: 0.8rem;
       }
       .events-table td.kind-name {
-        color: var(--text-muted);
+        color: var(--text-mute);
         font-size: 0.75rem;
         text-align: left;
         padding-left: 8px;
       }
       .events-table td.total-col {
         font-weight: 700;
-        background: var(--total-bg);
+        background: var(--bg-raised);
         color: var(--accent);
       }
       .events-table tr.total-row {
-        background: var(--total-bg);
+        background: var(--bg-raised);
         font-weight: 700;
       }
       .events-table tr.total-row td {
@@ -99,10 +114,10 @@
         text-align: left;
       }
       .events-table tr:hover td {
-        background: var(--hover-bg);
+        background: var(--accent-dim);
       }
       .events-table tr.total-row:hover td {
-        background: var(--total-bg);
+        background: var(--bg-raised);
       }
       .sort-controls {
         display: flex;
@@ -112,11 +127,11 @@
       }
       .sort-controls label {
         font-size: 0.85rem;
-        color: var(--text-muted);
+        color: var(--text-mute);
       }
       .sort-controls select {
         padding: 6px 10px;
-        background: var(--input-bg);
+        background: var(--bg-raised);
         border: 1px solid var(--border);
         color: var(--text);
         border-radius: 4px;
@@ -124,7 +139,7 @@
         font-size: 0.85rem;
       }
       .count-zero {
-        color: var(--text-muted);
+        color: var(--text-mute);
       }
       .count-nonzero {
         color: var(--text);
@@ -137,19 +152,19 @@
       .no-data {
         text-align: center;
         padding: 40px;
-        color: var(--text-muted);
+        color: var(--text-mute);
       }
       .events-loading {
         text-align: center;
         padding: 64px 20px;
-        color: var(--text-muted);
+        color: var(--text-mute);
       }
       .events-loading i {
         color: var(--accent);
         margin-bottom: 16px;
       }
       .events-updated {
-        color: var(--text-muted);
+        color: var(--text-mute);
         font-size: 0.78rem;
         margin: -18px 0 24px;
       }
@@ -166,14 +181,15 @@
       <div class="events-container">
         <div class="events-header">
           <h1><i class="fas fa-chart-bar"></i> Event Breakdown</h1>
-          <a href="/" class="back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+          <div class="events-header-actions"><button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark mode" aria-pressed="false"><i id="theme-icon" class="fas fa-moon" aria-hidden="true"></i><span id="theme-toggle-label">Dark</span></button><a href="/" class="back-link"><i class="fas fa-arrow-left"></i> Dashboard</a></div>
         </div>
 
         {{if .Loading}}
-          <div class="events-loading" id="events-loading" aria-live="polite">
-            <i class="fas fa-circle-notch fa-spin" style="font-size:2rem;display:block;"></i>
-            <p>Loading event data…</p>
-            <p>Historical totals are being prepared. This page will update automatically.</p>
+          <div class="events-loading events-state events-state--{{.CacheStatus}}" id="events-loading" data-status="{{.CacheStatus}}" aria-live="polite">
+            <i class="fas fa-database" style="font-size:2rem;display:block;"></i>
+            <strong id="events-state-title">Archive telemetry {{.CacheStatus}}</strong>
+            <p id="events-state-message">{{.CacheMessage}}</p>
+            {{if .EventTotalReady}}<p class="events-direct-total"><b>{{.EventTotal}}</b> events recorded since 2026-01-01 UTC · direct database count</p>{{else}}<p class="events-direct-total">Live relay metrics are available while the archive aggregate refreshes.</p>{{end}}
           </div>
         {{else if .Years}}
           {{range .Years}}
@@ -225,11 +241,11 @@
         {{else}}
           <div class="no-data">
             <i class="fas fa-database" style="font-size:3rem;margin-bottom:15px;display:block;"></i>
-            <p>No event data available for 2026 or later.</p>
+            {{if .EventTotalReady}}<p>No grouped event rows are available for 2026 or later.</p><p class="events-direct-total"><b>{{.EventTotal}}</b> direct events total since 2026-01-01 UTC.</p>{{else}}<p>{{.CacheMessage}}</p>{{end}}
           </div>
         {{end}}
         {{if .LastUpdated}}
-          <p class="events-updated">Data refreshed {{.LastUpdated}}</p>
+          <p class="events-updated">Archive snapshot refreshed {{.LastUpdated}} · grouped telemetry</p>
         {{end}}
       </div>
     </div>
@@ -240,21 +256,27 @@
         try {
           const response = await fetch('/api/events', { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
           const payload = await response.json();
-          if (payload.status === 'ready') {
+          if (payload.status === 'ready' || payload.status === 'stale') {
             window.location.reload();
             return;
           }
           if (loading) {
-            const message = loading.querySelector('p:last-child');
-            if (message) message.textContent = payload.error || 'Historical totals are still being prepared. Retrying…';
+            loading.dataset.status = payload.status || 'warming';
+            const title = document.getElementById('events-state-title');
+            const message = document.getElementById('events-state-message');
+            if (title) title.textContent = `Archive telemetry ${payload.status || 'warming'}`;
+            if (message) message.textContent = payload.message || payload.error || 'Archive refresh is still running; retrying…';
           }
         } catch (error) {
           if (loading) {
-            const message = loading.querySelector('p:last-child');
-            if (message) message.textContent = 'The data service is responding slowly. Retrying…';
+            loading.dataset.status = 'unavailable';
+            const title = document.getElementById('events-state-title');
+            const message = document.getElementById('events-state-message');
+            if (title) title.textContent = 'Archive telemetry unavailable';
+            if (message) message.textContent = 'The data service is responding slowly; retrying without blocking relay metrics.';
           }
         }
-        window.setTimeout(refreshEventBreakdown, 2000);
+        window.setTimeout(refreshEventBreakdown, 5000);
       }
 
       {{if .Loading}}

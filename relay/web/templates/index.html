@@ -12,7 +12,7 @@
     <div class="container dashboard-container">
       <header class="site-nav cockpit-nav">
         <a href="/" class="brand" aria-label="nostr.ltd operations home"><span class="brand-mark">n</span><span>nostr<span class="brand-dot">.</span>ltd <em>OPS</em></span></a>
-        <div class="cockpit-nav-meta"><span class="nav-clock" id="nav-clock">--:--:-- UTC</span><span class="nav-divider"></span><a href="/events">Event archive <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a><a href="https://github.com/psam21/ns" target="_blank" rel="noopener noreferrer">Source <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a><button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark mode" aria-pressed="false"><i id="theme-icon" class="fas fa-moon" aria-hidden="true"></i><span id="theme-toggle-label">Dark</span></button></div>
+        <div class="cockpit-nav-meta"><span class="nav-clock" id="nav-clock">--:--:-- UTC</span><span class="nav-divider"></span><button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark mode" aria-pressed="false"><i id="theme-icon" class="fas fa-moon" aria-hidden="true"></i><span id="theme-toggle-label">Dark</span></button></div>
       </header>
 
       <main id="dashboard">
@@ -24,7 +24,7 @@
         <section class="metric-strip" aria-label="Primary relay metrics">
           <div class="metric-cell metric-cell--health"><span class="metric-label">HEALTH</span><strong class="metric-value value-accent"><span class="health-led"></span> nominal</strong><span class="metric-sub">database <b>{{if .Cluster.IsHealthy}}healthy{{else}}degraded{{end}}</b></span></div>
           <div class="metric-cell"><span class="metric-label">ACTIVE CONNECTIONS</span><strong class="metric-value" id="active-connections">{{.Stats.ActiveConnections}}</strong><span class="metric-sub"><span id="load-percentage">{{printf "%.1f" .Stats.LoadPercentage}}%</span> capacity used</span></div>
-          <div class="metric-cell"><span class="metric-label">EVENTS STORED</span><a href="/events" class="metric-link"><strong class="metric-value{{if not .Stats.EventsStoredReady}} stat-loading{{end}}" id="events-stored">{{if .Stats.EventsStoredReady}}{{.Stats.EventsStored}}{{else}}Loading…{{end}}</strong><span class="metric-sub">2026+ · inspect archive <i class="fas fa-arrow-right" aria-hidden="true"></i></span></a></div>
+          <div class="metric-cell metric-cell--events" data-events-status="{{.Stats.EventsStoredStatus}}"><span class="metric-label">EVENTS STORED</span><strong class="metric-value{{if not .Stats.EventsStoredReady}} stat-loading{{end}}" id="events-stored">{{if .Stats.EventsStoredReady}}{{.Stats.EventsStored}}{{else}}—{{end}}</strong><span class="metric-sub" id="events-stored-meta">{{if .Stats.EventsStoredReady}}2026+ · live total{{else}}{{.Stats.EventsStoredMessage}}{{end}}</span></div>
           <div class="metric-cell"><span class="metric-label">UPTIME / SINCE</span><strong class="metric-value metric-value--small" id="live-since">{{.LiveSince}}</strong><span class="metric-sub">process start date</span></div>
           <div class="metric-cell metric-cell--policy"><span class="metric-label">POLICY</span><strong class="metric-value value-accent">OPEN</strong><span class="metric-sub">read/write · no auth</span></div>
         </section>
@@ -39,17 +39,17 @@
 
           <article class="console-panel snapshot-panel">
             <div class="console-heading"><div><span class="panel-kicker">02 / NODE</span><h2>Relay identity</h2></div><span class="node-badge">{{.Version}}</span></div>
-            <div class="identity-readout"><span class="readout-label">RELAY ENDPOINT</span><code>wss://{{.Host}}</code></div>
-            <div class="identity-grid"><div><span>software</span><strong>{{.Software}}</strong></div><div><span>protocol surface</span><strong>{{len .SupportedNIPs}} NIPs</strong></div><div><span>access model</span><strong class="value-accent">public</strong></div><div><span>media transport</span><strong>Blossom</strong></div></div>
-            <div class="node-footer"><span>live since <b>{{.LiveSince}}</b></span><a href="https://nostr.ltd" target="_blank" rel="noopener noreferrer">NIP-11 metadata <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></div>
+            <div class="identity-grid">
+<div><span>software</span><strong>{{.Software}}</strong></div><div><span>protocol surface</span><strong>{{len .SupportedNIPs}} NIPs</strong></div><div><span>access model</span><strong class="value-accent">public</strong></div><div><span>media transport</span><strong>Blossom</strong></div></div>
+            <div class="node-footer"><span>live since <b>{{.LiveSince}}</b></span><span>NIP-11 metadata · public</span></div>
           </article>
         </section>
 
         <section class="cockpit-grid cockpit-grid--secondary">
           <article class="console-panel kinds-panel">
-            <div class="console-heading"><div><span class="panel-kicker">03 / EVENT STREAM</span><h2>Top event kinds</h2></div><div class="panel-tools"><input id="kind-search" class="console-search" type="search" placeholder="filter kinds" aria-label="Filter event kinds" /><a href="/events" class="panel-link">all years <i class="fas fa-arrow-right" aria-hidden="true"></i></a></div></div>
+            <div class="console-heading"><div><span class="panel-kicker">03 / EVENT STREAM</span><h2>Top event kinds</h2></div><div class="panel-tools"><input id="kind-search" class="console-search" type="search" placeholder="filter kinds" aria-label="Filter event kinds" /><span class="panel-state" id="kind-state">{{.EventCacheStatus}}</span></div></div>
             <div class="kind-table-head"><span>KIND / MEANING</span><span>EVENTS</span><span>SHARE</span></div>
-            {{if .TopKinds}}<div class="kind-list" id="top-kinds" aria-label="Top event kinds">{{range .TopKinds}}<div class="kind-row" data-kind-search="{{.Kind}} {{.KindName}}"><div class="kind-name"><strong>{{.Kind}}</strong><span>{{.KindName}}</span></div><div class="kind-count">{{.Count}}</div><div class="kind-share"><span class="kind-bar"><i style="width: {{printf "%.2f" .Share}}%"></i></span><small>{{printf "%.1f" .Share}}%</small></div></div>{{end}}</div>{{else}}<div class="telemetry-empty"><span class="pulse-dot"></span> Event cache warming…</div>{{end}}
+            <div class="kind-list" id="top-kinds" aria-label="Top event kinds">{{range .TopKinds}}<div class="kind-row" data-kind-search="{{.Kind}} {{.KindName}}"><div class="kind-name"><strong>{{.Kind}}</strong><span>{{.KindName}}</span></div><div class="kind-count">{{.Count}}</div><div class="kind-share"><span class="kind-bar"><i style="width: {{printf "%.2f" .Share}}%"></i></span><small>{{printf "%.1f" .Share}}%</small></div></div>{{end}}</div><div class="telemetry-empty{{if .TopKinds}} is-hidden{{end}}" id="top-kinds-empty" data-status="{{.EventCacheStatus}}"><span class="pulse-dot"></span><div><strong>{{.EventCacheStatus}}</strong><small>{{.EventCacheMessage}}</small></div></div>
             <details class="kind-registry"><summary>All observed event kinds <span class="muted-count">({{len .EventKinds}})</span></summary><div class="kind-list kind-list--registry" id="kind-registry" aria-label="All observed event kinds">{{range .EventKinds}}<div class="kind-row" data-kind-search="{{.Kind}} {{.KindName}}"><div class="kind-name"><strong>{{.Kind}}</strong><span>{{.KindName}}</span></div><div class="kind-count">{{.Count}}</div><div class="kind-share"><span class="kind-bar"><i style="width: {{printf "%.2f" .Share}}%"></i></span><small>{{printf "%.1f" .Share}}%</small></div></div>{{end}}</div></details>
           </article>
 
@@ -62,9 +62,9 @@
         </section>
 
         <section class="cockpit-grid cockpit-grid--footer-panels">
-          <article class="console-panel compact-console connection-panel"><div class="console-heading"><div><span class="panel-kicker">05 / CONNECTION</span><h2>Quick connect</h2></div><span class="console-status">WS</span></div><div class="connect-line"><span>$</span><code>wss://{{.Host}}</code><button class="copy-btn copy-btn--visible" onclick="copyToClipboard('websocket-url')" aria-label="Copy relay URL"><i class="fas fa-copy" aria-hidden="true"></i></button></div><div class="connect-caption">Add this endpoint to any Nostr client’s relay settings.</div></article>
+          <article class="console-panel compact-console connection-panel"><div class="console-heading"><div><span class="panel-kicker">05 / CONNECTION</span><h2>Client connection</h2></div><span class="console-status">WS</span></div><div class="connect-line"><span>→</span><code>Use the WebSocket readout above</code></div><div class="connect-caption">Copy the canonical endpoint once, then add it to any Nostr client.</div></article>
           <article class="console-panel compact-console limits-panel"><div class="console-heading"><div><span class="panel-kicker">06 / LIMITS</span><h2>Runtime envelope</h2></div><span class="console-status">CONFIG</span></div><div class="limits-grid"><span>max message <b>{{.Limitation.MaxMessageLength}}</b></span><span>max connections <b>{{.Limitation.MaxConnections}}</b></span><span>max subscriptions <b>{{.Limitation.MaxSubscriptions}}</b></span><span>event tags <b>{{.Limitation.MaxEventTags}}</b></span></div></article>
-          <article class="console-panel compact-console source-panel"><div class="console-heading"><div><span class="panel-kicker">07 / ACCESS</span><h2>Open by design</h2></div><span class="console-status value-accent">OK</span></div><p>Inspect the protocol surface, event archive, and source. No account required.</p><div class="source-links"><a href="/events">Events <i class="fas fa-arrow-right" aria-hidden="true"></i></a><a href="https://github.com/psam21/ns" target="_blank" rel="noopener noreferrer">GitHub <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></div></article>
+          <article class="console-panel compact-console source-panel"><div class="console-heading"><div><span class="panel-kicker">07 / ACCESS</span><h2>Open by design</h2></div><span class="console-status value-accent">OK</span></div><p>Public WebSocket, public NIP-11 metadata, and no account required. Operational data stays on this console.</p><div class="access-note">READ / WRITE · NO AUTH</div></article>
         </section>
       </main>
 

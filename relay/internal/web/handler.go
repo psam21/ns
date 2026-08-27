@@ -25,23 +25,26 @@ import (
 
 // DashboardData represents the data passed to the dashboard template
 type DashboardData struct {
-	Name          string                `json:"name"`
-	Description   string                `json:"description"`
-	Software      string                `json:"software"`
-	Version       string                `json:"version"`
-	Contact       string                `json:"contact"`
-	Icon          string                `json:"icon"`
-	Host          string                `json:"host"`
-	Pubkey        string                `json:"pubkey"`
-	RelayID       string                `json:"relay_id"`
-	SupportedNIPs []interface{}         `json:"supported_nips"`
-	CustomNIPs    []constants.CustomNIP `json:"custom_nips"`
-	Limitation    *LimitationData       `json:"limitation"`
-	Stats         *StatsData            `json:"stats"`
-	TopKinds      []EventKindSummary    `json:"top_kinds"`
-	EventKinds    []EventKindSummary    `json:"event_kinds"`
-	LiveSince     string                `json:"live_since"`
-	Cluster       *storage.DatabaseInfo `json:"cluster"`
+	Name                string                `json:"name"`
+	Description         string                `json:"description"`
+	Software            string                `json:"software"`
+	Version             string                `json:"version"`
+	Contact             string                `json:"contact"`
+	Icon                string                `json:"icon"`
+	Host                string                `json:"host"`
+	Pubkey              string                `json:"pubkey"`
+	RelayID             string                `json:"relay_id"`
+	SupportedNIPs       []interface{}         `json:"supported_nips"`
+	CustomNIPs          []constants.CustomNIP `json:"custom_nips"`
+	Limitation          *LimitationData       `json:"limitation"`
+	Stats               *StatsData            `json:"stats"`
+	TopKinds            []EventKindSummary    `json:"top_kinds"`
+	EventKinds          []EventKindSummary    `json:"event_kinds"`
+	EventCacheStatus    string                `json:"event_cache_status"`
+	EventCacheUpdatedAt string                `json:"event_cache_updated_at,omitempty"`
+	EventCacheMessage   string                `json:"event_cache_message,omitempty"`
+	LiveSince           string                `json:"live_since"`
+	Cluster             *storage.DatabaseInfo `json:"cluster"`
 }
 
 // LimitationData represents relay limitations
@@ -57,19 +60,22 @@ type LimitationData struct {
 
 // StatsData represents relay statistics
 type StatsData struct {
-	ActiveConnections    int64            `json:"active_connections"`
-	TotalConnections     int64            `json:"total_connections"`
-	MessagesProcessed    int64            `json:"messages_processed"`
-	EventsStored         int64            `json:"events_stored"`
-	EventsStoredReady    bool             `json:"events_stored_ready"`
-	ActiveSubscriptions  int64            `json:"active_subscriptions"`
-	MessagesSent         int64            `json:"messages_sent"`
-	EventsPerSecond      float64          `json:"events_per_second"`
-	ConnectionsPerSecond float64          `json:"connections_per_second"`
-	AverageResponseTime  float64          `json:"average_response_time_ms"`
-	ErrorRate            float64          `json:"error_rate"`
-	MemoryUsage          map[string]int64 `json:"memory_usage"`
-	LoadPercentage       float64          `json:"load_percentage"`
+	ActiveConnections     int64            `json:"active_connections"`
+	TotalConnections      int64            `json:"total_connections"`
+	MessagesProcessed     int64            `json:"messages_processed"`
+	EventsStored          int64            `json:"events_stored"`
+	EventsStoredReady     bool             `json:"events_stored_ready"`
+	EventsStoredStatus    string           `json:"events_stored_status"`
+	EventsStoredUpdatedAt string           `json:"events_stored_updated_at,omitempty"`
+	EventsStoredMessage   string           `json:"events_stored_message,omitempty"`
+	ActiveSubscriptions   int64            `json:"active_subscriptions"`
+	MessagesSent          int64            `json:"messages_sent"`
+	EventsPerSecond       float64          `json:"events_per_second"`
+	ConnectionsPerSecond  float64          `json:"connections_per_second"`
+	AverageResponseTime   float64          `json:"average_response_time_ms"`
+	ErrorRate             float64          `json:"error_rate"`
+	MemoryUsage           map[string]int64 `json:"memory_usage"`
+	LoadPercentage        float64          `json:"load_percentage"`
 }
 
 // EventKindSummary represents an aggregate count for a Nostr event kind.
@@ -95,14 +101,24 @@ type Handler struct {
 		GetEventCountsByKindMonth(ctx context.Context, year int) ([]storage.EventCountByKindMonth, error)
 		GetEventCountsByKindMonthFromYear(ctx context.Context, startYear int) ([]storage.EventCountByKindMonth, error)
 	} // Database interface
-	eventsCacheMu         sync.RWMutex
-	eventsCache           EventBreakdownData
-	eventsCacheUpdatedAt  time.Time
-	eventsCacheRefreshing bool
-	eventsCacheLastErr    error
+	eventsCacheMu            sync.RWMutex
+	eventsCache              EventBreakdownData
+	eventsCacheUpdatedAt     time.Time
+	eventsCacheRefreshing    bool
+	eventsCacheLastAttemptAt time.Time
+	eventsCacheLastErr       error
+	eventsTotal              int64
+	eventsTotalUpdatedAt     time.Time
+	eventsTotalRefreshing    bool
+	eventsTotalLastAttemptAt time.Time
+	eventsTotalLastErr       error
 }
 
-const eventBreakdownCacheTTL = 30 * time.Second
+const (
+	eventBreakdownCacheTTL = 30 * time.Second
+	eventRefreshRetryDelay = 15 * time.Second
+	eventQueryTimeout      = 20 * time.Second
+)
 
 // NewHandler creates a new web handler
 func NewHandler(cfg *config.Config, logger *zap.Logger, node interface{}) *Handler {
@@ -440,6 +456,12 @@ func (h *Handler) getDashboardData(host string) *DashboardData {
 
 	// Get cluster information
 	clusterInfo := h.getClusterData()
+	eventSnapshot := h.eventCacheSnapshot()
+	if eventSnapshot.updatedAt.IsZero() || time.Since(eventSnapshot.updatedAt) >= eventBreakdownCacheTTL {
+		h.requestEventBreakdownRefresh()
+		eventSnapshot = h.eventCacheSnapshot()
+	}
+	eventStatus, eventMessage := eventCacheState(eventSnapshot.updatedAt, eventSnapshot.refreshing, eventSnapshot.lastErr)
 
 	return &DashboardData{
 		Name:          metadata.Name,
@@ -461,17 +483,26 @@ func (h *Handler) getDashboardData(host string) *DashboardData {
 			AuthRequired:     metadata.Limitation.AuthRequired,
 			PaymentRequired:  metadata.Limitation.PaymentRequired,
 		},
-		Stats:      h.getStatsData(),
-		TopKinds:   h.getTopEventKinds(6),
-		EventKinds: h.getTopEventKinds(65536),
-		LiveSince:  h.liveSince.Format("Jan 2, 2006"),
-		Cluster:    clusterInfo,
+		Stats:               h.getStatsData(),
+		TopKinds:            h.getTopEventKinds(6),
+		EventKinds:          h.getTopEventKinds(65536),
+		EventCacheStatus:    eventStatus,
+		EventCacheUpdatedAt: formatEventCacheTime(eventSnapshot.updatedAt),
+		EventCacheMessage:   eventMessage,
+		LiveSince:           h.liveSince.Format("Jan 2, 2006"),
+		Cluster:             clusterInfo,
 	}
 }
 
 // getStatsData retrieves current statistics
 func (h *Handler) getStatsData() *StatsData {
 	eventsStored, eventsStoredReady := h.getCachedEventCount()
+	h.eventsCacheMu.RLock()
+	totalUpdatedAt := h.eventsTotalUpdatedAt
+	totalRefreshing := h.eventsTotalRefreshing
+	totalLastErr := h.eventsTotalLastErr
+	h.eventsCacheMu.RUnlock()
+	totalStatus, totalMessage := eventTotalState(totalUpdatedAt, totalRefreshing, totalLastErr)
 
 	// Get memory usage
 	memUsage := getMemoryUsage()
@@ -490,19 +521,22 @@ func (h *Handler) getStatsData() *StatsData {
 
 	// Get other metrics - using our tracking functions
 	stats := &StatsData{
-		ActiveConnections:    activeConns,
-		TotalConnections:     metrics.GetTotalConnectionsCount(),
-		MessagesProcessed:    metrics.GetMessagesProcessedCount(),
-		EventsStored:         eventsStored,
-		EventsStoredReady:    eventsStoredReady,
-		ActiveSubscriptions:  metrics.GetActiveSubscriptionsCount(),
-		MessagesSent:         metrics.GetMessagesSentCount(),
-		EventsPerSecond:      metrics.GetEventsPerSecond(),
-		ConnectionsPerSecond: metrics.GetConnectionsPerSecond(),
-		AverageResponseTime:  metrics.GetAverageResponseTime(),
-		ErrorRate:            metrics.GetErrorRate(),
-		MemoryUsage:          memUsage,
-		LoadPercentage:       loadPercentage,
+		ActiveConnections:     activeConns,
+		TotalConnections:      metrics.GetTotalConnectionsCount(),
+		MessagesProcessed:     metrics.GetMessagesProcessedCount(),
+		EventsStored:          eventsStored,
+		EventsStoredReady:     eventsStoredReady,
+		EventsStoredStatus:    totalStatus,
+		EventsStoredUpdatedAt: formatEventCacheTime(totalUpdatedAt),
+		EventsStoredMessage:   totalMessage,
+		ActiveSubscriptions:   metrics.GetActiveSubscriptionsCount(),
+		MessagesSent:          metrics.GetMessagesSentCount(),
+		EventsPerSecond:       metrics.GetEventsPerSecond(),
+		ConnectionsPerSecond:  metrics.GetConnectionsPerSecond(),
+		AverageResponseTime:   metrics.GetAverageResponseTime(),
+		ErrorRate:             metrics.GetErrorRate(),
+		MemoryUsage:           memUsage,
+		LoadPercentage:        loadPercentage,
 	}
 
 	return stats
@@ -683,16 +717,78 @@ type NIPRowData struct {
 	RowTotal    int64   `json:"row_total"`
 }
 
-// getCachedEventCount returns the latest event total without making a request wait for the database.
+type eventCacheSnapshot struct {
+	data       EventBreakdownData
+	updatedAt  time.Time
+	refreshing bool
+	lastErr    error
+}
+
+func (h *Handler) eventCacheSnapshot() eventCacheSnapshot {
+	h.eventsCacheMu.RLock()
+	defer h.eventsCacheMu.RUnlock()
+	return eventCacheSnapshot{
+		data:       h.eventsCache,
+		updatedAt:  h.eventsCacheUpdatedAt,
+		refreshing: h.eventsCacheRefreshing,
+		lastErr:    h.eventsCacheLastErr,
+	}
+}
+
+func eventCacheState(updatedAt time.Time, refreshing bool, lastErr error) (string, string) {
+	switch {
+	case !updatedAt.IsZero() && refreshing:
+		return "refreshing", "Refreshing archive telemetry in the background."
+	case !updatedAt.IsZero() && lastErr != nil:
+		return "stale", "Showing the last complete snapshot; refresh is retrying."
+	case !updatedAt.IsZero():
+		return "ready", "Archive telemetry is current."
+	case refreshing:
+		return "warming", "Preparing archive telemetry without blocking live relay metrics."
+	case lastErr != nil:
+		return "unavailable", "Archive telemetry is temporarily unavailable; retrying."
+	default:
+		return "pending", "Archive telemetry has not completed its first refresh."
+	}
+}
+
+func eventTotalState(updatedAt time.Time, refreshing bool, lastErr error) (string, string) {
+	switch {
+	case !updatedAt.IsZero() && refreshing:
+		return "refreshing", "Refreshing the 2026+ total in the background."
+	case !updatedAt.IsZero() && lastErr != nil:
+		return "stale", "Showing the last known total; refresh is retrying."
+	case !updatedAt.IsZero():
+		return "ready", "2026+ total is current."
+	case refreshing:
+		return "warming", "Reading the 2026+ total without blocking relay metrics."
+	case lastErr != nil:
+		return "unavailable", "Event total temporarily unavailable; retrying."
+	default:
+		return "pending", "Event total has not completed its first refresh."
+	}
+}
+
+func formatEventCacheTime(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339)
+}
+
+// getCachedEventCount returns a fast 2026+ total without waiting for the grouped archive query.
 func (h *Handler) getCachedEventCount() (int64, bool) {
 	h.eventsCacheMu.RLock()
-	count := h.eventsCacheGrandTotalLocked()
-	ready := !h.eventsCacheUpdatedAt.IsZero()
-	updatedAt := h.eventsCacheUpdatedAt
+	count := h.eventsTotal
+	ready := !h.eventsTotalUpdatedAt.IsZero()
+	updatedAt := h.eventsTotalUpdatedAt
+	refreshing := h.eventsTotalRefreshing
+	lastAttemptAt := h.eventsTotalLastAttemptAt
 	h.eventsCacheMu.RUnlock()
 
-	if !ready || time.Since(updatedAt) >= eventBreakdownCacheTTL {
-		h.requestEventBreakdownRefresh()
+	if (!ready || time.Since(updatedAt) >= eventBreakdownCacheTTL) &&
+		(!refreshing && (lastAttemptAt.IsZero() || time.Since(lastAttemptAt) >= eventRefreshRetryDelay)) {
+		h.requestEventTotalRefresh()
 	}
 	return count, ready
 }
@@ -705,6 +801,44 @@ func (h *Handler) eventsCacheGrandTotalLocked() int64 {
 	return total
 }
 
+// requestEventTotalRefresh starts the cheap direct-count refresh independently from the grouped archive query.
+func (h *Handler) requestEventTotalRefresh() {
+	if h.db == nil {
+		return
+	}
+
+	h.eventsCacheMu.Lock()
+	if h.eventsTotalRefreshing || (!h.eventsTotalLastAttemptAt.IsZero() && time.Since(h.eventsTotalLastAttemptAt) < eventRefreshRetryDelay) {
+		h.eventsCacheMu.Unlock()
+		return
+	}
+	h.eventsTotalRefreshing = true
+	h.eventsTotalLastAttemptAt = time.Now()
+	h.eventsCacheMu.Unlock()
+
+	go h.refreshEventTotal()
+}
+
+func (h *Handler) refreshEventTotal() {
+	ctx, cancel := context.WithTimeout(context.Background(), eventQueryTimeout)
+	defer cancel()
+
+	count, err := h.db.GetTotalEventCount2026Plus(ctx)
+	h.eventsCacheMu.Lock()
+	h.eventsTotalRefreshing = false
+	if err != nil {
+		h.eventsTotalLastErr = err
+		h.eventsCacheMu.Unlock()
+		h.logger.Warn("Failed to refresh direct event total", zap.Error(err))
+		return
+	}
+	h.eventsTotal = count
+	h.eventsTotalUpdatedAt = time.Now()
+	h.eventsTotalLastErr = nil
+	h.eventsCacheMu.Unlock()
+	metrics.EventsStored.Set(float64(count))
+}
+
 // requestEventBreakdownRefresh starts at most one background refresh at a time.
 func (h *Handler) requestEventBreakdownRefresh() {
 	if h.db == nil {
@@ -712,18 +846,19 @@ func (h *Handler) requestEventBreakdownRefresh() {
 	}
 
 	h.eventsCacheMu.Lock()
-	if h.eventsCacheRefreshing {
+	if h.eventsCacheRefreshing || (!h.eventsCacheLastAttemptAt.IsZero() && time.Since(h.eventsCacheLastAttemptAt) < eventRefreshRetryDelay) {
 		h.eventsCacheMu.Unlock()
 		return
 	}
 	h.eventsCacheRefreshing = true
+	h.eventsCacheLastAttemptAt = time.Now()
 	h.eventsCacheMu.Unlock()
 
 	go h.refreshEventBreakdown()
 }
 
 func (h *Handler) refreshEventBreakdown() {
-	ctx, cancel := context.WithTimeout(context.Background(), constants.HealthCheckTimeout*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), eventQueryTimeout)
 	defer cancel()
 
 	counts, err := h.db.GetEventCountsByKindMonthFromYear(ctx, 2026)
@@ -822,15 +957,22 @@ func (h *Handler) HandleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.eventsCacheMu.RLock()
-	data := h.eventsCache
-	ready := !h.eventsCacheUpdatedAt.IsZero()
-	updatedAt := h.eventsCacheUpdatedAt
-	h.eventsCacheMu.RUnlock()
-
-	if !ready || time.Since(updatedAt) >= eventBreakdownCacheTTL {
+	_, _ = h.getCachedEventCount()
+	snapshot := h.eventCacheSnapshot()
+	if snapshot.updatedAt.IsZero() || time.Since(snapshot.updatedAt) >= eventBreakdownCacheTTL {
 		h.requestEventBreakdownRefresh()
+		snapshot = h.eventCacheSnapshot()
 	}
+	eventStatus, eventMessage := eventCacheState(snapshot.updatedAt, snapshot.refreshing, snapshot.lastErr)
+
+	h.eventsCacheMu.RLock()
+	total := h.eventsTotal
+	totalReady := !h.eventsTotalUpdatedAt.IsZero()
+	totalUpdatedAt := h.eventsTotalUpdatedAt
+	totalRefreshing := h.eventsTotalRefreshing
+	totalLastErr := h.eventsTotalLastErr
+	h.eventsCacheMu.RUnlock()
+	totalStatus, totalMessage := eventTotalState(totalUpdatedAt, totalRefreshing, totalLastErr)
 
 	tmplPath := filepath.Join("web", "templates", "events.html")
 	funcMap := template.FuncMap{
@@ -853,25 +995,34 @@ func (h *Handler) HandleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lastUpdated := ""
-	if ready {
-		lastUpdated = updatedAt.UTC().Format(time.RFC3339)
-	}
+	lastUpdated := formatEventCacheTime(snapshot.updatedAt)
 	pageData := struct {
 		EventBreakdownData
-		Loading     bool
-		LastUpdated string
+		Loading           bool
+		LastUpdated       string
+		CacheStatus       string
+		CacheMessage      string
+		EventTotal        int64
+		EventTotalReady   bool
+		EventTotalStatus  string
+		EventTotalMessage string
 	}{
-		EventBreakdownData: data,
-		Loading:            !ready,
+		EventBreakdownData: snapshot.data,
+		Loading:            snapshot.updatedAt.IsZero(),
 		LastUpdated:        lastUpdated,
+		CacheStatus:        eventStatus,
+		CacheMessage:       eventMessage,
+		EventTotal:         total,
+		EventTotalReady:    totalReady,
+		EventTotalStatus:   totalStatus,
+		EventTotalMessage:  totalMessage,
 	}
 	if err := tmpl.Execute(w, pageData); err != nil {
 		h.logger.Error("Failed to execute events template", zap.Error(err))
 	}
 }
 
-// HandleEventsAPI returns the cached event breakdown and starts a refresh when the cache is cold or stale.
+// HandleEventsAPI returns cached event telemetry and starts refreshes without blocking requests.
 func (h *Handler) HandleEventsAPI(w http.ResponseWriter, r *http.Request) {
 	apiHeaders := APISecurityHeaders()
 	apiHeaders.Apply(w)
@@ -893,43 +1044,55 @@ func (h *Handler) HandleEventsAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_, _ = h.getCachedEventCount()
+	snapshot := h.eventCacheSnapshot()
+	if snapshot.updatedAt.IsZero() || time.Since(snapshot.updatedAt) >= eventBreakdownCacheTTL {
+		h.requestEventBreakdownRefresh()
+		snapshot = h.eventCacheSnapshot()
+	}
+
 	h.eventsCacheMu.RLock()
-	data := h.eventsCache
-	ready := !h.eventsCacheUpdatedAt.IsZero()
-	updatedAt := h.eventsCacheUpdatedAt
-	refreshing := h.eventsCacheRefreshing
-	lastErr := h.eventsCacheLastErr
+	totalEvents := h.eventsTotal
+	totalReady := !h.eventsTotalUpdatedAt.IsZero()
+	totalUpdatedAt := h.eventsTotalUpdatedAt
+	totalRefreshing := h.eventsTotalRefreshing
+	totalLastErr := h.eventsTotalLastErr
 	h.eventsCacheMu.RUnlock()
 
-	if !ready || time.Since(updatedAt) >= eventBreakdownCacheTTL {
-		h.requestEventBreakdownRefresh()
-		refreshing = true
-	}
-
-	status := "ready"
-	if !ready {
-		status = "loading"
-	}
-	updatedAtString := ""
-	if ready {
-		updatedAtString = updatedAt.UTC().Format(time.RFC3339)
-	}
+	status, message := eventCacheState(snapshot.updatedAt, snapshot.refreshing, snapshot.lastErr)
+	totalStatus, totalMessage := eventTotalState(totalUpdatedAt, totalRefreshing, totalLastErr)
 	response := struct {
-		Status     string             `json:"status"`
-		Refreshing bool               `json:"refreshing"`
-		UpdatedAt  string             `json:"updated_at,omitempty"`
-		Error      string             `json:"error,omitempty"`
-		Data       EventBreakdownData `json:"data"`
+		Status         string             `json:"status"`
+		Refreshing     bool               `json:"refreshing"`
+		UpdatedAt      string             `json:"updated_at,omitempty"`
+		Message        string             `json:"message,omitempty"`
+		Error          string             `json:"error,omitempty"`
+		TotalEvents    int64              `json:"total_events"`
+		TotalReady     bool               `json:"total_ready"`
+		TotalStatus    string             `json:"total_status"`
+		TotalUpdatedAt string             `json:"total_updated_at,omitempty"`
+		TotalMessage   string             `json:"total_message,omitempty"`
+		Data           EventBreakdownData `json:"data"`
+		TopKinds       []EventKindSummary `json:"top_kinds"`
+		EventKinds     []EventKindSummary `json:"event_kinds"`
 	}{
-		Status:     status,
-		Refreshing: refreshing,
-		UpdatedAt:  updatedAtString,
-		Data:       data,
+		Status:         status,
+		Refreshing:     snapshot.refreshing,
+		UpdatedAt:      formatEventCacheTime(snapshot.updatedAt),
+		Message:        message,
+		TotalEvents:    totalEvents,
+		TotalReady:     totalReady,
+		TotalStatus:    totalStatus,
+		TotalUpdatedAt: formatEventCacheTime(totalUpdatedAt),
+		TotalMessage:   totalMessage,
+		Data:           snapshot.data,
+		TopKinds:       h.getTopEventKinds(6),
+		EventKinds:     h.getTopEventKinds(65536),
 	}
-	if lastErr != nil && !ready {
-		response.Error = "Event data is temporarily unavailable; retrying."
+	if snapshot.lastErr != nil {
+		response.Error = "The grouped archive refresh has not completed."
 	}
-	if status == "loading" {
+	if snapshot.updatedAt.IsZero() {
 		w.WriteHeader(http.StatusAccepted)
 	} else {
 		w.WriteHeader(http.StatusOK)

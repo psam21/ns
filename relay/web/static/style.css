@@ -1073,3 +1073,90 @@ body.cockpit-page { background: var(--bg); color: var(--text); font-family: var(
 .nips-grid--cockpit::-webkit-scrollbar { width: 4px; height: 4px; }
 .nips-grid--cockpit::-webkit-scrollbar-track { background: var(--bg-raised); }
 .nips-grid--cockpit::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 4px; }
+
+
+/* ── Cockpit readability and state clarity pass ───────────── */
+.cockpit-page {
+  --text-dim: #456159;
+  --text-mute: #607771;
+  --border: #c5d4d0;
+  --border-hi: #93aaa4;
+  --bg-raised: #edf4f2;
+  font-size: 14px;
+  line-height: 1.45;
+}
+:root[data-theme="dark"] .cockpit-page {
+  --text-dim: #969f9c;
+  --text-mute: #68736f;
+  --border: #2a3532;
+  --border-hi: #485651;
+  --bg-raised: #171d1b;
+}
+.cockpit-page .cockpit-nav-meta,
+.cockpit-page .cockpit-nav-meta a,
+.cockpit-page .nav-clock { font-size: .62rem; }
+.cockpit-page .instrument-title .eyebrow { color: var(--text-dim); font-size: .61rem; }
+.cockpit-page .instrument-title h1 { font-size: clamp(1.35rem, 2.2vw, 1.9rem); }
+.cockpit-page .instrument-title p { color: var(--text-dim); font-size: .64rem; }
+.cockpit-page .endpoint-readout code { font-size: .7rem; }
+.cockpit-page .readout-label { color: var(--text-dim); font-size: .56rem; }
+.cockpit-page .metric-label { color: var(--text-dim); font-size: .57rem; font-weight: 600; }
+.cockpit-page .metric-value { font-size: 1.32rem; }
+.cockpit-page .metric-value--small { font-size: .88rem; }
+.cockpit-page .metric-sub { color: var(--text-dim); font-size: .58rem; }
+.cockpit-page .panel-kicker { font-size: .59rem; font-weight: 600; }
+.cockpit-page .console-heading h2 { font-size: 1.04rem; }
+.cockpit-page .console-status,
+.cockpit-page .node-badge,
+.cockpit-page .panel-state { font-size: .58rem; }
+.cockpit-page .console-search { font-size: .6rem; }
+.cockpit-page .gauge-label,
+.cockpit-page .gauge-unit { color: var(--text-dim); font-size: .53rem; }
+.cockpit-page .gauge strong { font-size: 1rem; }
+.cockpit-page .signal-header,
+.cockpit-page .signal-scale { font-size: .53rem; }
+.cockpit-page .traffic-foot { color: var(--text-dim); font-size: .57rem; }
+.cockpit-page .identity-grid span { color: var(--text-dim); font-size: .57rem; }
+.cockpit-page .identity-grid strong { font-size: .78rem; }
+.cockpit-page .node-footer { color: var(--text-dim); font-size: .56rem; }
+.cockpit-page .kind-table-head { color: var(--text-dim); font-size: .54rem; font-weight: 600; }
+.cockpit-page .kind-name strong { font-size: .62rem; }
+.cockpit-page .kind-name span,
+.cockpit-page .kind-count,
+.cockpit-page .kind-share small { color: var(--text-dim); font-size: .59rem; }
+.cockpit-page .kind-share small { color: var(--text); }
+.cockpit-page .telemetry-empty {
+  min-height: 6.7rem;
+  padding: .8rem .55rem;
+  border: 1px dashed var(--border-hi);
+  border-radius: .25rem;
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font-size: .65rem;
+}
+.cockpit-page .telemetry-empty > div { display: flex; flex-direction: column; gap: .18rem; }
+.cockpit-page .telemetry-empty strong { color: var(--text); font-family: var(--sans); font-size: .75rem; font-weight: 650; text-transform: capitalize; }
+.cockpit-page .telemetry-empty small { color: var(--text-dim); font-family: var(--mono); font-size: .58rem; }
+.cockpit-page .telemetry-empty[data-status="unavailable"] { border-color: rgba(192,57,43,.45); }
+.cockpit-page .telemetry-empty[data-status="unavailable"] .pulse-dot { background: var(--red); box-shadow: 0 0 8px rgba(192,57,43,.25); }
+.cockpit-page .is-hidden { display: none !important; }
+.cockpit-page .panel-state { color: var(--accent); font-family: var(--mono); text-transform: uppercase; }
+.cockpit-page .metric-cell--events[data-events-status="unavailable"] .metric-value,
+.cockpit-page .metric-cell--events[data-events-status="unavailable"] .metric-sub { color: var(--red); }
+.cockpit-page .metric-cell--events[data-events-status="warming"] .metric-value,
+.cockpit-page .metric-cell--events[data-events-status="pending"] .metric-value { color: var(--text-dim); }
+.cockpit-page .nips-grid--cockpit .nip-num { font-size: .62rem; }
+.cockpit-page .nips-grid--cockpit .nip-desc { color: var(--text-dim); font-size: .56rem; }
+.cockpit-page .registry-note,
+.cockpit-page .protocol-foot,
+.cockpit-page .connect-caption,
+.cockpit-page .source-panel p { color: var(--text-dim); font-size: .56rem; }
+.cockpit-page .access-note { margin-top: .5rem; color: var(--accent); font-family: var(--mono); font-size: .57rem; font-weight: 600; letter-spacing: .08em; }
+.cockpit-page .compact-console { min-height: 5.5rem; }
+.cockpit-page .foot--cockpit { font-size: .55rem; }
+
+@media (max-width: 650px) {
+  .cockpit-page { font-size: 13px; }
+  .cockpit-page .metric-value { font-size: 1.15rem; }
+  .cockpit-page .console-heading h2 { font-size: .98rem; }
+}
