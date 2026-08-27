@@ -312,7 +312,7 @@ func (h *Handler) HandleStatic(w http.ResponseWriter, r *http.Request) {
 
 	// Security headers and caching for static assets
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Cache-Control", "public, max-age=3600, immutable")
+	w.Header().Set("Cache-Control", "public, max-age=300, must-revalidate")
 
 	http.ServeFile(w, r, fullPath)
 }
