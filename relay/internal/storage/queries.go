@@ -48,7 +48,7 @@ func (db *DB) GetEvents(ctx context.Context, filter nostr.Filter) ([]nostr.Event
 	// This size balances memory usage with performance for
 	// typical filter cap used by the relay and reduces slice
 	// growth for common queries while keeping memory modest.
-	events := make([]nostr.Event, 0, constants.DefaultQueryPrealloc)	// Process rows
+	events := make([]nostr.Event, 0, constants.DefaultQueryPrealloc) // Process rows
 	for rows.Next() {
 		var evt nostr.Event
 		var createdAt int64
@@ -727,13 +727,14 @@ func (db *DB) IsVanishedPubkey(ctx context.Context, pubkey string) (bool, error)
 	}
 	return count > 0, nil
 }
+
 // EventCountByKindMonth represents event counts grouped by kind and month
 type EventCountByKindMonth struct {
-	Kind      int
-	Year      int
-	Month     int
-	Count     int64
-	KindName  string
+	Kind     int
+	Year     int
+	Month    int
+	Count    int64
+	KindName string
 }
 
 // GetEventCountsByKindMonth returns event counts grouped by kind and month for a given year
@@ -776,6 +777,53 @@ func (db *DB) GetEventCountsByKindMonth(ctx context.Context, year int) ([]EventC
 			Count:    count,
 			KindName: kindName,
 		})
+	}
+
+	return results, nil
+}
+
+// GetEventCountsByKindMonthFromYear returns event counts grouped by year, kind, and month from startYear onward.
+// The created_at range predicate can use the events_created_at_desc index, while the grouping happens once for all years.
+func (db *DB) GetEventCountsByKindMonthFromYear(ctx context.Context, startYear int) ([]EventCountByKindMonth, error) {
+	if !db.isConnected() {
+		return nil, fmt.Errorf("database is not connected")
+	}
+
+	startOfYear := time.Date(startYear, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
+	query := `
+		SELECT kind::int,
+		       EXTRACT(YEAR FROM to_timestamp(created_at))::int as year,
+		       EXTRACT(MONTH FROM to_timestamp(created_at))::int as month,
+		       COUNT(*) as count
+		FROM events
+		WHERE created_at >= $1
+		GROUP BY kind, year, month
+		ORDER BY year, kind, month
+	`
+
+	rows, err := db.Pool.Query(ctx, query, startOfYear)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query event counts from %d: %w", startYear, err)
+	}
+	defer rows.Close()
+
+	var results []EventCountByKindMonth
+	for rows.Next() {
+		var kind, year, month int
+		var count int64
+		if err := rows.Scan(&kind, &year, &month, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan event count row: %w", err)
+		}
+		results = append(results, EventCountByKindMonth{
+			Kind:     kind,
+			Year:     year,
+			Month:    month,
+			Count:    count,
+			KindName: constants.GetNIPName(kind),
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed while reading event counts: %w", err)
 	}
 
 	return results, nil

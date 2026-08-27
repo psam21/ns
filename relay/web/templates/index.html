@@ -39,7 +39,7 @@
         </div>
         <div class="stat">
           <a href="/events" class="stat-link">
-            <span class="stat-val" id="events-stored">{{.Stats.EventsStored}}</span>
+            <span class="stat-val{{if not .Stats.EventsStoredReady}} stat-loading{{end}}" id="events-stored">{{if .Stats.EventsStoredReady}}{{.Stats.EventsStored}}{{else}}Loading…{{end}}</span>
             <span class="stat-lbl">events</span>
           </a>
         </div>

@@ -139,6 +139,20 @@
         padding: 40px;
         color: var(--text-muted);
       }
+      .events-loading {
+        text-align: center;
+        padding: 64px 20px;
+        color: var(--text-muted);
+      }
+      .events-loading i {
+        color: var(--accent);
+        margin-bottom: 16px;
+      }
+      .events-updated {
+        color: var(--text-muted);
+        font-size: 0.78rem;
+        margin: -18px 0 24px;
+      }
       @media (max-width: 900px) {
         .events-table {
           display: block;
@@ -155,7 +169,13 @@
           <a href="/" class="back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
         </div>
 
-        {{if .Years}}
+        {{if .Loading}}
+          <div class="events-loading" id="events-loading" aria-live="polite">
+            <i class="fas fa-circle-notch fa-spin" style="font-size:2rem;display:block;"></i>
+            <p>Loading event data…</p>
+            <p>Historical totals are being prepared. This page will update automatically.</p>
+          </div>
+        {{else if .Years}}
           {{range .Years}}
           <div class="year-table-container">
             <h2>{{.Year}} <span style="font-size:0.8rem;color:var(--text-muted);font-weight:400;">({{.GrandTotal}} events)</span></h2>
@@ -208,10 +228,39 @@
             <p>No event data available for 2026 or later.</p>
           </div>
         {{end}}
+        {{if .LastUpdated}}
+          <p class="events-updated">Data refreshed {{.LastUpdated}}</p>
+        {{end}}
       </div>
     </div>
 
     <script>
+      async function refreshEventBreakdown() {
+        const loading = document.getElementById('events-loading');
+        try {
+          const response = await fetch('/api/events', { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+          const payload = await response.json();
+          if (payload.status === 'ready') {
+            window.location.reload();
+            return;
+          }
+          if (loading) {
+            const message = loading.querySelector('p:last-child');
+            if (message) message.textContent = payload.error || 'Historical totals are still being prepared. Retrying…';
+          }
+        } catch (error) {
+          if (loading) {
+            const message = loading.querySelector('p:last-child');
+            if (message) message.textContent = 'The data service is responding slowly. Retrying…';
+          }
+        }
+        window.setTimeout(refreshEventBreakdown, 2000);
+      }
+
+      {{if .Loading}}
+      window.setTimeout(refreshEventBreakdown, 250);
+      {{end}}
+
       function sortTable(year, sortBy) {
         const table = document.getElementById('table-' + year);
         const tbody = table.querySelector('tbody');

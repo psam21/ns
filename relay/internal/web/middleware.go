@@ -109,27 +109,27 @@ func applySecurityHeaders(w http.ResponseWriter, headers *SecurityHeaders) {
 	if headers.CSP != "" {
 		w.Header().Set("Content-Security-Policy", headers.CSP)
 	}
-	
+
 	if headers.HSTS != "" {
 		w.Header().Set("Strict-Transport-Security", headers.HSTS)
 	}
-	
+
 	if headers.XFrameOptions != "" {
 		w.Header().Set("X-Frame-Options", headers.XFrameOptions)
 	}
-	
+
 	if headers.XContentTypeOptions != "" {
 		w.Header().Set("X-Content-Type-Options", headers.XContentTypeOptions)
 	}
-	
+
 	if headers.ReferrerPolicy != "" {
 		w.Header().Set("Referrer-Policy", headers.ReferrerPolicy)
 	}
-	
+
 	if headers.PermissionsPolicy != "" {
 		w.Header().Set("Permissions-Policy", headers.PermissionsPolicy)
 	}
-	
+
 	if headers.XXSSProtection != "" {
 		w.Header().Set("X-XSS-Protection", headers.XXSSProtection)
 	}
@@ -163,12 +163,13 @@ type InputValidation struct {
 func DefaultInputValidation() *InputValidation {
 	// Compile safe path patterns for our endpoints
 	pathPatterns := []*regexp.Regexp{
-		regexp.MustCompile(`^/$`),                                // Root path
-		regexp.MustCompile(`^/events$`),                          // Events breakdown page
-		regexp.MustCompile(`^/api/info$`),                        // API info endpoint
-		regexp.MustCompile(`^/api/stats$`),                       // API stats endpoint
-		regexp.MustCompile(`^/api/metrics$`),                     // API metrics endpoint
-		regexp.MustCompile(`^/api/cluster$`),                     // API cluster endpoint
+		regexp.MustCompile(`^/$`),                                     // Root path
+		regexp.MustCompile(`^/events$`),                               // Events breakdown page
+		regexp.MustCompile(`^/api/info$`),                             // API info endpoint
+		regexp.MustCompile(`^/api/stats$`),                            // API stats endpoint
+		regexp.MustCompile(`^/api/metrics$`),                          // API metrics endpoint
+		regexp.MustCompile(`^/api/events$`),                           // API events endpoint
+		regexp.MustCompile(`^/api/cluster$`),                          // API cluster endpoint
 		regexp.MustCompile(`^/static/[a-zA-Z0-9._-]+\.[a-zA-Z0-9]+$`), // Static files with safe chars
 	}
 
@@ -193,6 +194,7 @@ func APIInputValidation() *InputValidation {
 		regexp.MustCompile(`^/api/info$`),
 		regexp.MustCompile(`^/api/stats$`),
 		regexp.MustCompile(`^/api/metrics$`),
+		regexp.MustCompile(`^/api/events$`),
 		regexp.MustCompile(`^/api/cluster$`),
 	}
 
@@ -460,12 +462,12 @@ func ValidatedHandlerFunc(validation *InputValidation, handlerFunc http.HandlerF
 
 // SecureValidatedHandlerFunc combines security headers with input validation for regular handlers
 func SecureValidatedHandlerFunc(handlerFunc http.HandlerFunc) http.HandlerFunc {
-	return SecurityHandlerFunc(DefaultSecurityHeaders(), 
+	return SecurityHandlerFunc(DefaultSecurityHeaders(),
 		ValidatedHandlerFunc(DefaultInputValidation(), handlerFunc))
 }
 
 // SecureValidatedAPIHandlerFunc combines security headers with input validation for API handlers
 func SecureValidatedAPIHandlerFunc(handlerFunc http.HandlerFunc) http.HandlerFunc {
-	return SecurityHandlerFunc(APISecurityHeaders(), 
+	return SecurityHandlerFunc(APISecurityHeaders(),
 		ValidatedHandlerFunc(APIInputValidation(), handlerFunc))
 }
