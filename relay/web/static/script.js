@@ -247,21 +247,9 @@ class RelayDashboard {
       // Update all the stats with real data
       if (data.stats) {
         this.updateStatElement('active-connections', data.stats.active_connections);
-        this.setText('active-connections-gauge', this.formatStatValue(data.stats.active_connections));
-        this.setText('events-per-second', Number(data.stats.events_per_second || 0).toFixed(2));
-        this.setText('response-time', Number(data.stats.average_response_time_ms || 0).toFixed(1));
-        this.setText('error-rate', `${Number(data.stats.error_rate || 0).toFixed(2)}%`);
         this.setText('load-percentage', `${Number(data.stats.load_percentage || 0).toFixed(1)}%`);
-        this.setText('load-reading', `${Number(data.stats.load_percentage || 0).toFixed(1)} / 100%`);
-        const loadBar = document.getElementById('load-bar');
-        if (loadBar) loadBar.style.width = `${Math.min(100, Math.max(0, Number(data.stats.load_percentage || 0)))}%`;
-        this.setText('messages-processed', this.formatStatValue(data.stats.messages_processed || 0));
-        this.setText('messages-sent', this.formatStatValue(data.stats.messages_sent || 0));
-        this.setText('active-subscriptions', this.formatStatValue(data.stats.active_subscriptions || 0));
         const eventsReady = Boolean(data.stats.events_stored_ready);
         const eventsStatus = data.stats.events_stored_status || (eventsReady ? 'ready' : 'warming');
-        const eventsCell = document.querySelector('.metric-cell--events');
-        if (eventsCell) eventsCell.dataset.eventsStatus = eventsStatus;
         this.updateStatElement('events-stored', eventsReady ? data.stats.events_stored : '—');
         document.getElementById('events-stored')?.classList.toggle('stat-loading', !eventsReady);
         const eventsMeta = document.getElementById('events-stored-meta');
@@ -277,7 +265,6 @@ class RelayDashboard {
       
       // Update online indicator
       this.updateOnlineIndicator(true);
-      this.addLastUpdatedIndicator();
       
     } catch (error) {
       console.warn('Failed to update stats:', error);
@@ -507,7 +494,7 @@ function formatUptime(seconds) {
   }
 }
 
-// Apply a light default with an optional persistent dark mode.
+// Apply a dark default with an optional persistent light mode.
 function applyTheme(theme) {
   const normalizedTheme = theme === 'dark' ? 'dark' : 'light';
   document.documentElement.dataset.theme = normalizedTheme;
@@ -523,13 +510,13 @@ function applyTheme(theme) {
 }
 
 function initThemeToggle() {
-  const savedTheme = window.localStorage.getItem('nostr-theme');
-  applyTheme(savedTheme === 'dark' ? 'dark' : 'light');
+  const savedTheme = window.localStorage.getItem('nostr-theme-v2');
+  applyTheme(savedTheme === 'light' ? 'light' : 'dark');
   const toggle = document.getElementById('theme-toggle');
   if (!toggle) return;
   toggle.addEventListener('click', () => {
     const nextTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-    window.localStorage.setItem('nostr-theme', nextTheme);
+    window.localStorage.setItem('nostr-theme-v2', nextTheme);
     applyTheme(nextTheme);
   });
 }
