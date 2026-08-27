@@ -27,9 +27,39 @@ fail() {
 }
 
 require_command() {
-    if ! command -v "$1" >/dev/null 2>&1; then
-        fail "missing command: $1"
-    fi
+	if ! command -v "$1" >/dev/null 2>&1; then
+		fail "missing command: $1"
+	fi
+}
+
+resolve_nak() {
+	if [[ -n "${NAK_BIN:-}" ]]; then
+		if [[ -x "$NAK_BIN" ]]; then
+			export PATH="$(dirname -- "$NAK_BIN"):$PATH"
+			return 0
+		fi
+		fail "NAK_BIN is not executable: $NAK_BIN"
+		return 1
+	fi
+	if command -v nak >/dev/null 2>&1; then
+		return 0
+	fi
+	local candidate
+	for candidate in "$RELAY_ROOT/bin/nak" "$RELAY_ROOT/tests/nips/bin/nak"; do
+		if [[ -x "$candidate" ]]; then
+			export PATH="$(dirname -- "$candidate"):$PATH"
+			return 0
+		fi
+	done
+	if command -v go >/dev/null 2>&1; then
+		candidate="$(go env GOPATH 2>/dev/null)/bin/nak"
+		if [[ -x "$candidate" ]]; then
+			export PATH="$(dirname -- "$candidate"):$PATH"
+			return 0
+		fi
+	fi
+	fail 'missing command: nak (set NAK_BIN or install github.com/fiatjaf/nak@v0.20.6)'
+	return 1
 }
 
 printf 'Full NIP coverage validation\n'
@@ -40,9 +70,10 @@ for command_name in awk sort comm find grep sed bash go node; do
     require_command "$command_name"
 done
 if [[ "$LIVE" == true ]]; then
-    for command_name in curl jq nak; do
-        require_command "$command_name"
-    done
+	for command_name in curl jq; do
+		require_command "$command_name"
+	done
+	resolve_nak || true
 fi
 
 if [[ ! -f "$MATRIX" ]]; then
@@ -137,11 +168,7 @@ else
 fi
 
 if [[ "$LIVE" == true && "$failures" -eq 0 ]]; then
-    for command_name in curl jq nak; do
-        if ! command -v "$command_name" >/dev/null 2>&1; then
-            continue
-        fi
-    done
+
 
     if INFO=$(curl --fail --silent --show-error --max-time 10 \
         -H 'Accept: application/nostr+json' "$HTTP_URL"); then

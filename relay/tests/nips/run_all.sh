@@ -11,17 +11,50 @@ TEST_TIMEOUT="${TEST_TIMEOUT:-120}"
 NIP_AUTH_BRIDGE="${NIP_AUTH_BRIDGE:-true}"
 NIP_AUTH_RELAY_URL="${NIP_AUTH_RELAY_URL:-$RELAY_URL}"
 
-required_commands=(bash curl jq nak timeout)
+required_commands=(bash curl jq timeout)
 missing=()
 for command_name in "${required_commands[@]}"; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
         missing+=("$command_name")
     fi
 done
-
 if ((${#missing[@]} > 0)); then
     printf 'Missing required command(s): %s\n' "${missing[*]}" >&2
     printf 'Install the missing tools, then rerun the suite.\n' >&2
+    exit 2
+fi
+
+resolve_nak() {
+    if [[ -n "${NAK_BIN:-}" ]]; then
+        if [[ -x "$NAK_BIN" ]]; then
+            export PATH="$(dirname -- "$NAK_BIN"):$PATH"
+            return 0
+        fi
+        printf 'NAK_BIN is not executable: %s\n' "$NAK_BIN" >&2
+        return 1
+    fi
+    if command -v nak >/dev/null 2>&1; then
+        return 0
+    fi
+    local candidate
+    for candidate in "$RELAY_ROOT/bin/nak" "$RELAY_ROOT/tests/nips/bin/nak"; do
+        if [[ -x "$candidate" ]]; then
+            export PATH="$(dirname -- "$candidate"):$PATH"
+            return 0
+        fi
+    done
+    if command -v go >/dev/null 2>&1; then
+        candidate="$(go env GOPATH 2>/dev/null)/bin/nak"
+        if [[ -x "$candidate" ]]; then
+            export PATH="$(dirname -- "$candidate"):$PATH"
+            return 0
+        fi
+    fi
+    printf 'Missing required command: nak\n' >&2
+    printf 'Set NAK_BIN or install github.com/fiatjaf/nak@v0.20.6, then rerun the suite.\n' >&2
+    return 1
+}
+if ! resolve_nak; then
     exit 2
 fi
 

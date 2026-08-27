@@ -16,6 +16,15 @@ Required tools for the common suite are:
 - `python3`, `openssl`, `base64`, `od`, and `sha256sum` for selected scripts
 - `go` when the runner’s authenticated WebSocket bridge or NIP-42 probe is enabled
 
+On Fedora, install the pinned test client once and make Go’s bin directory visible:
+
+```bash
+go install github.com/fiatjaf/nak@v0.20.6
+export PATH="$(go env GOPATH)/bin:$PATH"
+```
+
+Alternatively, point the suite at an existing executable with `NAK_BIN=/absolute/path/to/nak`. The runners also discover `relay/bin/nak`, `relay/tests/nips/bin/nak`, and `$(go env GOPATH)/bin/nak` automatically.
+
 The project-specific Time Capsules test may require additional Python packages listed in `nip-xx-time-capsules/requirements-test.txt` when that directory is present.
 
 ## Configuration
@@ -29,9 +38,10 @@ export TEST_TIMEOUT=30                    # Optional per-test timeout
 export VERBOSE=1                          # Optional script-specific verbosity
 export NIP_AUTH_BRIDGE=true                 # Bridge upstream AUTH challenges for nak
 export NIP_AUTH_RELAY_URL=wss://nostr.ltd   # URL placed in NIP-42 AUTH events
+export NAK_BIN="/absolute/path/to/nak"       # Optional explicit nak executable
 ```
 
-The default is intentionally local. The suite no longer contains hard-coded production or legacy fork-domain endpoints. Override `RELAY_URL` and `HTTP_URL` only when you have permission to test another relay.
+The default is intentionally local. The suite no longer contains hard-coded production or legacy fork-domain endpoints. Override `RELAY_URL` and `HTTP_URL` only when you have permission to test another relay. Live preflight remains a hard gate: if `nak` cannot be located, the relay is not contacted and the command exits non-zero.
 
 ## Run the suite
 
