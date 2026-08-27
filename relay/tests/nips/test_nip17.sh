@@ -71,18 +71,34 @@ simulate_sender() {
     
     # Publish to relay
     echo -e "${YELLOW}Sender: Publishing gift-wrapped message...${NC}"
-    echo "$GIFT_WRAPPED" | nak event "$RELAY"
+    echo "$GIFT_WRAPPED" | nak --sec "$sender_privkey" --auth event "$RELAY"
     
     # Wait a moment for the event to be processed
     sleep 2
     
     # Verify the event was stored
     echo -e "${YELLOW}Sender: Verifying event was stored...${NC}"
-    RESPONSE=$(nak req -i "$EVENT_ID" "$RELAY")
+    RESPONSE=$(nak --sec "$sender_privkey" --auth req -i "$EVENT_ID" "$RELAY")
     echo -e "${GREEN}Sender: Message sent successfully with ID: $EVENT_ID${NC}"
     
     # Export the EVENT_ID for use in the receiver function
     export EVENT_ID
+}
+
+fetch_published_event() {
+    local event_id=$1
+    local attempts=${NIP17_FETCH_ATTEMPTS:-6}
+    local response
+    for ((attempt = 1; attempt <= attempts; attempt++)); do
+        if response=$(nak --sec "$RECIPIENT_PRIVKEY" --auth req -i "$event_id" "$RELAY" 2>/dev/null) && \
+            printf '%s' "$response" | jq -e --arg id "$event_id" 'select(type == "object" and .id == $id)' >/dev/null 2>&1; then
+            printf '%s' "$response"
+            return 0
+        fi
+        sleep "${NIP17_FETCH_DELAY:-2}"
+    done
+    echo -e "${RED}Error: Event $event_id was not retrievable after $attempts attempts${NC}" >&2
+    return 1
 }
 
 # Function to simulate receiver
@@ -94,13 +110,12 @@ simulate_receiver() {
     
     echo -e "${YELLOW}Receiver: Checking for message with ID: $event_id${NC}"
     echo -e "${YELLOW}Receiver: Fetching specific event by ID${NC}"
-    # Directly fetch the event by ID instead of using a time-based filter
-    RECIPIENT_SUB=$(nak req -k 1059 "$RELAY" -i "$event_id")
-    
+    # Fetch the exact event after asynchronous storage has had time to commit.
+    RECIPIENT_SUB=$(fetch_published_event "$event_id") || return 1
+
     # First, check if we got a valid JSON response
-    if ! echo "$RECIPIENT_SUB" | jq . > /dev/null 2>&1; then
-        echo -e "${RED}Error: Failed to get valid JSON response${NC}"
-        echo -e "${RED}Response was: $RECIPIENT_SUB${NC}"
+    if ! echo "$RECIPIENT_SUB" | jq -e --arg id "$event_id" 'type == "object" and .id == $id' >/dev/null 2>&1; then
+        echo -e "${RED}Error: Failed to get the published gift-wrap event${NC}" >&2
         return 1
     fi
 

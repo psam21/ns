@@ -61,7 +61,7 @@ HTTP_URL=http://localhost:8080 \
   ./tests/nips/run_all.sh
 ```
 
-`run_all.sh` checks prerequisites, builds a repository-owned authenticated WebSocket bridge when enabled, runs each `test_nip*.sh` script in sorted order, prints a pass/fail summary, and exits non-zero if any script fails. The bridge answers an upstream NIP-42 challenge with an ephemeral test signer and keeps the existing `nak`-based scripts unchanged. Set `NIP_AUTH_BRIDGE=false` for a local relay that does not issue eager AUTH challenges. The suite is intentionally not part of the default unit-test command because it needs a live relay and mutates test data.
+`run_all.sh` checks prerequisites, builds a repository-owned authenticated WebSocket bridge when enabled, runs each declared integration script in sorted order, prints a pass/fail summary, and exits non-zero if any script fails. The bridge answers an upstream NIP-42 challenge with an ephemeral test signer for ordinary scripts. Identity-sensitive NIP-17 and NIP-59 tests are routed directly to the configured upstream relay so their generated sender/recipient keys can authenticate private-event reads. Set `NIP_AUTH_BRIDGE=false` for a local relay that does not issue eager AUTH challenges. The suite is intentionally not part of the default unit-test command because it needs a live relay and mutates test data.
 
 ### Validate all 77 advertised identifiers
 

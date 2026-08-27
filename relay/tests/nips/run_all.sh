@@ -143,12 +143,19 @@ if [[ "$NIP_AUTH_BRIDGE" == "true" && "$RELAY_URL" =~ ^wss?:// ]]; then
 fi
 
 for test_file in "${tests[@]}"; do
-    test_name=$(basename "$test_file")
-    printf '\n=== %s ===\n' "$test_name"
-    if RELAY_URL="$test_relay_url" HTTP_URL="$HTTP_URL" \
-        NIP_AUTH_UPSTREAM_URL="$RELAY_URL" NIP_AUTH_RELAY_URL="$NIP_AUTH_RELAY_URL" \
-        NIP_AUTH_PROBE_BINARY="$auth_probe_binary" \
-        timeout --foreground "$TEST_TIMEOUT" bash "$test_file"; then
+	test_name=$(basename "$test_file")
+	printf '\n=== %s ===\n' "$test_name"
+	run_relay_url="$test_relay_url"
+	if [[ "$test_name" == "test_nip17.sh" || "$test_name" == "test_nip59.sh" ]]; then
+		# These tests query recipient-private events and must authenticate as the
+		# generated recipient, so do not hide the upstream session behind the
+		# bridge signer.
+		run_relay_url="$RELAY_URL"
+	fi
+	if RELAY_URL="$run_relay_url" HTTP_URL="$HTTP_URL" \
+		NIP_AUTH_UPSTREAM_URL="$RELAY_URL" NIP_AUTH_RELAY_URL="$NIP_AUTH_RELAY_URL" \
+		NIP_AUTH_PROBE_BINARY="$auth_probe_binary" \
+		timeout --foreground "$TEST_TIMEOUT" bash "$test_file"; then
         ((passed += 1))
         printf 'PASS: %s\n' "$test_name"
     else
