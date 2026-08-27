@@ -12,7 +12,7 @@ func GetFullVersionInfo() string {
 	return fmt.Sprintf("Version: %s\nCommit: %s\nBuilt: %s", version, commit, date)
 }
 
-// GetVersionWithPrefix returns version with "shugur relay version: " prefix
+// GetVersionWithPrefix returns the nostr.ltd relay version prefix
 func GetVersionWithPrefix() string {
-	return fmt.Sprintf("shugur relay version: %s", version)
+	return fmt.Sprintf("nostr.ltd relay version: %s", version)
 }

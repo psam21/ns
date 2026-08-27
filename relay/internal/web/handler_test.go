@@ -1,6 +1,9 @@
 package web
 
 import (
+	"html/template"
+	"math"
+	"path/filepath"
 	"testing"
 
 	"github.com/Shugur-Network/relay/internal/storage"
@@ -36,5 +39,41 @@ func TestBuildEventBreakdownData(t *testing.T) {
 	}
 	if data.Years[1].GrandTotal != 6 {
 		t.Fatalf("expected 2027 grand total 6, got %d", data.Years[1].GrandTotal)
+	}
+}
+
+func TestDashboardTemplateParses(t *testing.T) {
+	path := filepath.Join("..", "..", "web", "templates", "index.html")
+	_, err := template.New("index.html").Funcs(template.FuncMap{
+		"formatNIP":      func(value interface{}) string { return "01" },
+		"nipDescription": func(value interface{}) string { return "Protocol" },
+	}).ParseFiles(path)
+	if err != nil {
+		t.Fatalf("dashboard template should parse: %v", err)
+	}
+}
+
+func TestGetTopEventKinds(t *testing.T) {
+	h := &Handler{eventsCache: EventBreakdownData{Years: []YearEventData{{
+		Year: 2026,
+		Rows: []NIPRowData{
+			{Kind: 1, KindName: "Basic Protocol", RowTotal: 75},
+			{Kind: 7, KindName: "Browser Extension", RowTotal: 25},
+			{Kind: 42, KindName: "Authentication", RowTotal: 10},
+		},
+	}}}}
+
+	items := h.getTopEventKinds(2)
+	if len(items) != 2 {
+		t.Fatalf("expected two top kinds, got %d", len(items))
+	}
+	if items[0].Kind != 1 || items[0].Count != 75 {
+		t.Fatalf("unexpected first top kind: %#v", items[0])
+	}
+	if items[1].Kind != 7 || items[1].Count != 25 {
+		t.Fatalf("unexpected second top kind: %#v", items[1])
+	}
+	if math.Abs(items[0].Share-68.18181818181819) > 0.000001 || math.Abs(items[1].Share-22.727272727272727) > 0.000001 {
+		t.Fatalf("unexpected shares: %#v", items)
 	}
 }

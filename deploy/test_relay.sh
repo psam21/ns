@@ -27,7 +27,7 @@ echo "$EVENTS" | head -3
 echo ""
 
 echo "TEST 4: Publish Metadata (Kind 0)"
-RESULT=$($NAK event --sec "$SK" -k 0 -c '{"name":"testbot","about":"Shugur relay test"}' "$RELAY" </dev/null 2>&1)
+RESULT=$($NAK event --sec "$SK" -k 0 -c '{"name":"testbot","about":"nostr.ltd relay test"}' "$RELAY" </dev/null 2>&1)
 echo "$RESULT" | head -3
 echo ""
 

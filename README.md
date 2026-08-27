@@ -1,151 +1,115 @@
 # nostr.ltd
 
-Nostr relay and media server deployment for **nostr.ltd**, powered by [Shugur Relay](https://github.com/Shugur-Network/relay) and [Blossom](https://github.com/hzrd149/blossom-server).
+**nostr.ltd** is an open public Nostr relay and media service. Connect a compatible Nostr client to `wss://nostr.ltd` to publish and read signed events, or use the companion Blossom server for Nostr-authenticated media.
+
+## What is Nostr?
+
+Nostr is an open protocol for sharing cryptographically signed events across a network of independent relays. Your identity is a keypair rather than an account owned by one platform, and clients can connect to multiple relays so users keep control over where they publish and read.
+
+Learn more from the [NIP-01 protocol specification](https://nips.nostr.com/1) and the [Nostr protocol community site](https://nostr.org/).
 
 ## Live Services
 
 | Service | URL |
 |---|---|
-| **Relay (WebSocket)** | `wss://nostr.ltd` |
-| **Relay Dashboard** | [https://nostr.ltd](https://nostr.ltd) |
-| **Blossom Media Server** | `https://blossom.nostr.ltd` |
-| **NIP-11 Info** | `curl -H "Accept: application/nostr+json" https://nostr.ltd` |
+| **Relay WebSocket** | `wss://nostr.ltd` |
+| **Relay landing page** | [https://nostr.ltd](https://nostr.ltd) |
+| **Event activity** | [https://nostr.ltd/events](https://nostr.ltd/events) |
+| **Blossom media server** | [https://blossom.nostr.ltd](https://blossom.nostr.ltd) |
+| **NIP-11 relay information** | `curl -H "Accept: application/nostr+json" https://nostr.ltd` |
+
+## Why use nostr.ltd?
+
+The service is designed as transparent public infrastructure for Nostr. It offers a broad protocol surface, PostgreSQL-backed event storage, a live status dashboard, an inspectable event breakdown, and a companion media server. There is no account to create for relay access; add the WebSocket endpoint to a compatible client and keep your other relay connections as you prefer.
 
 ## Architecture
 
-```
-Nostr Clients (Damus, Amethyst, Primal, etc.)
-        │
-        ├─── wss:// ──────────────────┐
-        │                             │
-        ├─── https:// (media) ───┐    │
-        ▼                        ▼    ▼
-┌─────────────────────────────────────────┐
-│              Caddy (TLS)                │  ← Auto Let's Encrypt
-│              Port 80/443                │
-└────┬───────────────────────────┬────────┘
-     │ blossom.nostr.ltd         │ nostr.ltd / www.nostr.ltd
-     ▼                           ▼
-┌──────────────┐          ┌─────────────────┐
-│   Blossom    │          │  Shugur Relay   │
-│  Port 3000   │          │   Port 8080     │
-└──────┬───────┘          └────────┬────────┘
-       │                           │
-       ▼                           ▼
-┌──────────────┐          ┌─────────────────┐
-│  AWS S3      │          │  PostgreSQL 16  │
-│  (blobs)     │          │  (local)        │
-└──────────────┘          └─────────────────┘
+```text
+Nostr clients (desktop, web, and mobile)
+             │
+             ├── wss://nostr.ltd ────────┐
+             ├── https:// media ─────┐   │
+             ▼                       ▼   ▼
+       ┌─────────────────────────────────────┐
+       │             Caddy (TLS)              │
+       │             Ports 80 / 443          │
+       └──────────────┬──────────────┬───────┘
+                      │              │
+                      ▼              ▼
+             ┌──────────────┐  ┌────────────────┐
+             │    Blossom   │  │  Nostr relay   │
+             │   Port 3000  │  │   Port 8080    │
+             └──────┬───────┘  └────────┬───────┘
+                    ▼                   ▼
+             ┌──────────────┐  ┌────────────────┐
+             │    AWS S3    │  │ PostgreSQL 16  │
+             │    (blobs)   │  │    (events)    │
+             └──────────────┘  └────────────────┘
 ```
 
-## Infrastructure
+## Supported NIPs
 
-- **Compute:** AWS EC2 t4g.small (ARM Graviton, 2 vCPU, 2 GB RAM) — ap-south-1 (Mumbai)
-- **Database:** PostgreSQL 16 (local on EC2)
-- **Blob Storage:** AWS S3 (`nostr-ltd-blossom` bucket, ap-south-1)
-- **TLS:** Caddy with automatic Let's Encrypt
-- **Domain:** nostr.ltd (BigRock registrar)
+The relay currently advertises the supported NIPs listed in [`relay/internal/constants/relay_metadata.go`](relay/internal/constants/relay_metadata.go). The landing page presents the live list with links to each specification.
 
-## Supported NIPs (78)
+Custom protocol work includes **XX — Time Capsules** and **YY — Nostr Web Pages**. Their implementation lives in the relay source under [`relay/internal/relay/nips`](relay/internal/relay/nips).
 
-01, 02, 05, 07, 09, 10, 11, 13, 17, 18, 19, 21, 22, 23, 24, 25, 27, 29, 30, 32, 34, 35, 36, 37, 38, 39, 40, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 56, 57, 58, 59, 60, 61, 62, 64, 65, 66, 67, 69, 70, 71, 75, 77, 78, 84, 85, 86, 87, 88, 89, 90, 92, 94, 98, 99, 7D, A0, A4, B0, B7, C0, C7, CC, F4
+## Blossom media server
 
-Plus custom NIPs: XX (Time Capsules), YY (Nostr Web Pages)
-
-## Blossom Media Server
-
-[Blossom](https://github.com/hzrd149/blossom) (Blobs Stored Simply on Mediaservers) provides content-addressable file storage with Nostr authentication.
-
-**Supported BUDs:** BUD-01, BUD-02, BUD-03, BUD-04, BUD-05, BUD-06, BUD-07, BUD-08
+The companion [Blossom](https://github.com/hzrd149/blossom-server) service provides content-addressable media storage with Nostr authentication.
 
 | Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/<sha256>` | GET | Retrieve blob by hash |
-| `/<sha256>` | HEAD | Check if blob exists |
-| `/upload` | PUT | Upload blob (auth required) |
-| `/<sha256>` | DELETE | Delete blob (auth required) |
-| `/mirror` | PUT | Mirror blob from URL |
-| `/media` | PUT | Upload + optimize media |
+|---|---|---|
+| `/<sha256>` | GET | Retrieve a blob by hash |
+| `/<sha256>` | HEAD | Check whether a blob exists |
+| `/upload` | PUT | Upload a blob (authentication required) |
+| `/<sha256>` | DELETE | Delete a blob (authentication required) |
+| `/mirror` | PUT | Mirror a blob from a URL |
+| `/media` | PUT | Upload and optimize media |
 
-**Upload limit:** 10MB hard cap (enforced at header check and during streaming).
+The upload limit is 10 MB. Files are stored in S3, authenticated with kind `24242` events, and deleted from S3 when no owners remain.
 
-Files are stored in S3 with no expiration (perpetual) and authenticated via kind `24242` Nostr events (BUD-06). Deletes are hard deletes — blobs are purged from S3 when no owners remain.
+## Repository structure
 
-**Admin Dashboard:** `https://blossom.nostr.ltd/admin/` (basic auth, credentials in config)
-
-## Repository Structure
-
-```
+```text
 ├── deploy/
-│   ├── config.yaml            # Relay production config (credentials via env vars)
+│   ├── config.yaml            # Production relay configuration
 │   ├── relay.service          # Relay systemd unit
 │   ├── blossom.service        # Blossom systemd unit
-│   ├── Caddyfile              # Caddy reverse proxy config
-│   └── test_relay.sh          # Relay test suite
-├── blossom/                   # Vendored fork of hzrd149/blossom-server
-│   ├── config.yml             # Production config (S3 backend, credentials via env vars)
+│   ├── Caddyfile              # TLS reverse proxy configuration
+│   └── test_relay.sh          # Relay smoke-test suite
+├── blossom/                   # Blossom media server and admin dashboard
 │   ├── src/                   # Server source (TypeScript)
 │   ├── admin/                 # Admin dashboard (React)
 │   └── public/                # Upload UI
-└── relay/                     # Shugur Relay source (PostgreSQL backend)
+└── relay/                     # Nostr relay source
     ├── internal/
-    │   ├── constants/         # Relay metadata, NIP lists
-    │   ├── relay/
-    │   │   ├── nips/          # NIP validators (23+ files)
-    │   │   ├── plugin_validator.go  # Central event validator
-    │   │   ├── connection.go  # WebSocket handler, NIP-42/67
-    │   │   └── subscription.go
+    │   ├── constants/         # Relay metadata and supported NIPs
+    │   ├── relay/             # WebSocket handling and validation
     │   ├── storage/           # PostgreSQL storage layer
-    │   ├── web/               # Dashboard HTTP handler
-    │   └── config/            # Configuration
+    │   └── web/                # Dashboard handlers and templates
     └── cmd/                   # CLI entry point
 ```
 
-## Patches Applied
-
-The relay source includes patches for PostgreSQL support:
-
-- **`internal/config/database.go`** — Added `URL` field for direct connection strings
-- **`internal/config/defaults.yaml`** — Added `URL` default and `RATE_LIMIT.BAN_DURATION`
-- **`internal/config/config.go`** — Conditional validation when using URL vs Server+Port
-- **`internal/application/node_builder.go`** — Cloud mode in `BuildDB()` with `replaceDBNameInURL()` helper
-- **`internal/storage/schema.go`** — Fast-path schema init (skips DDL when tables exist), `splitSQL()` for pgx compatibility
-- **`internal/storage/schema.sql`** — PostgreSQL-optimized schema with `nostr_d_tag()` immutable function
-
-## Security
-
-All security checks pass:
-- ✅ 0 Dependabot alerts
-- ✅ 0 npm vulnerabilities (relay, blossom, blossom/admin)
-- ✅ 0 Code scanning alerts
-- ✅ 0 Open PRs
-
 ## Deployment
 
-### Relay
+Build the relay for the AWS Graviton ARM64 host:
 
 ```bash
-# Build for ARM64
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bin/relay-arm64 ./cmd
-
-# On server: credentials are in /opt/relay/.env (never in git)
-sudo systemctl start relay
 ```
 
-### Blossom
+The production service uses `/opt/relay/relay-arm64`, `/opt/relay/config.yaml`, and `/opt/relay/.env`. Credentials remain outside the repository and are injected through the systemd environment file.
+
+Build the Blossom service with:
 
 ```bash
-# Build TypeScript + admin dashboard
 pnpm install && npx tsc && npx vite build
-
-# Deploy to /opt/blossom/ on server
-# Credentials are in /opt/blossom/.env (S3_ACCESS_KEY, S3_SECRET_KEY, etc.)
-sudo systemctl start blossom
 ```
+
+See [`deploy/relay.service`](deploy/relay.service), [`deploy/blossom.service`](deploy/blossom.service), and [`deploy/Caddyfile`](deploy/Caddyfile) for the production service definitions.
 
 ## Security
 
-- All credentials injected via `EnvironmentFile=` in systemd (never in config files or git)
-- S3 access via dedicated IAM user with least-privilege policy
-- TLS termination at Caddy layer
-- systemd hardening: `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=true`
+Production credentials are injected through systemd environment files. The relay uses a dedicated S3 IAM identity, TLS terminates at Caddy, and the systemd services apply hardening such as `NoNewPrivileges`, `ProtectSystem`, and `ProtectHome`.
+
+For questions or operational contact, use the address configured in the deployment environment rather than committing credentials or secrets to the repository.

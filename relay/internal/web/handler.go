@@ -38,6 +38,7 @@ type DashboardData struct {
 	CustomNIPs    []constants.CustomNIP `json:"custom_nips"`
 	Limitation    *LimitationData       `json:"limitation"`
 	Stats         *StatsData            `json:"stats"`
+	TopKinds      []EventKindSummary    `json:"top_kinds"`
 	LiveSince     string                `json:"live_since"`
 	Cluster       *storage.DatabaseInfo `json:"cluster"`
 }
@@ -68,6 +69,14 @@ type StatsData struct {
 	ErrorRate            float64          `json:"error_rate"`
 	MemoryUsage          map[string]int64 `json:"memory_usage"`
 	LoadPercentage       float64          `json:"load_percentage"`
+}
+
+// EventKindSummary represents an aggregate count for a Nostr event kind.
+type EventKindSummary struct {
+	Kind     int     `json:"kind"`
+	KindName string  `json:"kind_name"`
+	Count    int64   `json:"count"`
+	Share    float64 `json:"share"`
 }
 
 // Handler provides HTTP handlers for the web dashboard
@@ -452,6 +461,7 @@ func (h *Handler) getDashboardData(host string) *DashboardData {
 			PaymentRequired:  metadata.Limitation.PaymentRequired,
 		},
 		Stats:     h.getStatsData(),
+		TopKinds:  h.getTopEventKinds(6),
 		LiveSince: h.liveSince.Format("Jan 2, 2006"),
 		Cluster:   clusterInfo,
 	}
@@ -494,6 +504,49 @@ func (h *Handler) getStatsData() *StatsData {
 	}
 
 	return stats
+}
+
+// getTopEventKinds returns the most common event kinds from the cached breakdown.
+func (h *Handler) getTopEventKinds(limit int) []EventKindSummary {
+	if limit <= 0 {
+		return nil
+	}
+
+	h.eventsCacheMu.RLock()
+	data := h.eventsCache
+	h.eventsCacheMu.RUnlock()
+
+	counts := make(map[int]EventKindSummary)
+	var total int64
+	for _, year := range data.Years {
+		for _, row := range year.Rows {
+			item := counts[row.Kind]
+			item.Kind = row.Kind
+			item.KindName = row.KindName
+			item.Count += row.RowTotal
+			counts[row.Kind] = item
+			total += row.RowTotal
+		}
+	}
+	if total == 0 {
+		return nil
+	}
+
+	items := make([]EventKindSummary, 0, len(counts))
+	for _, item := range counts {
+		item.Share = float64(item.Count) / float64(total) * 100
+		items = append(items, item)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Count == items[j].Count {
+			return items[i].Kind < items[j].Kind
+		}
+		return items[i].Count > items[j].Count
+	})
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return items
 }
 
 // getClusterData retrieves database information

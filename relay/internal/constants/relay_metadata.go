@@ -16,11 +16,11 @@ const (
 
 // Default relay metadata constants
 const (
-	DefaultRelayDescription = "High-performance, reliable, scalable Nostr relay for decentralized communication. Supports time capsules with threshold witness mode and VDF timelock (coming soon)."
-	DefaultRelayContact     = "support@shugur.com"
-	DefaultRelaySoftware    = "shugur"
+	DefaultRelayDescription = "Open public Nostr relay infrastructure for portable identity, signed events, and resilient communication."
+	DefaultRelayContact     = "epochshield@proton.me"
+	DefaultRelaySoftware    = "nostr.ltd"
 	DefaultRelayVersion     = "2.0.0"
-	DefaultRelayIcon        = "https://avatars.githubusercontent.com/u/198367099?s=400&u=2bc76d4fe6f57a1c39ef00fd784dd0bf85d79bda&v=4"
+	DefaultRelayIcon        = "https://nostr.ltd/favicon.ico"
 )
 
 // DefaultSupportedNIPs lists the NIPs supported by the relay
@@ -118,13 +118,13 @@ var DefaultCustomNIPs = []CustomNIP{
 		ID:          "XX",
 		Name:        "Time Capsules",
 		Description: "Time-locked message delivery with threshold witness mode and VDF support",
-		Link:        "https://github.com/Shugur-Network/NIP-XX_Time-Capsules",
+		Link:        "https://github.com/psam21/ns/tree/main/relay/internal/relay/nips",
 	},
 	{
 		ID:          "YY",
 		Name:        "Nostr Web Pages",
 		Description: "Censorship-resistant static websites on Nostr",
-		Link:        "https://github.com/Shugur-Network/nw-nips",
+		Link:        "https://github.com/psam21/ns/tree/main/relay/internal/relay/nips",
 	},
 }
 
@@ -186,10 +186,10 @@ func DefaultRelayMetadata(cfg *config.Config) nip11.RelayInformationDocument {
 		}
 	}
 
-	// Use relay name from config, fallback to "shugur-relay" if empty
+	// Use relay name from config, fallback to nostr.ltd if empty
 	relayName := cfg.Relay.Name
 	if relayName == "" {
-		relayName = "shugur-relay"
+		relayName = "nostr.ltd"
 	}
 
 	// Use relay description from config, fallback to default if empty

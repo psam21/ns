@@ -1,10 +1,9 @@
-# Comprehensive Makefile for Shugur Relay
+# Comprehensive Makefile for nostr.ltd Relay
 # Production-ready build, test, and deployment automation
 
 # Project information
-PROJECT_NAME := shugur-relay
+PROJECT_NAME := nostr-ltd-relay
 BINARY_NAME := relay
-PACKAGE := github.com/Shugur-Network/Relay
 
 # Version information
 VERSION ?= $(shell cat VERSION 2>/dev/null || echo "dev")
@@ -34,7 +33,7 @@ RACE_FLAGS := -race
 CGO_ENABLED := 0
 
 # Docker configuration
-DOCKER_IMAGE := ghcr.io/shugur-network/relay
+DOCKER_IMAGE := ghcr.io/psam21/ns/relay
 DOCKER_TAG ?= $(VERSION)
 
 # Test configuration
@@ -334,7 +333,7 @@ ci: clean deps fmt lint security test build
 # Help target
 .PHONY: help
 help:
-	@echo "Shugur Relay - Available Make targets:"
+	@echo "nostr.ltd Relay - Available Make targets:"
 	@echo ""
 	@echo "Building:"
 	@echo "  build           - Build production binary"

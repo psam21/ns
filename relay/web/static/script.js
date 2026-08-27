@@ -1,8 +1,9 @@
-// Shugur Relay Dashboard JavaScript
+// nostr.ltd Dashboard JavaScript
 
 class RelayDashboard {
   constructor() {
     this.statsUpdateInterval = null;
+    this.telemetryUpdateInterval = null;
     this.statAnimationIntervals = [];
     this.init();
   }
@@ -10,6 +11,7 @@ class RelayDashboard {
   init() {
     this.setupEventListeners();
     this.startStatsUpdates();
+    this.startTelemetryUpdates();
   }
 
   // Setup event listeners
@@ -28,12 +30,24 @@ class RelayDashboard {
       });
     });
 
+    const nipSearch = document.getElementById('nip-search');
+    if (nipSearch) {
+      nipSearch.addEventListener('input', () => {
+        const query = nipSearch.value.trim().toLowerCase();
+        document.querySelectorAll('[data-nip-search]').forEach((item) => {
+          const matches = !query || item.dataset.nipSearch.toLowerCase().includes(query);
+          item.classList.toggle('is-filtered', !matches);
+        });
+      });
+    }
+
     // Handle visibility change to pause/resume updates when tab is not visible
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
         this.stopStatsUpdates();
       } else {
         this.startStatsUpdates();
+        this.startTelemetryUpdates();
       }
     });
   }
@@ -93,6 +107,59 @@ class RelayDashboard {
     if (this.statsUpdateInterval) {
       clearInterval(this.statsUpdateInterval);
       this.statsUpdateInterval = null;
+    }
+    this.stopTelemetryUpdates();
+  }
+
+  startTelemetryUpdates() {
+    this.updateEventKinds();
+    this.telemetryUpdateInterval = setInterval(() => this.updateEventKinds(), 30000);
+  }
+
+  stopTelemetryUpdates() {
+    if (this.telemetryUpdateInterval) {
+      clearInterval(this.telemetryUpdateInterval);
+      this.telemetryUpdateInterval = null;
+    }
+  }
+
+  async updateEventKinds() {
+    const container = document.getElementById('top-kinds');
+    if (!container) return;
+    try {
+      const response = await fetch('/api/events', { headers: { Accept: 'application/json' } });
+      if (!response.ok) return;
+      const payload = await response.json();
+      if (payload.status !== 'ready' || !payload.data || !Array.isArray(payload.data.years)) return;
+
+      const byKind = new Map();
+      payload.data.years.forEach((year) => {
+        (year.rows || []).forEach((row) => {
+          const current = byKind.get(row.kind) || { kind: row.kind, kindName: row.kind_name || 'Unknown kind', count: 0 };
+          current.count += Number(row.row_total) || 0;
+          byKind.set(row.kind, current);
+        });
+      });
+      const allItems = Array.from(byKind.values()).sort((a, b) => b.count - a.count || a.kind - b.kind);
+      const total = allItems.reduce((sum, item) => sum + item.count, 0);
+      const items = allItems.slice(0, 6);
+      if (!total) return;
+
+      container.replaceChildren();
+      items.forEach((item) => {
+        const share = item.count / total * 100;
+        const row = document.createElement('div');
+        row.className = 'kind-row';
+        row.innerHTML = `<div class="kind-name"><strong></strong><span></span></div><div class="kind-count"></div><div class="kind-share"><span class="kind-bar"><i></i></span><small></small></div>`;
+        row.querySelector('.kind-name strong').textContent = item.kind;
+        row.querySelector('.kind-name span').textContent = item.kindName;
+        row.querySelector('.kind-count').textContent = item.count.toLocaleString();
+        row.querySelector('.kind-bar i').style.width = `${share.toFixed(2)}%`;
+        row.querySelector('.kind-share small').textContent = `${share.toFixed(1)}%`;
+        container.appendChild(row);
+      });
+    } catch (error) {
+      console.warn('Failed to update event kinds:', error);
     }
   }
 
@@ -188,7 +255,7 @@ class RelayDashboard {
   // Update online indicator
   updateOnlineIndicator(isOnline) {
     const statusDot = document.querySelector('.status-dot');
-    const statusText = document.querySelector('.status-indicator span');
+    const statusText = document.querySelector('.status-indicator .status-text');
     
     if (statusDot && statusText) {
       if (isOnline) {
@@ -355,8 +422,36 @@ function formatUptime(seconds) {
   }
 }
 
+// Apply a light default with an optional persistent dark mode.
+function applyTheme(theme) {
+  const normalizedTheme = theme === 'dark' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = normalizedTheme;
+  const toggle = document.getElementById('theme-toggle');
+  const icon = document.getElementById('theme-icon');
+  const label = document.getElementById('theme-toggle-label');
+  if (!toggle || !icon || !label) return;
+  const darkMode = normalizedTheme === 'dark';
+  toggle.setAttribute('aria-pressed', String(darkMode));
+  toggle.setAttribute('aria-label', darkMode ? 'Switch to light mode' : 'Switch to dark mode');
+  icon.className = darkMode ? 'fas fa-sun' : 'fas fa-moon';
+  label.textContent = darkMode ? 'Light' : 'Dark';
+}
+
+function initThemeToggle() {
+  const savedTheme = window.localStorage.getItem('nostr-theme');
+  applyTheme(savedTheme === 'dark' ? 'dark' : 'light');
+  const toggle = document.getElementById('theme-toggle');
+  if (!toggle) return;
+  toggle.addEventListener('click', () => {
+    const nextTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    window.localStorage.setItem('nostr-theme', nextTheme);
+    applyTheme(nextTheme);
+  });
+}
+
 // Initialize dashboard when DOM is loaded
 document.addEventListener("DOMContentLoaded", () => {
+  initThemeToggle();
   new RelayDashboard();
   new DatabaseClusterInfo();
 

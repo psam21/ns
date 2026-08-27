@@ -21,11 +21,11 @@ var (
 	cfg     *config.Config // Global reference to loaded configuration
 )
 
-// rootCmd defines the main CLI command for shugur relay
+// rootCmd defines the main command for nostr.ltd relay
 var rootCmd = &cobra.Command{
 	Use:   "relay",
-	Short: "Shugur relay is a high-performance Nostr relay server",
-	Long:  `High-performance, reliable, scalable Nostr relay for decentralized communication.`,
+	Short: "nostr.ltd is an open public Nostr relay server",
+	Long:  `Open public Nostr relay infrastructure for portable identity, signed events, and resilient communication.`,
 	Example: `
   relay start --db-host localhost --db-port 5432
   relay start --log-level debug --metrics-port 9090
@@ -86,7 +86,7 @@ func printWelcomeBanner() {
 	fmt.Println(" |____/|_| |_|\\__,_|\\__, |\\__,_|_|    |_| \\_\\___|_|\\__,_|\\__, |")
 	fmt.Println("                    |___/                                |___/ ")
 	fmt.Println()
-	fmt.Println("Welcome to Shugur Relay - A high-performance, reliable, scalable Nostr relay!")
+	fmt.Println("Welcome to nostr.ltd - open public infrastructure for Nostr.")
 }
 
 // init is automatically called before main(), sets up flags and loads config
@@ -106,8 +106,8 @@ func init() {
 	// A simple version subcommand
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "version",
-		Short: "Print the version number of shugur relay",
-		Long:  "Print the version number of shugur relay along with build information",
+		Short: "Print the version number of nostr.ltd relay",
+		Long:  "Print the version number of nostr.ltd relay along with build information",
 		Run: func(cmd *cobra.Command, args []string) {
 			// Check if detailed flag is provided
 			if detailed, _ := cmd.Flags().GetBool("detailed"); detailed {
@@ -125,8 +125,8 @@ func init() {
 	// Add start subcommand
 	startCmd := &cobra.Command{
 		Use:   "start",
-		Short: "Start the shugur relay server",
-		Long:  "Start the shugur relay server with the specified configuration",
+		Short: "Start the nostr.ltd relay server",
+		Long:  "Start the nostr.ltd relay server with the specified configuration",
 		Run: func(cmd *cobra.Command, args []string) {
 			printWelcomeBanner()
 
@@ -168,7 +168,7 @@ func init() {
 				os.Exit(1)
 			}
 
-			logger.Info("Shugur relay started successfully!")
+			logger.Info("nostr.ltd relay started successfully!")
 		},
 	}
 

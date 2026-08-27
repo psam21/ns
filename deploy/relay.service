@@ -1,5 +1,5 @@
 [Unit]
-Description=Shugur Nostr Relay
+Description=nostr.ltd Nostr Relay
 After=network-online.target
 Wants=network-online.target
 
