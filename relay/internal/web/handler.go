@@ -112,12 +112,16 @@ type Handler struct {
 	eventsTotalRefreshing    bool
 	eventsTotalLastAttemptAt time.Time
 	eventsTotalLastErr       error
+	storedCountRefreshing    bool
+	storedCountLastAttemptAt time.Time
+	storedCountLastErr       error
 }
 
 const (
-	eventBreakdownCacheTTL = 30 * time.Second
-	eventRefreshRetryDelay = 15 * time.Second
-	eventQueryTimeout      = 20 * time.Second
+	eventBreakdownCacheTTL     = 30 * time.Second
+	eventRefreshRetryDelay     = 15 * time.Second
+	eventQueryTimeout          = 20 * time.Second
+	storedCountRefreshInterval = 5 * time.Minute
 )
 
 // NewHandler creates a new web handler
@@ -496,13 +500,13 @@ func (h *Handler) getDashboardData(host string) *DashboardData {
 
 // getStatsData retrieves current statistics
 func (h *Handler) getStatsData() *StatsData {
-	eventsStored, eventsStoredReady := h.getCachedEventCount()
+	eventsStored, eventsStoredReady := h.getStoredEventCount()
 	h.eventsCacheMu.RLock()
-	totalUpdatedAt := h.eventsTotalUpdatedAt
-	totalRefreshing := h.eventsTotalRefreshing
-	totalLastErr := h.eventsTotalLastErr
+	storedRefreshing := h.storedCountRefreshing
+	storedLastErr := h.storedCountLastErr
 	h.eventsCacheMu.RUnlock()
-	totalStatus, totalMessage := eventTotalState(totalUpdatedAt, totalRefreshing, totalLastErr)
+	storedUpdatedAt := metrics.GetStoredEventsCountUpdatedAt()
+	storedStatus, storedMessage := storedEventState(storedUpdatedAt, storedRefreshing, storedLastErr)
 
 	// Get memory usage
 	memUsage := getMemoryUsage()
@@ -526,9 +530,9 @@ func (h *Handler) getStatsData() *StatsData {
 		MessagesProcessed:     metrics.GetMessagesProcessedCount(),
 		EventsStored:          eventsStored,
 		EventsStoredReady:     eventsStoredReady,
-		EventsStoredStatus:    totalStatus,
-		EventsStoredUpdatedAt: formatEventCacheTime(totalUpdatedAt),
-		EventsStoredMessage:   totalMessage,
+		EventsStoredStatus:    storedStatus,
+		EventsStoredUpdatedAt: formatEventCacheTime(storedUpdatedAt),
+		EventsStoredMessage:   storedMessage,
 		ActiveSubscriptions:   metrics.GetActiveSubscriptionsCount(),
 		MessagesSent:          metrics.GetMessagesSentCount(),
 		EventsPerSecond:       metrics.GetEventsPerSecond(),
@@ -776,6 +780,78 @@ func formatEventCacheTime(value time.Time) string {
 	return value.UTC().Format(time.RFC3339)
 }
 
+// storedEventState describes the primary all-events count used by the dashboard.
+func storedEventState(updatedAt time.Time, refreshing bool, lastErr error) (string, string) {
+	switch {
+	case !updatedAt.IsZero() && refreshing:
+		return "refreshing", "Refreshing the database-backed total in the background."
+	case !updatedAt.IsZero() && lastErr != nil:
+		return "stale", "Showing the last confirmed total; an exact refresh is retrying."
+	case !updatedAt.IsZero():
+		return "ready", "Database-backed total · live inserts included."
+	case refreshing:
+		return "warming", "Confirming the stored-event total without blocking relay traffic."
+	case lastErr != nil:
+		return "unavailable", "The database total could not be confirmed; retrying."
+	default:
+		return "pending", "The stored-event total has not been confirmed yet."
+	}
+}
+
+// getStoredEventCount returns the all-events total seeded during startup and maintained on successful inserts.
+// Exact refreshes run asynchronously so dashboard requests never wait on COUNT(*).
+func (h *Handler) getStoredEventCount() (int64, bool) {
+	count := metrics.GetStoredEventsCount()
+	updatedAt := metrics.GetStoredEventsCountUpdatedAt()
+	ready := metrics.StoredEventsCountReady()
+
+	h.eventsCacheMu.RLock()
+	refreshing := h.storedCountRefreshing
+	lastAttemptAt := h.storedCountLastAttemptAt
+	h.eventsCacheMu.RUnlock()
+
+	if (!ready || updatedAt.IsZero() || time.Since(updatedAt) >= storedCountRefreshInterval) &&
+		(!refreshing && (lastAttemptAt.IsZero() || time.Since(lastAttemptAt) >= eventRefreshRetryDelay)) {
+		h.requestStoredEventCountRefresh()
+	}
+	return count, ready
+}
+
+func (h *Handler) requestStoredEventCountRefresh() {
+	if h.db == nil {
+		return
+	}
+
+	h.eventsCacheMu.Lock()
+	if h.storedCountRefreshing || (!h.storedCountLastAttemptAt.IsZero() && time.Since(h.storedCountLastAttemptAt) < eventRefreshRetryDelay) {
+		h.eventsCacheMu.Unlock()
+		return
+	}
+	h.storedCountRefreshing = true
+	h.storedCountLastAttemptAt = time.Now()
+	h.eventsCacheMu.Unlock()
+
+	go h.refreshStoredEventCount()
+}
+
+func (h *Handler) refreshStoredEventCount() {
+	ctx, cancel := context.WithTimeout(context.Background(), eventQueryTimeout)
+	defer cancel()
+
+	count, err := h.db.GetTotalEventCount(ctx)
+	h.eventsCacheMu.Lock()
+	h.storedCountRefreshing = false
+	if err != nil {
+		h.storedCountLastErr = err
+		h.eventsCacheMu.Unlock()
+		h.logger.Warn("Failed to refresh stored event total", zap.Error(err))
+		return
+	}
+	h.storedCountLastErr = nil
+	h.eventsCacheMu.Unlock()
+	metrics.SetStoredEventsCount(count)
+}
+
 // getCachedEventCount returns a fast 2026+ total without waiting for the grouped archive query.
 func (h *Handler) getCachedEventCount() (int64, bool) {
 	h.eventsCacheMu.RLock()
@@ -836,7 +912,6 @@ func (h *Handler) refreshEventTotal() {
 	h.eventsTotalUpdatedAt = time.Now()
 	h.eventsTotalLastErr = nil
 	h.eventsCacheMu.Unlock()
-	metrics.EventsStored.Set(float64(count))
 }
 
 // requestEventBreakdownRefresh starts at most one background refresh at a time.
@@ -879,7 +954,6 @@ func (h *Handler) refreshEventBreakdown() {
 	h.eventsCacheLastErr = nil
 	h.eventsCacheMu.Unlock()
 
-	metrics.EventsStored.Set(float64(eventBreakdownGrandTotal(data)))
 }
 
 func eventBreakdownGrandTotal(data EventBreakdownData) int64 {
@@ -957,6 +1031,14 @@ func (h *Handler) HandleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	storedCount, storedReady := h.getStoredEventCount()
+	storedUpdatedAt := metrics.GetStoredEventsCountUpdatedAt()
+	h.eventsCacheMu.RLock()
+	storedRefreshing := h.storedCountRefreshing
+	storedLastErr := h.storedCountLastErr
+	h.eventsCacheMu.RUnlock()
+	storedStatus, storedMessage := storedEventState(storedUpdatedAt, storedRefreshing, storedLastErr)
+
 	_, _ = h.getCachedEventCount()
 	snapshot := h.eventCacheSnapshot()
 	if snapshot.updatedAt.IsZero() || time.Since(snapshot.updatedAt) >= eventBreakdownCacheTTL {
@@ -998,14 +1080,18 @@ func (h *Handler) HandleEvents(w http.ResponseWriter, r *http.Request) {
 	lastUpdated := formatEventCacheTime(snapshot.updatedAt)
 	pageData := struct {
 		EventBreakdownData
-		Loading           bool
-		LastUpdated       string
-		CacheStatus       string
-		CacheMessage      string
-		EventTotal        int64
-		EventTotalReady   bool
-		EventTotalStatus  string
-		EventTotalMessage string
+		Loading            bool
+		LastUpdated        string
+		CacheStatus        string
+		CacheMessage       string
+		EventTotal         int64
+		EventTotalReady    bool
+		EventTotalStatus   string
+		EventTotalMessage  string
+		StoredEventCount   int64
+		StoredEventReady   bool
+		StoredEventStatus  string
+		StoredEventMessage string
 	}{
 		EventBreakdownData: snapshot.data,
 		Loading:            snapshot.updatedAt.IsZero(),
@@ -1016,6 +1102,10 @@ func (h *Handler) HandleEvents(w http.ResponseWriter, r *http.Request) {
 		EventTotalReady:    totalReady,
 		EventTotalStatus:   totalStatus,
 		EventTotalMessage:  totalMessage,
+		StoredEventCount:   storedCount,
+		StoredEventReady:   storedReady,
+		StoredEventStatus:  storedStatus,
+		StoredEventMessage: storedMessage,
 	}
 	if err := tmpl.Execute(w, pageData); err != nil {
 		h.logger.Error("Failed to execute events template", zap.Error(err))
@@ -1044,6 +1134,14 @@ func (h *Handler) HandleEventsAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	storedCount, storedReady := h.getStoredEventCount()
+	storedUpdatedAt := metrics.GetStoredEventsCountUpdatedAt()
+	h.eventsCacheMu.RLock()
+	storedRefreshing := h.storedCountRefreshing
+	storedLastErr := h.storedCountLastErr
+	h.eventsCacheMu.RUnlock()
+	storedStatus, storedMessage := storedEventState(storedUpdatedAt, storedRefreshing, storedLastErr)
+
 	_, _ = h.getCachedEventCount()
 	snapshot := h.eventCacheSnapshot()
 	if snapshot.updatedAt.IsZero() || time.Since(snapshot.updatedAt) >= eventBreakdownCacheTTL {
@@ -1062,32 +1160,42 @@ func (h *Handler) HandleEventsAPI(w http.ResponseWriter, r *http.Request) {
 	status, message := eventCacheState(snapshot.updatedAt, snapshot.refreshing, snapshot.lastErr)
 	totalStatus, totalMessage := eventTotalState(totalUpdatedAt, totalRefreshing, totalLastErr)
 	response := struct {
-		Status         string             `json:"status"`
-		Refreshing     bool               `json:"refreshing"`
-		UpdatedAt      string             `json:"updated_at,omitempty"`
-		Message        string             `json:"message,omitempty"`
-		Error          string             `json:"error,omitempty"`
-		TotalEvents    int64              `json:"total_events"`
-		TotalReady     bool               `json:"total_ready"`
-		TotalStatus    string             `json:"total_status"`
-		TotalUpdatedAt string             `json:"total_updated_at,omitempty"`
-		TotalMessage   string             `json:"total_message,omitempty"`
-		Data           EventBreakdownData `json:"data"`
-		TopKinds       []EventKindSummary `json:"top_kinds"`
-		EventKinds     []EventKindSummary `json:"event_kinds"`
+		Status              string             `json:"status"`
+		Refreshing          bool               `json:"refreshing"`
+		UpdatedAt           string             `json:"updated_at,omitempty"`
+		Message             string             `json:"message,omitempty"`
+		Error               string             `json:"error,omitempty"`
+		TotalEvents         int64              `json:"total_events"`
+		TotalReady          bool               `json:"total_ready"`
+		TotalStatus         string             `json:"total_status"`
+		TotalUpdatedAt      string             `json:"total_updated_at,omitempty"`
+		TotalMessage        string             `json:"total_message,omitempty"`
+		StoredEvents        int64              `json:"stored_events"`
+		StoredEventsReady   bool               `json:"stored_events_ready"`
+		StoredEventsStatus  string             `json:"stored_events_status"`
+		StoredEventsUpdated string             `json:"stored_events_updated_at,omitempty"`
+		StoredEventsMessage string             `json:"stored_events_message,omitempty"`
+		Data                EventBreakdownData `json:"data"`
+		TopKinds            []EventKindSummary `json:"top_kinds"`
+		EventKinds          []EventKindSummary `json:"event_kinds"`
 	}{
-		Status:         status,
-		Refreshing:     snapshot.refreshing,
-		UpdatedAt:      formatEventCacheTime(snapshot.updatedAt),
-		Message:        message,
-		TotalEvents:    totalEvents,
-		TotalReady:     totalReady,
-		TotalStatus:    totalStatus,
-		TotalUpdatedAt: formatEventCacheTime(totalUpdatedAt),
-		TotalMessage:   totalMessage,
-		Data:           snapshot.data,
-		TopKinds:       h.getTopEventKinds(6),
-		EventKinds:     h.getTopEventKinds(65536),
+		Status:              status,
+		Refreshing:          snapshot.refreshing,
+		UpdatedAt:           formatEventCacheTime(snapshot.updatedAt),
+		Message:             message,
+		TotalEvents:         totalEvents,
+		TotalReady:          totalReady,
+		TotalStatus:         totalStatus,
+		TotalUpdatedAt:      formatEventCacheTime(totalUpdatedAt),
+		TotalMessage:        totalMessage,
+		StoredEvents:        storedCount,
+		StoredEventsReady:   storedReady,
+		StoredEventsStatus:  storedStatus,
+		StoredEventsUpdated: formatEventCacheTime(storedUpdatedAt),
+		StoredEventsMessage: storedMessage,
+		Data:                snapshot.data,
+		TopKinds:            h.getTopEventKinds(6),
+		EventKinds:          h.getTopEventKinds(65536),
 	}
 	if snapshot.lastErr != nil {
 		response.Error = "The grouped archive refresh has not completed."

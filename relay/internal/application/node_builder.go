@@ -317,11 +317,15 @@ func (b *NodeBuilder) BuildDB() error {
 		return fmt.Errorf("database schema verification failed: %w", err)
 	}
 
-	// Initialize EventsStored metric with current count
-	if count, err := dbConn.GetTotalEventCount(b.ctx); err != nil {
-		logger.Warn("Failed to get initial event count for metrics", zap.Error(err))
+	// Initialize EventsStored metric with a bounded database count. If this is slow,
+	// the relay still starts and the dashboard retries the count asynchronously.
+	countCtx, cancelCount := context.WithTimeout(b.ctx, 20*time.Second)
+	count, countErr := dbConn.GetTotalEventCount(countCtx)
+	cancelCount()
+	if countErr != nil {
+		logger.Warn("Failed to get initial event count for metrics", zap.Error(countErr))
 	} else {
-		metrics.EventsStored.Set(float64(count))
+		metrics.SetStoredEventsCount(count)
 		logger.Info("Initialized EventsStored metric", zap.Int64("count", count))
 	}
 

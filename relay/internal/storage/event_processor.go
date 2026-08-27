@@ -163,9 +163,9 @@ func (ep *EventProcessor) processEvents(ctx context.Context) {
 						// Only add to bloom filter after successful insertion for non-ephemeral events
 						ep.db.Bloom.AddString(evt.ID)
 
-						// Increment the stored events metric only for new events
+						// Increment the stored events metric and dashboard count only for new events
 						if err == nil {
-							metrics.EventsStored.Inc()
+							metrics.IncrementStoredEvents()
 
 							// Broadcast event immediately to local clients for real-time streaming
 							if ep.db.eventDispatcher != nil {

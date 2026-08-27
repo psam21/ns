@@ -189,7 +189,7 @@
             <i class="fas fa-database" style="font-size:2rem;display:block;"></i>
             <strong id="events-state-title">Archive telemetry {{.CacheStatus}}</strong>
             <p id="events-state-message">{{.CacheMessage}}</p>
-            {{if .EventTotalReady}}<p class="events-direct-total"><b>{{.EventTotal}}</b> events recorded since 2026-01-01 UTC · direct database count</p>{{else}}<p class="events-direct-total">Live relay metrics are available while the archive aggregate refreshes.</p>{{end}}
+            {{if .StoredEventReady}}<p class="events-direct-total" id="stored-event-total"><b>{{.StoredEventCount}}</b> events stored in the relay · database-backed live total</p>{{else}}<p class="events-direct-total" id="stored-event-total">Stored-event total is not confirmed yet: <span id="stored-event-total-message">{{.StoredEventMessage}}</span></p>{{end}}{{if .EventTotalReady}}<p class="events-direct-total"><b>{{.EventTotal}}</b> events recorded since 2026-01-01 UTC · archive subset</p>{{end}}
           </div>
         {{else if .Years}}
           {{range .Years}}
@@ -241,7 +241,7 @@
         {{else}}
           <div class="no-data">
             <i class="fas fa-database" style="font-size:3rem;margin-bottom:15px;display:block;"></i>
-            {{if .EventTotalReady}}<p>No grouped event rows are available for 2026 or later.</p><p class="events-direct-total"><b>{{.EventTotal}}</b> direct events total since 2026-01-01 UTC.</p>{{else}}<p>{{.CacheMessage}}</p>{{end}}
+            {{if .StoredEventReady}}<p>No grouped event rows are available for 2026 or later.</p><p class="events-direct-total" id="stored-event-total"><b>{{.StoredEventCount}}</b> events stored in the relay · database-backed live total.</p>{{else}}<p>{{.CacheMessage}}</p><p class="events-direct-total" id="stored-event-total">Stored-event total is not confirmed yet: <span id="stored-event-total-message">{{.StoredEventMessage}}</span></p>{{end}}{{if .EventTotalReady}}<p class="events-direct-total"><b>{{.EventTotal}}</b> events recorded since 2026-01-01 UTC · archive subset.</p>{{end}}
           </div>
         {{end}}
         {{if .LastUpdated}}
@@ -256,6 +256,13 @@
         try {
           const response = await fetch('/api/events', { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
           const payload = await response.json();
+          const storedTotal = document.getElementById('stored-event-total');
+          if (storedTotal && payload.stored_events_ready) {
+            storedTotal.textContent = `${Number(payload.stored_events || 0).toLocaleString()} events stored in the relay · database-backed live total`;
+          } else if (storedTotal) {
+            const storedMessage = document.getElementById('stored-event-total-message');
+            if (storedMessage) storedMessage.textContent = payload.stored_events_message || 'The stored-event total is still being confirmed.';
+          }
           if (payload.status === 'ready' || payload.status === 'stale') {
             window.location.reload();
             return;

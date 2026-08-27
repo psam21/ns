@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Shugur-Network/relay/internal/constants"
+	"github.com/Shugur-Network/relay/internal/metrics"
 	"github.com/Shugur-Network/relay/internal/storage"
 )
 
@@ -141,7 +142,24 @@ func TestEventTotalState(t *testing.T) {
 	}
 }
 
+func TestStatsUsesStartupStoredEventMetric(t *testing.T) {
+	metrics.SetStoredEventsCount(123)
+
+	h := &Handler{}
+	stats := h.getStatsData()
+	if stats.EventsStored != 123 {
+		t.Fatalf("events stored = %d, want startup-seeded count 123", stats.EventsStored)
+	}
+	if !stats.EventsStoredReady {
+		t.Fatal("expected startup-seeded stored-event count to be ready")
+	}
+	if stats.EventsStoredStatus != "ready" {
+		t.Fatalf("events stored status = %q, want ready", stats.EventsStoredStatus)
+	}
+}
+
 func TestEventsAPIIncludesDirectTotalWhileBreakdownWarms(t *testing.T) {
+	metrics.SetStoredEventsCount(42)
 	now := time.Now()
 	h := &Handler{
 		db:                    &storage.DB{},
@@ -158,10 +176,13 @@ func TestEventsAPIIncludesDirectTotalWhileBreakdownWarms(t *testing.T) {
 		t.Fatalf("status code = %d, want %d while breakdown warms", recorder.Code, http.StatusAccepted)
 	}
 	var response struct {
-		Status      string `json:"status"`
-		TotalEvents int64  `json:"total_events"`
-		TotalReady  bool   `json:"total_ready"`
-		Message     string `json:"message"`
+		Status       string `json:"status"`
+		TotalEvents  int64  `json:"total_events"`
+		TotalReady   bool   `json:"total_ready"`
+		StoredEvents int64  `json:"stored_events"`
+		StoredReady  bool   `json:"stored_events_ready"`
+		StoredStatus string `json:"stored_events_status"`
+		Message      string `json:"message"`
 	}
 	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
 		t.Fatalf("decode response: %v", err)
@@ -171,6 +192,9 @@ func TestEventsAPIIncludesDirectTotalWhileBreakdownWarms(t *testing.T) {
 	}
 	if !response.TotalReady || response.TotalEvents != 42 {
 		t.Fatalf("direct total = %d ready=%v, want 42 and ready", response.TotalEvents, response.TotalReady)
+	}
+	if !response.StoredReady || response.StoredEvents != 42 || response.StoredStatus != "ready" {
+		t.Fatalf("stored total = %d ready=%v status=%q, want 42, ready, ready", response.StoredEvents, response.StoredReady, response.StoredStatus)
 	}
 	if response.Message == "" {
 		t.Fatal("expected a non-empty warming message")

@@ -11,10 +11,10 @@ import (
 
 // SlidingWindow represents a simple sliding window for rate calculations
 type SlidingWindow struct {
-	mu       sync.RWMutex
-	events   []int64 // timestamps of events
-	window   time.Duration
-	maxSize  int
+	mu      sync.RWMutex
+	events  []int64 // timestamps of events
+	window  time.Duration
+	maxSize int
 }
 
 // NewSlidingWindow creates a new sliding window
@@ -30,25 +30,25 @@ func NewSlidingWindow(window time.Duration, maxSize int) *SlidingWindow {
 func (sw *SlidingWindow) Add(timestamp int64) {
 	sw.mu.Lock()
 	defer sw.mu.Unlock()
-	
+
 	// Add new timestamp
 	sw.events = append(sw.events, timestamp)
-	
+
 	// Remove old events outside the window
 	now := time.Now().Unix()
 	cutoff := now - int64(sw.window.Seconds())
-	
+
 	// Find first event within window
 	i := 0
 	for i < len(sw.events) && sw.events[i] < cutoff {
 		i++
 	}
-	
+
 	// Keep only events within window
 	if i > 0 {
 		sw.events = sw.events[i:]
 	}
-	
+
 	// Limit size if needed
 	if len(sw.events) > sw.maxSize {
 		sw.events = sw.events[len(sw.events)-sw.maxSize:]
@@ -59,14 +59,14 @@ func (sw *SlidingWindow) Add(timestamp int64) {
 func (sw *SlidingWindow) Rate() float64 {
 	sw.mu.RLock()
 	defer sw.mu.RUnlock()
-	
+
 	if len(sw.events) == 0 {
 		return 0
 	}
-	
+
 	now := time.Now().Unix()
 	cutoff := now - int64(sw.window.Seconds())
-	
+
 	// Count events within the window
 	count := 0
 	for _, timestamp := range sw.events {
@@ -74,11 +74,11 @@ func (sw *SlidingWindow) Rate() float64 {
 			count++
 		}
 	}
-	
+
 	if count == 0 {
 		return 0
 	}
-	
+
 	return float64(count) / sw.window.Seconds()
 }
 
@@ -90,17 +90,58 @@ var (
 
 // Global counters for dashboard display (since prometheus metrics can't be read directly)
 var (
-	messagesProcessedCount int64
-	activeConnectionsCount int64
-	totalConnectionsCount  int64
-	messagesSentCount      int64
-	activeSubscrCount      int64
-	lastEventTimestamp     int64
-	lastConnTimestamp      int64
-	responseTimeSum        int64
-	responseTimeCount      int64
-	errorCount             int64
+	messagesProcessedCount       int64
+	activeConnectionsCount       int64
+	totalConnectionsCount        int64
+	messagesSentCount            int64
+	activeSubscrCount            int64
+	lastEventTimestamp           int64
+	lastConnTimestamp            int64
+	responseTimeSum              int64
+	responseTimeCount            int64
+	errorCount                   int64
+	storedEventsCount            int64
+	storedEventsCountReady       int32
+	storedEventsCountUpdatedUnix int64
 )
+
+// SetStoredEventsCount records the database-backed count of persisted non-ephemeral events.
+// The readiness bit is separate because zero is a valid, truthful count.
+func SetStoredEventsCount(count int64) {
+	if count < 0 {
+		count = 0
+	}
+	EventsStored.Set(float64(count))
+	atomic.StoreInt64(&storedEventsCount, count)
+	atomic.StoreInt64(&storedEventsCountUpdatedUnix, time.Now().Unix())
+	atomic.StoreInt32(&storedEventsCountReady, 1)
+}
+
+// GetStoredEventsCount returns the latest database-backed persisted-event count.
+func GetStoredEventsCount() int64 {
+	return atomic.LoadInt64(&storedEventsCount)
+}
+
+// StoredEventsCountReady reports whether a successful database count has initialized the value.
+func StoredEventsCountReady() bool {
+	return atomic.LoadInt32(&storedEventsCountReady) == 1
+}
+
+// IncrementStoredEvents increments the persisted-event count after a successful insert.
+func IncrementStoredEvents() {
+	EventsStored.Inc()
+	atomic.AddInt64(&storedEventsCount, 1)
+	atomic.StoreInt64(&storedEventsCountUpdatedUnix, time.Now().Unix())
+}
+
+// GetStoredEventsCountUpdatedAt returns when the stored-event count was last established or changed.
+func GetStoredEventsCountUpdatedAt() time.Time {
+	updatedUnix := atomic.LoadInt64(&storedEventsCountUpdatedUnix)
+	if updatedUnix == 0 {
+		return time.Time{}
+	}
+	return time.Unix(updatedUnix, 0).UTC()
+}
 
 // GetMessagesProcessedCount returns the current count of processed messages since start
 func GetMessagesProcessedCount() int64 {
