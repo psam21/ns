@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Shugur-Network/relay/internal/constants"
 	"github.com/Shugur-Network/relay/internal/storage"
 )
 
@@ -39,6 +40,12 @@ func TestBuildEventBreakdownData(t *testing.T) {
 	}
 	if data.Years[1].GrandTotal != 6 {
 		t.Fatalf("expected 2027 grand total 6, got %d", data.Years[1].GrandTotal)
+	}
+}
+
+func TestSupportedNIPRegistryCount(t *testing.T) {
+	if got := len(constants.DefaultSupportedNIPs); got != 77 {
+		t.Fatalf("expected 77 supported NIPs, got %d", got)
 	}
 }
 

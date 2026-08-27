@@ -1065,3 +1065,11 @@ body.cockpit-page { background: var(--bg); color: var(--text); font-family: var(
   .console-search { width: 5.1rem; }
   .foot--cockpit { align-items: flex-start; flex-direction: column; }
 }
+
+
+.registry-note { display: flex; justify-content: space-between; gap: .5rem; margin-top: .32rem; color: var(--text-mute); font-family: var(--mono); font-size: .48rem; }
+.registry-note i { margin-right: .18rem; color: var(--accent); }
+.nips-grid--cockpit { scrollbar-color: var(--accent) var(--bg-raised); scrollbar-width: thin; }
+.nips-grid--cockpit::-webkit-scrollbar { width: 4px; height: 4px; }
+.nips-grid--cockpit::-webkit-scrollbar-track { background: var(--bg-raised); }
+.nips-grid--cockpit::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 4px; }

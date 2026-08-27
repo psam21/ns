@@ -56,6 +56,7 @@
           <article class="console-panel nips-panel">
             <div class="console-heading"><div><span class="panel-kicker">04 / PROTOCOL</span><h2>Supported NIPs <span class="muted-count">({{len .SupportedNIPs}})</span></h2></div><div class="panel-tools"><input id="nip-search" class="console-search" type="search" placeholder="filter NIPs" aria-label="Filter supported NIPs" /><a href="https://nips.nostr.com/" target="_blank" rel="noopener noreferrer" class="panel-link">specs <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></div></div>
             <div class="nips-grid nips-grid--cockpit" aria-label="Supported NIPs">{{range .SupportedNIPs}}<a href="https://nips.nostr.com/{{formatNIP .}}" target="_blank" rel="noopener noreferrer" class="nip-item" data-nip-search="{{formatNIP .}} {{nipDescription .}}"><span class="nip-num">{{formatNIP .}}</span><span class="nip-desc">{{nipDescription .}}</span></a>{{end}}</div>
+            <div class="registry-note"><span><i class="fas fa-list-check" aria-hidden="true"></i> {{len .SupportedNIPs}} / {{len .SupportedNIPs}} loaded</span><span>scroll to inspect all</span></div>
             <div class="protocol-foot"><span><b>nostr</b> = signed events + independent relays</span><a href="https://nips.nostr.com/1" target="_blank" rel="noopener noreferrer">NIP-01 <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></a></div>
           </article>
         </section>
