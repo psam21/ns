@@ -24,8 +24,11 @@ func TestPrintWelcomeBannerUsesNostrBranding(t *testing.T) {
 		t.Fatalf("read banner output: %v", err)
 	}
 	banner := string(output)
-	if !strings.Contains(banner, "nostr.ltd") {
-		t.Fatalf("banner does not contain nostr.ltd branding: %q", banner)
+	if !strings.Contains(banner, "NOSTR.LTD") {
+		t.Fatalf("banner does not contain the exact NOSTR.LTD wordmark: %q", banner)
+	}
+	if !strings.Contains(banner, "nostr.ltd relay") {
+		t.Fatalf("banner does not contain the nostr.ltd relay descriptor: %q", banner)
 	}
 	if strings.Contains(strings.ToLower(banner), "shugur") {
 		t.Fatalf("banner contains obsolete Shugur branding: %q", banner)

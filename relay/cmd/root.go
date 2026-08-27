@@ -79,11 +79,9 @@ func Execute(ctx context.Context) {
 }
 
 func printWelcomeBanner() {
-	fmt.Println(" _ __   ___  ___| |_ _ __ ")
-	fmt.Println("| '_ \\ / _ \\/ __| __| '__|")
-	fmt.Println("| | | |  __/\\__ \\ |_| |   ")
-	fmt.Println("|_| |_|\\___||___/\\__|_|   ")
-	fmt.Println()
+	fmt.Println("+------------------------------+")
+	fmt.Println("|          NOSTR.LTD           |")
+	fmt.Println("+------------------------------+")
 	fmt.Println("nostr.ltd relay - open public infrastructure for Nostr")
 }
 
