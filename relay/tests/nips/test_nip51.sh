@@ -36,7 +36,7 @@ print_result() {
 check_event_accepted() {
     local response=$1
     # Check if the response contains an acceptance message (success)
-    if [[ "$response" == *"publishing to ws://localhost:8080... success"* ]]; then
+    if [[ "$response" =~ publishing[[:space:]]to[[:space:]].*success ]]; then
         return 0  # success
     else
         return 1  # failure
@@ -47,7 +47,7 @@ check_event_accepted() {
 check_event_rejected() {
     local response=$1
     # Check if the response contains a failure message (rejection)
-    if [[ "$response" == *"publishing to ws://localhost:8080... failed"* ]]; then
+    if [[ "$response" =~ publishing[[:space:]]to[[:space:]].*failed ]]; then
         return 0  # successfully rejected
     else
         return 1  # not rejected (should have been)

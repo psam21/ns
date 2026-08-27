@@ -6,8 +6,9 @@ set -u
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 RELAY_URL="${RELAY_URL:-ws://localhost:8080}"
 HTTP_URL="${HTTP_URL:-http://localhost:8080}"
+TEST_TIMEOUT="${TEST_TIMEOUT:-120}"
 
-required_commands=(bash curl jq nak)
+required_commands=(bash curl jq nak timeout)
 missing=()
 for command_name in "${required_commands[@]}"; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
@@ -23,7 +24,8 @@ fi
 
 printf 'NIP integration suite\n'
 printf 'Relay: %s\n' "$RELAY_URL"
-printf 'HTTP:  %s\n\n' "$HTTP_URL"
+printf 'HTTP:  %s\n' "$HTTP_URL"
+printf 'Per-test timeout: %ss\n\n' "$TEST_TIMEOUT"
 
 if ! curl --fail --silent --show-error --max-time 10 \
     -H 'Accept: application/nostr+json' "$HTTP_URL" >/dev/null; then
@@ -44,7 +46,7 @@ for test_file in "${tests[@]}"; do
     test_name=$(basename "$test_file")
     printf '\n=== %s ===\n' "$test_name"
     if RELAY_URL="$RELAY_URL" HTTP_URL="$HTTP_URL" \
-        bash "$test_file"; then
+        timeout --foreground "$TEST_TIMEOUT" bash "$test_file"; then
         ((passed += 1))
         printf 'PASS: %s\n' "$test_name"
     else

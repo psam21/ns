@@ -36,9 +36,9 @@ check_dependencies
 # Function to check relay connectivity
 check_relay() {
     echo "🔗 Checking relay connection..."
-    if ! timeout 5 bash -c "</dev/tcp/localhost/8085" 2>/dev/null; then
-        echo -e "${RED}❌ Relay not accessible on localhost:8080${NC}"
-        echo "Start the relay with: ./bin/relay start --config config/development.yaml"
+    if ! timeout 10 nak relay info "$RELAY" >/dev/null 2>&1; then
+        echo -e "${RED}❌ Relay not accessible at $RELAY${NC}"
+        echo "Start the relay or set RELAY_URL to an authorized test endpoint."
         exit 1
     fi
     echo -e "${GREEN}✅ Relay is accessible${NC}"

@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -26,17 +28,13 @@ generate_test_keys() {
     
     # Generate sender keys
     SENDER_PRIVKEY=$(nak key generate)
-    SENDER_PUBKEY=$(nak key public $SENDER_PRIVKEY)
+    SENDER_PUBKEY=$(nak key public "$SENDER_PRIVKEY")
     
     # Generate recipient keys
     RECIPIENT_PRIVKEY=$(nak key generate)
-    RECIPIENT_PUBKEY=$(nak key public $RECIPIENT_PRIVKEY)
+    RECIPIENT_PUBKEY=$(nak key public "$RECIPIENT_PRIVKEY")
     
-    echo -e "${GREEN}Generated keys:${NC}"
-    echo "Sender private key: $SENDER_PRIVKEY"
-    echo "Sender public key:  $SENDER_PUBKEY"
-    echo "Recipient private key: $RECIPIENT_PRIVKEY"
-    echo "Recipient public key:  $RECIPIENT_PUBKEY"
+    echo -e "${GREEN}Generated ephemeral test keys without printing secret material.${NC}"
 }
 
 # Function to get random timestamp within last 2 days
@@ -56,30 +54,18 @@ simulate_sender() {
     echo -e "${YELLOW}Sender: Encrypting message...${NC}"
     # First encrypt the message using NIP-44 v2
     ENCRYPTED_MESSAGE=$(nak encrypt --recipient-pubkey "$recipient_pubkey" --sec "$sender_privkey" "$message")
-    echo -e "${YELLOW}Encrypted message:${NC}"
-    echo "$ENCRYPTED_MESSAGE"
-    
     # Create unsigned chat event (kind 14)
     echo -e "${YELLOW}Sender: Creating encrypted chat event...${NC}"
     CHAT_EVENT=$(nak event -k 14 -c "$ENCRYPTED_MESSAGE" --sec "$sender_privkey" -p "$recipient_pubkey")
-    echo -e "${YELLOW}Chat event:${NC}"
-    echo "$CHAT_EVENT"
-    
     # Seal the chat message (kind 13)
     echo -e "${YELLOW}Sender: Sealing message...${NC}"
     SEALED_EVENT=$(nak event -k 13 -c "$CHAT_EVENT" --sec "$sender_privkey" --created-at $(get_random_timestamp))
-    echo -e "${YELLOW}Sealed event:${NC}"
-    echo "$SEALED_EVENT"
-    
     # Gift-wrap the sealed message (kind 1059) - encrypt the seal with NIP-44
     echo -e "${YELLOW}Sender: Gift-wrapping message...${NC}"
     # First encrypt the sealed event using NIP-44
     ENCRYPTED_SEAL=$(nak encrypt --recipient-pubkey "$recipient_pubkey" --sec "$sender_privkey" "$SEALED_EVENT")
     # Then create the gift wrap event with encrypted content
     GIFT_WRAPPED=$(nak event -k 1059 -c "$ENCRYPTED_SEAL" --sec "$sender_privkey" -p "$recipient_pubkey" --created-at $(get_random_timestamp))
-    echo -e "${YELLOW}Gift-wrapped event:${NC}"
-    echo "$GIFT_WRAPPED"
-    
     # Extract the event ID for later use
     EVENT_ID=$(echo "$GIFT_WRAPPED" | jq -r '.id')
     
@@ -93,9 +79,6 @@ simulate_sender() {
     # Verify the event was stored
     echo -e "${YELLOW}Sender: Verifying event was stored...${NC}"
     RESPONSE=$(nak req -i "$EVENT_ID" "$RELAY")
-    echo -e "${YELLOW}Relay response:${NC}"
-    echo "$RESPONSE"
-    
     echo -e "${GREEN}Sender: Message sent successfully with ID: $EVENT_ID${NC}"
     
     # Export the EVENT_ID for use in the receiver function
@@ -114,25 +97,16 @@ simulate_receiver() {
     # Directly fetch the event by ID instead of using a time-based filter
     RECIPIENT_SUB=$(nak req -k 1059 "$RELAY" -i "$event_id")
     
-    echo -e "${YELLOW}Receiver: Raw event data:${NC}"
-    echo "$RECIPIENT_SUB"
-    
     # First, check if we got a valid JSON response
     if ! echo "$RECIPIENT_SUB" | jq . > /dev/null 2>&1; then
         echo -e "${RED}Error: Failed to get valid JSON response${NC}"
         echo -e "${RED}Response was: $RECIPIENT_SUB${NC}"
         return 1
     fi
-    
-    echo -e "${YELLOW}Receiver: Processing event:${NC}"
-    echo "$RECIPIENT_SUB" | jq .
-    
+
     # Extract all p tags from gift-wrapped event and check if any match the recipient pubkey
     RECIPIENT_TAGS=$(echo "$RECIPIENT_SUB" | jq -r '.tags[] | select(.[0] == "p") | .[1]')
     echo -e "${YELLOW}Receiver: Found recipient tags in gift-wrapped event: $RECIPIENT_TAGS${NC}"
-    
-    # Debug: Show expected pubkey
-    echo -e "${YELLOW}Receiver: Expected pubkey: $recipient_pubkey${NC}"
     
     # Extract and decrypt the gift-wrapped content
     GIFT_WRAPPED_CONTENT=$(echo "$RECIPIENT_SUB" | jq -r '.content')
@@ -145,9 +119,6 @@ simulate_receiver() {
         echo -e "${RED}Content was: $GIFT_WRAPPED_CONTENT${NC}"
         return 1
     fi
-    echo -e "${YELLOW}Receiver: Sealed event:${NC}"
-    echo "$SEALED_EVENT" | jq .
-    
     # Parse the chat event
     CHAT_EVENT=$(echo "$SEALED_EVENT" | jq -r '.content')
     if [ $? -ne 0 ]; then
@@ -155,9 +126,6 @@ simulate_receiver() {
         echo -e "${RED}Content was: $SEALED_EVENT${NC}"
         return 1
     fi
-    echo -e "${YELLOW}Receiver: Chat event:${NC}"
-    echo "$CHAT_EVENT" | jq .
-    
     # Extract recipient tags from chat event
     CHAT_RECIPIENT_TAGS=$(echo "$CHAT_EVENT" | jq -r '.tags[] | select(.[0] == "p") | .[1]')
     echo -e "${YELLOW}Receiver: Found recipient tags in chat event: $CHAT_RECIPIENT_TAGS${NC}"
@@ -210,20 +178,14 @@ simulate_receiver() {
             echo -e "${RED}Content was: $CHAT_EVENT${NC}"
             return 1
         fi
-        echo -e "${YELLOW}Receiver: Encrypted content:${NC}"
-        echo "$ENCRYPTED_MESSAGE"
-        
         # Decrypt the message
         echo -e "${YELLOW}Receiver: Attempting to decrypt message...${NC}"
         DECRYPTED_MESSAGE=$(nak decrypt --sec "$recipient_privkey" -p "$sender_pubkey" "$ENCRYPTED_MESSAGE")
         if [ $? -ne 0 ]; then
             echo -e "${RED}Error: Failed to decrypt message${NC}"
-            echo -e "${RED}Using recipient private key: $recipient_privkey${NC}"
-            echo -e "${RED}Using sender public key: $sender_pubkey${NC}"
             return 1
         fi
-        echo -e "${GREEN}Receiver: Successfully decrypted message:${NC}"
-        echo "$DECRYPTED_MESSAGE"
+        echo -e "${GREEN}Receiver: Successfully decrypted the automated test message.${NC}"
         return 0
     else
         echo -e "${YELLOW}Receiver: Event not addressed to recipient (expected $recipient_pubkey)${NC}"
@@ -240,9 +202,8 @@ check_nak
 # Generate test keys
 generate_test_keys
 
-# Get message from user
-echo -e "${YELLOW}Enter your message:${NC}"
-read -r MESSAGE
+# Use a deterministic non-interactive message; callers may override it safely.
+MESSAGE="${NIP17_MESSAGE:-automated NIP-17 integration test message}"
 
 # Simulate sender
 echo -e "\n${BLUE}=== Sender Simulation ===${NC}"

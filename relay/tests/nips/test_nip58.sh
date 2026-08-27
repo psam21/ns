@@ -222,7 +222,7 @@ test_valid_badge_definition() {
     local description="$1"
     shift
     echo "Testing: $description"
-    echo "  Running: nak event --kind 30009 --content '' $@ --sec $BADGE_ISSUER_SECRET_KEY $RELAY_URL"
+    echo "  Running: nak event --kind 30009 --content '' [secret omitted] $RELAY_URL"
     if nak event --kind 30009 --content '' "$@" --sec "$BADGE_ISSUER_SECRET_KEY" "$RELAY_URL" >/dev/null 2>&1; then
         echo "  ✓ PASS: Valid badge definition accepted"
     else
@@ -236,7 +236,7 @@ test_valid_badge_award() {
     local description="$1"
     shift
     echo "Testing: $description"
-    echo "  Running: nak event --kind 8 --content 'Badge awarded!' $@ --sec $BADGE_ISSUER_SECRET_KEY $RELAY_URL"
+    echo "  Running: nak event --kind 8 --content 'Badge awarded!' [secret omitted] $RELAY_URL"
     if nak event --kind 8 --content 'Badge awarded!' "$@" --sec "$BADGE_ISSUER_SECRET_KEY" "$RELAY_URL" >/dev/null 2>&1; then
         echo "  ✓ PASS: Valid badge award accepted"
     else
@@ -250,7 +250,7 @@ test_valid_profile_badges() {
     local description="$1"
     shift
     echo "Testing: $description"
-    echo "  Running: nak event --kind 30008 --content 'My badges' $@ --sec $RECIPIENT_SECRET_KEY $RELAY_URL"
+    echo "  Running: nak event --kind 30008 --content 'My badges' [secret omitted] $RELAY_URL"
     if nak event --kind 30008 --content 'My badges' "$@" --sec "$RECIPIENT_SECRET_KEY" "$RELAY_URL" >/dev/null 2>&1; then
         echo "  ✓ PASS: Valid profile badges accepted"
     else
