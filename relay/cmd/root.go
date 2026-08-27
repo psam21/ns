@@ -79,14 +79,12 @@ func Execute(ctx context.Context) {
 }
 
 func printWelcomeBanner() {
-	fmt.Println("  ____  _                              ____      _             ")
-	fmt.Println(" / ___|| |__  _   _  __ _ _   _ _ __  |  _ \\ ___| | __ _ _   _ ")
-	fmt.Println(" \\___ \\| '_ \\| | | |/ _` | | | | '__| | |_) / _ \\ |/ _` | | | |")
-	fmt.Println("  ___) | | | | |_| | (_| | |_| | |    |  _ <  __/ | (_| | |_| |")
-	fmt.Println(" |____/|_| |_|\\__,_|\\__, |\\__,_|_|    |_| \\_\\___|_|\\__,_|\\__, |")
-	fmt.Println("                    |___/                                |___/ ")
+	fmt.Println(" _ __   ___  ___| |_ _ __ ")
+	fmt.Println("| '_ \\ / _ \\/ __| __| '__|")
+	fmt.Println("| | | |  __/\\__ \\ |_| |   ")
+	fmt.Println("|_| |_|\\___||___/\\__|_|   ")
 	fmt.Println()
-	fmt.Println("Welcome to nostr.ltd - open public infrastructure for Nostr.")
+	fmt.Println("nostr.ltd relay - open public infrastructure for Nostr")
 }
 
 // init is automatically called before main(), sets up flags and loads config
