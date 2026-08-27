@@ -5,7 +5,7 @@
 # Test script for NIP-65: Relay List Metadata (kind 10002)
 # Tests relay list metadata events with 'r' tags and empty content using nak
 
-RELAY_URL="${RELAY_URL:-wss://shu02.shugur.net}"
+RELAY_URL="${RELAY_URL:-ws://localhost:8080}"
 
 # Colors for output
 RED='\033[0;31m'

@@ -14,7 +14,7 @@ fail_count=0
 
 # Relay URL
 # RELAY="ws://localhost:8080"
-RELAY="wss://shu02.shugur.net"
+RELAY="${RELAY:-${RELAY_URL:-ws://localhost:8080}}"
 
 # Helper function to print test results
 print_result() {
@@ -32,7 +32,7 @@ print_result() {
     ((test_count++))
 }
 
-echo -e "${BLUE}Starting Shugur Relay NIPs Tests${NC}\n"
+echo -e "${BLUE}Starting nostr.ltd relay NIPs Tests${NC}\n"
 
 # Test NIP-01: Basic Protocol Flow Semantics
 echo -e "\n${YELLOW}Testing NIP-01: Basic Protocol Flow Semantics${NC}"

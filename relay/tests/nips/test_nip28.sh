@@ -14,7 +14,7 @@ fail_count=0
 
 # Relay URL
 # RELAY="ws://localhost:8080"
-RELAY="wss://shu02.shugur.net"
+RELAY="${RELAY:-${RELAY_URL:-ws://localhost:8080}}"
 
 # Helper function to print test results
 print_result() {
@@ -50,12 +50,12 @@ extract_event_id() {
     echo "$output" | grep -o '[a-f0-9]\{64\}' | head -1
 }
 
-echo -e "${BLUE}Starting Shugur Relay NIP-28 (Public Chat) Tests${NC}\n"
+echo -e "${BLUE}Starting nostr.ltd relay NIP-28 (Public Chat) Tests${NC}\n"
 echo -e "${YELLOW}Testing NIP-28: Public Chat Events (Kinds 40-44)${NC}\n"
 
 # Test 1: Create Channel (Kind 40)
 echo -e "Test 1: Channel Creation (Kind 40)..."
-CHANNEL_RESPONSE=$(nak event -k 40 --content '{"name": "Test Channel", "about": "A test channel for NIP-28 testing", "picture": "https://example.com/channel.jpg", "relays": ["wss://shu01.shugur.net", "wss://shu02.shugur.net"]}' $RELAY 2>&1)
+CHANNEL_RESPONSE=$(nak event -k 40 --content '{"name": "Test Channel", "about": "A test channel for NIP-28 testing", "picture": "https://example.com/channel.jpg", "relays": ["wss://backup.example.com", "wss://relay.example.com"]}' $RELAY 2>&1)
 CHANNEL_ID=$(extract_event_id "$CHANNEL_RESPONSE")
 
 if [ ! -z "$CHANNEL_ID" ] && check_event_accepted "$CHANNEL_RESPONSE"; then
@@ -69,7 +69,7 @@ fi
 # Test 2: Channel Metadata Update (Kind 41)
 if [ ! -z "$CHANNEL_ID" ]; then
     echo -e "\nTest 2: Channel Metadata Update (Kind 41)..."
-    METADATA_RESPONSE=$(nak event -k 41 --content '{"name": "Updated Test Channel", "about": "Updated description for testing", "picture": "https://example.com/updated.jpg", "relays": ["wss://shu01.shugur.net"]}' -t e="$CHANNEL_ID,wss://shu01.shugur.net,root" -t t="testing" $RELAY 2>&1)
+    METADATA_RESPONSE=$(nak event -k 41 --content '{"name": "Updated Test Channel", "about": "Updated description for testing", "picture": "https://example.com/updated.jpg", "relays": ["wss://backup.example.com"]}' -t e="$CHANNEL_ID,wss://backup.example.com,root" -t t="testing" $RELAY 2>&1)
     
     if check_event_accepted "$METADATA_RESPONSE"; then
         print_result "Update channel metadata" true "28"
@@ -82,7 +82,7 @@ fi
 # Test 3: Channel Message (Kind 42)
 if [ ! -z "$CHANNEL_ID" ]; then
     echo -e "\nTest 3: Channel Message (Kind 42)..."
-    MESSAGE_RESPONSE=$(nak event -k 42 --content "Hello from the test channel! This is a root message. 👋" -t e="$CHANNEL_ID,wss://shu01.shugur.net,root" $RELAY 2>&1)
+    MESSAGE_RESPONSE=$(nak event -k 42 --content "Hello from the test channel! This is a root message. 👋" -t e="$CHANNEL_ID,wss://backup.example.com,root" $RELAY 2>&1)
     MESSAGE_ID=$(extract_event_id "$MESSAGE_RESPONSE")
     
     if [ ! -z "$MESSAGE_ID" ] && check_event_accepted "$MESSAGE_RESPONSE"; then
@@ -101,9 +101,9 @@ if [ ! -z "$CHANNEL_ID" ] && [ ! -z "$MESSAGE_ID" ]; then
     DUMMY_PUBKEY="79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
     
     REPLY_RESPONSE=$(nak event -k 42 --content "This is a reply to the first message! 💬" \
-        -t e="$CHANNEL_ID,wss://shu01.shugur.net,root" \
-        -t e="$MESSAGE_ID,wss://shu01.shugur.net,reply" \
-        -t p="$DUMMY_PUBKEY,wss://shu01.shugur.net" \
+        -t e="$CHANNEL_ID,wss://backup.example.com,root" \
+        -t e="$MESSAGE_ID,wss://backup.example.com,reply" \
+        -t p="$DUMMY_PUBKEY,wss://backup.example.com" \
         $RELAY 2>&1)
     
     if check_event_accepted "$REPLY_RESPONSE"; then
@@ -200,7 +200,7 @@ fi
 if [ ! -z "$MESSAGE_ID" ]; then
     echo -e "\nTest 12: Invalid Reply Structure (missing root reference)..."
     INVALID_REPLY_RESPONSE=$(nak event -k 42 --content "Invalid reply without root" \
-        -t e="$MESSAGE_ID,wss://shu01.shugur.net,reply" \
+        -t e="$MESSAGE_ID,wss://backup.example.com,reply" \
         $RELAY 2>&1)
     
     if [[ "$INVALID_REPLY_RESPONSE" == *"reply must have"* ]] || [[ "$INVALID_REPLY_RESPONSE" == *"invalid reply structure"* ]]; then

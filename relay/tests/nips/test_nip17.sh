@@ -8,8 +8,8 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 
 # Relay URL - should be from kind 10050 list
-RELAY="ws://localhost:8085"
-# RELAY="wss://shu02.shugur.net"
+RELAY="${RELAY:-${RELAY_URL:-ws://localhost:8080}}"
+# RELAY="wss://relay.example.com"
 
 # Function to check if nak is installed
 check_nak() {

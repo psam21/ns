@@ -15,9 +15,9 @@ failed_tests=0
 
 # Relay URL
 # RELAY="ws://localhost:8080"
-RELAY="wss://shu02.shugur.net"
+RELAY="${RELAY:-${RELAY_URL:-ws://localhost:8080}}"
 
-RELAY_URL=$RELAY
+RELAY_URL="${RELAY_URL:-ws://localhost:8080}"
 
 # Function to check dependencies
 check_dependencies() {

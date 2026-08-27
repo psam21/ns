@@ -14,8 +14,8 @@ fail_count=0
 
 # Relay URL
 # RELAY="ws://localhost:8080"
-RELAY="wss://shu02.shugur.net"
-RELAY_INFO_URL="https://shu02.shugur.net"
+RELAY="${RELAY:-${RELAY_URL:-ws://localhost:8080}}"
+RELAY_INFO_URL="${RELAY_INFO_URL:-${HTTP_URL:-http://localhost:8080}}"
 
 # Helper function to print test results
 print_result() {
@@ -33,7 +33,7 @@ print_result() {
     ((test_count++))
 }
 
-echo -e "${BLUE}Starting Shugur Relay NIP-11 Tests${NC}\n"
+echo -e "${BLUE}Starting nostr.ltd relay NIP-11 Tests${NC}\n"
 
 # Test NIP-11: Relay Information Document
 echo -e "\n${YELLOW}Testing NIP-11: Relay Information Document${NC}"

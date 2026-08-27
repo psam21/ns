@@ -1,253 +1,134 @@
-# Nostr Implementation Protocol (NIP) Test Suite
+# Nostr Implementation Protocol (NIP) integration tests
 
-This directory contains comprehensive test scripts for various Nostr Implementation Protocols (NIPs). Each test validates specific functionality and ensures compliance with the respective NIP specifications.
+This directory contains shell-based integration tests for the relay’s Nostr protocol surface and project-specific extensions. The scripts publish, query, and in some cases delete events, so they must run only against a disposable local relay or a relay for which testing has been explicitly authorized.
 
-**Currently testing 35+ implemented NIPs** including core protocol features, advanced functionality, encryption, privacy, and specialized features like Cashu Wallets, Nutzaps, Moderated Communities, and more.
+The suite currently contains **35 shell scripts**. These scripts exercise relay behavior; they do not prove complete conformance to every section of a NIP, and a script marked present in this inventory is not the same as an advertised NIP in NIP-11.
 
-## 🚀 Quick Start
+## Prerequisites
 
-### Prerequisites
+Run commands from the `relay/` directory. Start a test relay using a disposable PostgreSQL database and the development configuration, which listens on `ws://localhost:8080` by default.
 
-- Local Nostr relay running on `ws://localhost:8085`
-- Required tools: `nak`, `jq`, `base64`, `od`, `python3`
-- Bash shell environment
+Required tools for the common suite are:
 
-#### Python Dependencies (for NIP-XX Time Capsules)
+- `bash` and `timeout`
+- [`nak`](https://github.com/fiatjaf/nak) for event publishing and querying
+- `curl` and `jq` for NIP-11 and HTTP checks
+- `python3`, `openssl`, `base64`, `od`, and `sha256sum` for selected scripts
 
-For NIP-XX Time Capsules testing, install Python dependencies:
+The project-specific Time Capsules test may require additional Python packages listed in `nip-xx-time-capsules/requirements-test.txt` when that directory is present.
+
+## Configuration
+
+All standardized relay-facing scripts accept these environment variables:
 
 ```bash
-# Option 1: Install globally (if permitted)
-pip3 install websocket-client requests
-
-# Option 2: Use virtual environment (recommended)
-python3 -m venv venv
-source venv/bin/activate
-pip3 install -r nip-xx-time-capsules/requirements-test.txt
-
-# Option 3: Use requirements file directly  
-pip3 install -r nip-xx-time-capsules/requirements-test.txt
+export RELAY_URL="ws://localhost:8080"   # WebSocket endpoint
+export HTTP_URL="http://localhost:8080"  # HTTP/NIP-11 endpoint
+export TEST_TIMEOUT=30                    # Optional per-test timeout
+export VERBOSE=1                          # Optional script-specific verbosity
 ```
 
-### Running Tests
+The default is intentionally local. The suite no longer contains hard-coded production or legacy fork-domain endpoints. Override `RELAY_URL` and `HTTP_URL` only when you have permission to test another relay.
+
+## Run the suite
+
+First check shell syntax without connecting to a relay:
 
 ```bash
-
-# Run a specific test
-./tests/nips/test_nip01.sh
-
-# Run NIP-XX Time Capsules Python test
-./tests/nips/nip-xx-time-capsules/test_nip_xx_time_capsules.sh
-
-# Run all tests (if available)
 for test in tests/nips/test_nip*.sh; do
-    echo "Running $test..."
-    bash "$test"
+  bash -n "$test" || exit 1
 done
 ```
 
-## 📋 Available Tests
-
-### Core NIPs
-
-| Test File | NIP | Description | Status |
-|-----------|-----|-------------|---------|
-| `test_nip01.sh` | NIP-01 | Basic protocol structure and event format | ✅ |
-| `test_nip02.sh` | NIP-02 | Contact lists and petnames | ✅ |
-| `test_nip03.sh` | NIP-03 | OpenTimestamps attestations | ✅ |
-| `test_nip04.sh` | NIP-04 | Encrypted direct messages | ✅ |
-
-### Authentication & Security
-
-| Test File | NIP | Description | Status |
-|-----------|-----|-------------|---------|
-| `test_nip09.sh` | NIP-09 | Event deletion | ✅ |
-| `test_nip11.sh` | NIP-11 | Relay information document | ✅ |
-| `test_nip15.sh` | NIP-15 | Nostr marketplace | ✅ |
-| `test_nip16.sh` | NIP-16 | Event treatment | ✅ |
-| `test_nip17.sh` | NIP-17 | Reposts | ✅ |
-
-### Advanced Features
-
-| Test File | NIP | Description | Status |
-|-----------|-----|-------------|---------|
-| `test_nip20.sh` | NIP-20 | Command results | ✅ |
-| `test_nip22.sh` | NIP-22 | Event `created_at` limits | ✅ |
-| `test_nip23.sh` | NIP-23 | Long-form content | ✅ |
-| `test_nip25.sh` | NIP-25 | Reactions | ✅ |
-| `test_nip28.sh` | NIP-28 | Public chat | ✅ |
-| `test_nip47.sh` | NIP-47 | Nostr Wallet Connect (NWC) | ✅ |
-| `test_nip51.sh` | NIP-51 | Lists | ✅ |
-| `test_nip52.sh` | NIP-52 | Calendar Events | ✅ |
-| `test_nip53.sh` | NIP-53 | Live Activities | ✅ |
-| `test_nip54.sh` | NIP-54 | Wiki | ✅ |
-| `test_nip56.sh` | NIP-56 | Reporting | ✅ |
-| `test_nip57.sh` | NIP-57 | Lightning Zaps | ✅ |
-| `test_nip58.sh` | NIP-58 | Badges | ✅ |
-
-### Encryption & Privacy
-
-| Test File | NIP | Description | Status |
-|-----------|-----|-------------|---------|
-| `test_nip33.sh` | NIP-33 | Addressable events | ✅ |
-| `test_nip40.sh` | NIP-40 | Expiration timestamps | ✅ |
-| `test_nip44.sh` | NIP-44 | Encrypted payloads | ✅ |
-| `test_nip45.sh` | NIP-45 | Counting results | ✅ |
-| `test_nip50.sh` | NIP-50 | Keywords filter | ✅ |
-| `test_nip59.sh` | NIP-59 | Gift wrap events | ✅ |
-| `test_nip60.sh` | NIP-60 | Cashu Wallets | ✅ |
-| `test_nip61.sh` | NIP-61 | Nutzaps (P2PK Cashu tokens) | ✅ |
-| `test_nip65.sh` | NIP-65 | Relay list metadata | ✅ |
-| `test_nip72.sh` | NIP-72 | Moderated Communities | ✅ |
-
-### Specialized Features
-
-| Test File | NIP | Description | Status |
-|-----------|-----|-------------|---------|
-| `test_nip78.sh` | NIP-78 | Application-specific data | ✅ |
-| `test_nip_time_capsules.sh` | NIP-XX | Time-lock encrypted messages | ✅ |
-
-## 🔧 Test Configuration
-
-### Environment Variables
+Then run all scripts through the aggregate runner:
 
 ```bash
-# Relay URL (default: ws://localhost:8085)
-export RELAY_URL="ws://localhost:8085"
-
-# Test timeout (default: 30 seconds)
-export TEST_TIMEOUT=30
-
-# Verbose output
-export VERBOSE=1
+RELAY_URL=ws://localhost:8080 \
+HTTP_URL=http://localhost:8080 \
+  ./tests/nips/run_all.sh
 ```
 
-### Common Test Patterns
+`run_all.sh` checks prerequisites, runs each `test_nip*.sh` script in sorted order, prints a pass/fail summary, and exits non-zero if any script fails. The suite is intentionally not part of the default unit-test command because it needs a live relay and mutates test data.
 
-Most tests follow this structure:
-
-1. **Setup**: Generate test keys and data
-2. **Create**: Generate events according to NIP spec
-3. **Publish**: Send events to relay
-4. **Verify**: Validate event structure and content
-5. **Cleanup**: Remove test data (if applicable)
-
-## 📊 Test Results
-
-### Success Indicators
-
-- ✅ All test cases pass
-- ✅ Events published successfully to relay
-- ✅ Event structure matches NIP specification
-- ✅ Content validation successful
-
-### Common Issues
-
-- ❌ **Relay not running**: Ensure `ws://localhost:8085` is accessible
-- ❌ **Missing dependencies**: Install `nak`, `jq`, `base64`, `od`, `python3`
-- ❌ **Permission denied**: Make scripts executable with `chmod +x`
-- ❌ **Invalid event format**: Check NIP specification compliance
-
-## 🎯 Specialized Tests
-
-### NIP-XX Time Capsules (`test_nip_time_capsules.sh`)
-
-**Purpose**: Tests time-lock encrypted messages that can only be decrypted after a specific time.
-
-**Features**:
-
-- Public time capsules (mode 0x01)
-- Private time capsules (mode 0x02)
-- Gift-wrapped private capsules (NIP-59 integration)
-- Real age v1 format with tlock recipients
-- Drand integration for time-lock mechanism
-
-**Usage**:
+Run one test directly when debugging:
 
 ```bash
-# Run the time capsule test
-./tests/nips/test_nip_time_capsules.sh
-
-# Expected output: 2 events created
-# 1. Public time capsule (kind 1041)
-# 2. Private time capsule (kind 1041 with 'p' tag)
-```
-
-### NIP-44 Encryption (`test_nip44.sh`)
-
-**Purpose**: Tests encrypted payloads using shared secrets.
-
-**Features**:
-
-- Key generation and derivation
-- Message encryption/decryption
-- Authentication and integrity verification
-
-### NIP-59 Gift Wrapping (`test_nip59.sh`)
-
-**Purpose**: Tests metadata privacy through ephemeral keys.
-
-**Features**:
-
-- Ephemeral key generation
-- Event wrapping and unwrapping
-- Recipient-specific encryption
-
-## 🔍 Debugging Tests
-
-### Enable Verbose Output
-
-```bash
-# Run with debug information
-VERBOSE=1 ./tests/nips/test_nip01.sh
-
-# Run with bash debug mode
+RELAY_URL=ws://localhost:8080 ./tests/nips/test_nip01.sh
+VERBOSE=1 RELAY_URL=ws://localhost:8080 ./tests/nips/test_nip44.sh
 bash -x ./tests/nips/test_nip01.sh
 ```
 
-### Check Relay Status
+The deployment smoke test is separate and can be run from the repository root against the HTTP/WebSocket listener:
 
 ```bash
-# Test relay connectivity
-curl -s http://localhost:8085/ | jq .
-
-# Check relay info
-nak relay info ws://localhost:8085
+RELAY_URL=ws://localhost:8080 HTTP_URL=http://localhost:8080 ./deploy/test_relay.sh
 ```
 
-### Validate Event Format
+## Coverage inventory
+
+| Script | NIP or extension | Focus |
+|---|---|---|
+| `test_nip01.sh` | NIP-01 | Basic event and protocol flow |
+| `test_nip02.sh` | NIP-02 | Follow lists and petnames |
+| `test_nip03.sh` | NIP-03 | OpenTimestamps attestations |
+| `test_nip04.sh` | NIP-04 | Encrypted direct messages |
+| `test_nip09.sh` | NIP-09 | Event deletion |
+| `test_nip11.sh` | NIP-11 | Relay information document |
+| `test_nip15.sh` | NIP-15 | Marketplace events |
+| `test_nip16.sh` | NIP-16 | Event treatment |
+| `test_nip17.sh` | NIP-17 | Private direct messages and related events |
+| `test_nip20.sh` | NIP-20 | Command results |
+| `test_nip22.sh` | NIP-22 | Comment events and timestamp limits |
+| `test_nip23.sh` | NIP-23 | Long-form content |
+| `test_nip25.sh` | NIP-25 | Reactions |
+| `test_nip28.sh` | NIP-28 | Public chat |
+| `test_nip33.sh` | NIP-33 | Addressable events |
+| `test_nip40.sh` | NIP-40 | Expiration timestamps |
+| `test_nip44.sh` | NIP-44 | Versioned encrypted payloads |
+| `test_nip45.sh` | NIP-45 | COUNT requests and counting results |
+| `test_nip47.sh` | NIP-47 | Nostr Wallet Connect event validation |
+| `test_nip50.sh` | NIP-50 | Search capability |
+| `test_nip51.sh` | NIP-51 | Lists |
+| `test_nip52.sh` | NIP-52 | Calendar events |
+| `test_nip53.sh` | NIP-53 | Live activities |
+| `test_nip54.sh` | NIP-54 | Wiki events |
+| `test_nip56.sh` | NIP-56 | Reporting |
+| `test_nip57.sh` | NIP-57 | Lightning zaps |
+| `test_nip58.sh` | NIP-58 | Badges |
+| `test_nip59.sh` | NIP-59 | Gift wrapping |
+| `test_nip60.sh` | NIP-60 | Cashu Wallets |
+| `test_nip61.sh` | NIP-61 | Nutzaps |
+| `test_nip65.sh` | NIP-65 | Relay list metadata |
+| `test_nip72.sh` | NIP-72 | Moderated communities |
+| `test_nip78.sh` | NIP-78 | Application-specific data |
+| `test_nip_nostr_web.sh` | YY | Nostr Web Pages extension |
+| `test_nip_time_capsules.sh` | XX | Time Capsules extension |
+
+The full advertised registry is maintained separately in [`relay/internal/constants/relay_metadata.go`](../../internal/constants/relay_metadata.go) and tracked in [`docs/NIP-Tracking.md`](../../../docs/NIP-Tracking.md). The relay currently advertises 77 NIP identifiers, while this integration directory covers a smaller, behavior-focused subset.
+
+## Specialized tests
+
+### Time Capsules (`test_nip_time_capsules.sh`)
+
+This test exercises the project-specific time-lock capsule format, including public and private modes and NIP-59 gift wrapping where configured. It may depend on the local Time Capsules helper package and external time-lock services. Treat it as an integration test rather than a fast smoke test.
+
+### Nostr Web Pages (`test_nip_nostr_web.sh`)
+
+This test exercises the project-specific static website event flow and content-addressed asset references. It uses temporary test keys and should run only against an isolated relay.
+
+## Troubleshooting
+
+If the suite cannot connect, verify that the relay is running on port 8080 and that PostgreSQL is available. Check the HTTP metadata endpoint with:
 
 ```bash
-# Check event structure
-echo '{"kind":1,"content":"test"}' | jq .
-
-# Validate against NIP spec
-nak event validate < event.json
+curl -sS -H 'Accept: application/nostr+json' "$HTTP_URL" | jq .
+nak relay info "$RELAY_URL"
 ```
 
-## 📚 NIP Documentation
+If a script fails, rerun it directly with `VERBOSE=1` or `bash -x`, inspect the relay logs, and confirm that its event kinds are accepted by the current validator. Some scripts target protocol behavior that may be advertised but not fully implemented; such failures should be recorded as implementation work rather than hidden by changing the runner’s exit status.
 
-For detailed specifications, refer to:
+## Adding or upgrading tests
 
-- [NIP Repository](https://github.com/nostr-protocol/nips)
-- [Nostr Protocol Website](https://nostr.com)
-- [NIP-01: Basic Protocol](https://github.com/nostr-protocol/nips/blob/master/01.md)
+When adding a test, use the `test_nipXX.sh` naming convention, consume `RELAY_URL` rather than embedding an endpoint, fail clearly when prerequisites are missing, and clean up any events that do not need to persist. Document special dependencies and add the script to the coverage table. When a NIP specification changes, review both the validator and its integration test, then run shell syntax checks and the affected script against a disposable database before updating the tracking document.
 
-## 🤝 Contributing
-
-When adding new tests:
-
-1. Follow the existing naming convention: `test_nip##.sh`
-2. Include comprehensive error handling
-3. Add clear success/failure indicators
-4. Document any special requirements
-5. Test against multiple relay implementations
-
-## 📝 Notes
-
-- All tests are designed to work with the local relay at `ws://localhost:8085`
-- Tests use temporary keys and data - no permanent data is created
-- Some tests may require specific relay features or configurations
-- Time-based tests (like NIP-XX) may take longer to complete due to waiting periods
-
-For questions or issues, please refer to the individual test files or the NIP specifications.
+For authoritative specifications, consult the [Nostr NIP repository](https://github.com/nostr-protocol/nips) and the project’s current [`docs/NIP-Tracking.md`](../../../docs/NIP-Tracking.md).

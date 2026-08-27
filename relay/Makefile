@@ -38,6 +38,8 @@ DOCKER_TAG ?= $(VERSION)
 
 # Test configuration
 TEST_FLAGS := -v -race
+NIP_RELAY_URL ?= ws://localhost:8080
+NIP_HTTP_URL ?= http://localhost:8080
 COVERAGE_FILE := coverage.out
 COVERAGE_HTML := coverage.html
 
@@ -177,17 +179,13 @@ test-coverage:
 	@$(GOCMD) tool cover -html=$(COVERAGE_FILE) -o $(COVERAGE_HTML)
 	@echo "Coverage report generated: $(COVERAGE_HTML)"
 
-# Run integration tests
-.PHONY: test-integration
-test-integration: build
-	@echo "Running integration tests..."
-	@./bin/relay --version
-	@for test_file in tests/test_nip*.sh; do \
-		if [ -f "$$test_file" ]; then \
-			echo "Running $$test_file"; \
-			bash "$$test_file" || exit 1; \
-		fi; \
-	done
+# Run NIP integration tests against an already running relay
+.PHONY: test-integration test-nips
+test-integration: test-nips
+
+test-nips:
+	@echo "Running NIP integration tests against $(NIP_RELAY_URL)..."
+	@RELAY_URL="$(NIP_RELAY_URL)" HTTP_URL="$(NIP_HTTP_URL)" ./tests/nips/run_all.sh
 
 # Module management
 .PHONY: tidy

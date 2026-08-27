@@ -25,14 +25,15 @@ import websocket
 import requests
 import hashlib
 import sys
+import os
 from datetime import datetime
 
 
 class NIPXXValidator:
     """NIP-XX Time Capsules Validator - Strict specification compliance"""
     
-    def __init__(self, relay_url="wss://shu01.shugur.net"):
-        self.relay_url = relay_url
+    def __init__(self, relay_url=None):
+        self.relay_url = relay_url or os.environ.get("RELAY_URL", "ws://localhost:8080")
         
         # Real drand networks (unchained production networks only)
         self.drand_networks = {

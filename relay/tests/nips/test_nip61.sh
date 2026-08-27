@@ -10,7 +10,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-RELAY_URL="ws://localhost:8081"
+RELAY_URL="${RELAY_URL:-ws://localhost:8080}"
 NIP="NIP-61"
 
 # Test counter

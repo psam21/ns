@@ -13,8 +13,8 @@ success_count=0
 fail_count=0
 
 # Relay URL
-RELAY="ws://localhost:8081"
-# RELAY="wss://shu02.shugur.net"
+RELAY="${RELAY:-${RELAY_URL:-ws://localhost:8080}}"
+# RELAY="wss://relay.example.com"
 
 # RELAY="wss://nos.lol"
 
@@ -64,7 +64,7 @@ print_result() {
     ((test_count++))
 }
 
-echo -e "${BLUE}Starting Shugur Relay NIP-44 Tests (Encrypted)${NC}\n"
+echo -e "${BLUE}Starting nostr.ltd relay NIP-44 Tests (Encrypted)${NC}\n"
 
 # Check for dependencies
 check_dependencies

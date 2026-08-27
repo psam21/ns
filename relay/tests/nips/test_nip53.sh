@@ -13,7 +13,7 @@ success_count=0
 fail_count=0
 
 # Relay URL
-RELAY=${RELAY:-"ws://localhost:8081"}
+RELAY="${RELAY:-${RELAY_URL:-ws://localhost:8080}}"
 
 # Test secret keys
 TEST_SECRET_KEY="26f2ef538bef741566429408b799a7583f6d4a02a2e701fe1b710b3f41055c0c"
@@ -36,7 +36,7 @@ print_result() {
     ((test_count++))
 }
 
-echo -e "${BLUE}Starting Shugur Relay NIP-53 Tests${NC}\n"
+echo -e "${BLUE}Starting nostr.ltd relay NIP-53 Tests${NC}\n"
 
 # Test NIP-53: Live Activities
 echo -e "\n${YELLOW}Testing NIP-53: Live Activities${NC}"

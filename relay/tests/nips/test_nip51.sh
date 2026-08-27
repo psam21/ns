@@ -13,8 +13,8 @@ success_count=0
 fail_count=0
 
 # Relay URL
-RELAY="ws://localhost:8081"
-# RELAY="wss://shu02.shugur.net"
+RELAY="${RELAY:-${RELAY_URL:-ws://localhost:8080}}"
+# RELAY="wss://relay.example.com"
 
 # Helper function to print test results
 print_result() {
@@ -36,7 +36,7 @@ print_result() {
 check_event_accepted() {
     local response=$1
     # Check if the response contains an acceptance message (success)
-    if [[ "$response" == *"publishing to ws://localhost:8081... success"* ]]; then
+    if [[ "$response" == *"publishing to ws://localhost:8080... success"* ]]; then
         return 0  # success
     else
         return 1  # failure
@@ -47,7 +47,7 @@ check_event_accepted() {
 check_event_rejected() {
     local response=$1
     # Check if the response contains a failure message (rejection)
-    if [[ "$response" == *"publishing to ws://localhost:8081... failed"* ]]; then
+    if [[ "$response" == *"publishing to ws://localhost:8080... failed"* ]]; then
         return 0  # successfully rejected
     else
         return 1  # not rejected (should have been)
@@ -68,7 +68,7 @@ if ! command -v nak &> /dev/null; then
     exit 1
 fi
 
-echo -e "${BLUE}Starting Shugur Relay NIP-51 (Lists) Tests${NC}\n"
+echo -e "${BLUE}Starting nostr.ltd relay NIP-51 (Lists) Tests${NC}\n"
 echo -e "${YELLOW}Testing NIP-51: Lists (Standard Lists and Sets)${NC}\n"
 
 # Generate test pubkeys

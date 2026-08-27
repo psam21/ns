@@ -1,170 +1,133 @@
-# NIP Implementation Tracking Document
+# NIP support and upgrade tracking
 
-**Generated:** 2026-08-21  
-**Source:** https://github.com/nostr-protocol/nips (master branch)  
-**Project:** NostrRelayBlossom (relay + blossom)
+**Last reviewed:** 2026-08-27
+**Canonical source:** [`relay/internal/constants/relay_metadata.go`](../relay/internal/constants/relay_metadata.go)
+**Project:** nostr.ltd relay and companion Blossom media service
 
----
+## How to read this document
 
-## Legend
-- 🔴 **Critical** - Security, deprecated/unrecommended NIPs, breaking changes
-- 🟡 **High** - Recent spec updates, missing high-value NIPs
-- 🟢 **Medium** - Missing useful NIPs, spec clarifications
-- 🔵 **Low** - Nice-to-have, niche NIPs
-- ✅ **Done** - Already implemented and current
+The relay advertises a protocol surface through NIP-11. The canonical `DefaultSupportedNIPs` list currently contains **77 identifiers**, and the public dashboard renders that complete list in a searchable, internally scrollable panel.
 
----
+An advertised identifier is not a claim that every sentence of the corresponding specification is enforced by a dedicated validator. Relay support is distributed across connection handling, filters, event validation, persistence, the web/API layer, and the companion Blossom service. Conformance work should therefore be tracked against concrete behavior and tests, not only against the NIP-11 list.
 
-## 🔴 CRITICAL: Unrecommended/Deprecated NIPs (Remove or Deprecate)
+The integration suite under [`relay/tests/nips`](../relay/tests/nips) currently contains **35 shell scripts**. It intentionally covers a smaller, behavior-focused subset and should be run only against a disposable or explicitly authorized relay because the scripts publish and sometimes delete events.
 
-| # | NIP | Current Status | Official Status | Action Required | Files to Modify |
-|---|-----|----------------|-----------------|-----------------|-----------------|
-| 1 | NIP-03 | ✅ Implemented | **Unrecommended**: "vulnerable to one specific attack, needs update" | Remove from advertised list or add warning | `relay/internal/constants/relay_metadata.go`, `relay/internal/relay/nips/nip03.go` |
-| 2 | NIP-04 | ✅ Implemented | **Unrecommended**: "deprecated in favor of NIP-17" | Remove from advertised list, keep NIP-17 only | `relay/internal/constants/relay_metadata.go`, `relay/internal/relay/nips/nip04.go` |
-| 3 | NIP-15 | ✅ Implemented | **Unrecommended**: "too complicated, try NIP-99 instead" | Remove from advertised list, implement NIP-99 | `relay/internal/constants/relay_metadata.go`, `relay/internal/relay/nips/nip15.go` |
-| 4 | NIP-26 | ✅ Implemented | **Unrecommended**: "adds unnecessary burden for little gain" | Remove from advertised list | `relay/internal/constants/relay_metadata.go`, `relay/internal/relay/nips/nip26.go` |
-| 5 | NIP-28 | ✅ Implemented | **Unrecommended**: "try NIP-29 instead" | Remove from advertised list, ensure NIP-29 complete | `relay/internal/constants/relay_metadata.go`, `relay/internal/relay/nips/nip28.go` |
-| 6 | NIP-72 | ✅ Implemented | **Unrecommended**: "try NIP-29 instead" | Remove from advertised list, ensure NIP-29 complete | `relay/internal/constants/relay_metadata.go`, `relay/internal/relay/nips/nip72.go` |
-| 7 | NIP-90 | ✅ Implemented | **Unrecommended**: "got totally out of control" | Remove from advertised list | `relay/internal/constants/relay_metadata.go`, `relay/internal/relay/nips/nip90.go` |
-| 8 | NIP-96 | ✅ Implemented | **Unrecommended**: "replaced by Blossom" | Remove from advertised list (Blossom handles this) | `relay/internal/constants/relay_metadata.go`, `relay/internal/relay/nips/nip96.go` |
-| 9 | NIP-EE | ✅ Implemented | **Unrecommended**: "superseded by Marmot Protocol" | Remove from advertised list, reference Marmot | `relay/internal/constants/relay_metadata.go`, `relay/internal/relay/nips/nip_ee.go` |
+## Current advertised registry
 
----
+The following identifiers are the exact current contents of `DefaultSupportedNIPs`:
 
-## 🟡 HIGH: Recent Spec Updates (Validator Reviews Needed)
+| # | NIP | # | NIP | # | NIP | # | NIP |
+|---:|---|---:|---|---:|---|---:|---|
+| 1 | NIP-01 | 21 | NIP-34 | 41 | NIP-54 | 61 | NIP-86 |
+| 2 | NIP-02 | 22 | NIP-35 | 42 | NIP-56 | 62 | NIP-87 |
+| 3 | NIP-05 | 23 | NIP-36 | 43 | NIP-57 | 63 | NIP-88 |
+| 4 | NIP-07 | 24 | NIP-37 | 44 | NIP-58 | 64 | NIP-89 |
+| 5 | NIP-09 | 25 | NIP-38 | 45 | NIP-59 | 65 | NIP-92 |
+| 6 | NIP-10 | 26 | NIP-39 | 46 | NIP-60 | 66 | NIP-94 |
+| 7 | NIP-11 | 27 | NIP-40 | 47 | NIP-61 | 67 | NIP-98 |
+| 8 | NIP-13 | 28 | NIP-42 | 48 | NIP-62 | 68 | NIP-99 |
+| 9 | NIP-17 | 29 | NIP-43 | 49 | NIP-64 | 69 | NIP-7D |
+| 10 | NIP-18 | 30 | NIP-44 | 50 | NIP-65 | 70 | NIP-A0 |
+| 11 | NIP-19 | 31 | NIP-45 | 51 | NIP-66 | 71 | NIP-A4 |
+| 12 | NIP-21 | 32 | NIP-46 | 52 | NIP-67 | 72 | NIP-B0 |
+| 13 | NIP-22 | 33 | NIP-47 | 53 | NIP-69 | 73 | NIP-C0 |
+| 14 | NIP-23 | 34 | NIP-48 | 54 | NIP-70 | 74 | NIP-F4 |
+| 15 | NIP-24 | 35 | NIP-49 | 55 | NIP-71 | 75 | NIP-CC |
+| 16 | NIP-25 | 36 | NIP-50 | 56 | NIP-75 | 76 | NIP-C7 |
+| 17 | NIP-27 | 37 | NIP-51 | 57 | NIP-77 | 77 | NIP-B7 |
+| 18 | NIP-29 | 38 | NIP-52 | 58 | NIP-78 |  |  |
+| 19 | NIP-30 | 39 | NIP-53 | 59 | NIP-84 |  |  |
+| 20 | NIP-32 | 40 | NIP-5A | 60 | NIP-85 |  |  |
 
-| # | NIP | Last Update | Change Summary | Files to Review/Update |
-|---|-----|-------------|----------------|------------------------|
-| 10 | NIP-29 | 2 weeks ago | Added "previous" tag example | `relay/internal/relay/nips/nip29.go`, `relay/internal/relay/nip29.go` |
-| 11 | NIP-47 | 3 weeks ago | Simplified core spec, added extensions | `relay/internal/relay/nips/nip47.go` |
-| 12 | NIP-78 | 3 months ago | "a normal application-specific kind" | `relay/internal/relay/nips/nip78.go` |
-| 13 | NIP-45 | 6 months ago | Added HyperLogLog relay response | `relay/internal/relay/nips/nip45.go` |
-| 14 | NIP-44 | 2 months ago | Allow encrypting >65535 bytes | `relay/internal/relay/nips/nip44.go`, `relay/internal/constants/capsules.go` |
-| 15 | NIP-43 | 2 months ago | Added relay roles event | `relay/internal/relay/nips/nip43.go`, `relay/internal/relay/nip43.go` |
-| 16 | NIP-86 | 2 months ago | Added relay roles event | `relay/internal/relay/nips/nip86.go` |
-| 17 | NIP-51 | Last month | Added kind:10011, favorite follow sets | `relay/internal/relay/nips/nip51.go` |
-| 18 | NIP-34 | Last month | Dropped GRASP hosting instructions | `relay/internal/relay/nips/nip34.go` |
-| 19 | NIP-46 | Last month | Avoid silent timeouts | `relay/internal/relay/nips/nip46.go` |
-| 20 | NIP-15 | Last month | Try NIP-99 instead (see #3) | `relay/internal/relay/nips/nip15.go` |
-| 21 | NIP-69 | 9 months ago | Order expiration support | `relay/internal/relay/nips/nip69.go` |
-| 22 | NIP-60 | 10 months ago | Added "unit" tag to NutZap | `relay/internal/relay/nips/nip60.go` |
+The table above is grouped for readability; the ordinal column is only a display index. The identifiers themselves are the source of truth. To avoid accidental drift, any change to the registry should update the regression test in `relay/internal/web/handler_test.go` and the dashboard count expectations together.
 
----
+> **Correction note:** The previous version of this document described approximately 97 tracked items and listed many obsolete “remove” and “not implemented” tasks. Those numbers mixed advertised NIPs, possible future work, and Blossom-related capabilities. They were not a reliable implementation inventory and have been removed.
 
-## 🟢 MEDIUM: Missing High-Value NIPs (Not Implemented)
+## Integration-test coverage
 
-| # | NIP | Description | Priority | Implementation Notes |
-|---|-----|-------------|----------|---------------------|
-| 23 | NIP-05 | DNS-based identifier mapping | High | Identity resolution, relay should support |
-| 24 | NIP-07 | window.nostr for browsers | High | Client-side, relay advertises support |
-| 25 | NIP-10 | Text Notes and Threads | High | Threading support (reply chains) |
-| 26 | NIP-19 | bech32-encoded entities | Medium | npub/nsec/note encoding |
-| 27 | NIP-21 | nostr: URI scheme | Medium | URI handling |
-| 28 | NIP-27 | Text Note References | High | Replaces NIP-08, reply threading |
-| 29 | NIP-36 | Sensitive Content | Medium | Content warnings |
-| 30 | NIP-46 | Nostr Remote Signing | High | Signer/bunker support |
-| 31 | NIP-48 | Bridged Events | Medium | Cross-relay events |
-| 32 | NIP-49 | Private Key Encryption (ncryptsec) | Medium | Encrypted nsec |
-| 33 | NIP-55 | Android Signer Application | Low | Client-side |
-| 33 | NIP-5A | Static Websites (nsites) | Medium | Web hosting on Nostr |
-| 34 | NIP-67 | EOSE Completeness Hint | Medium | Sync optimization |
-| 35 | NIP-68 | Picture-first feeds | Low | Media feeds |
-| 36 | NIP-73 | External Content IDs | Low | Content addressing |
-| 37 | NIP-87 | Cashu/Fedimint Discovery | Medium | Ecash mint discovery |
-| 38 | NIP-89 | Recommended App Handlers | Low | Client hints |
-| 39 | NIP-92 | Media Attachments (imeta) | **High** | **Blossom integration critical** |
-| 40 | NIP-94 | File Metadata | Medium | File info events |
-| 41 | NIP-98 | HTTP Auth | Medium | REST API auth |
-| 42 | NIP-A0 | Voice Messages | Low | Audio events |
-| 43 | NIP-A4 | Public Messages | Low | Public DMs |
-| 44 | NIP-B0 | Web Bookmarks | Low | Bookmark events |
-| 44 | NIP-B7 | Blossom | ✅ **Implemented in Blossom service** | Already done |
-| 45 | NIP-C0 | Code Snippets | Low | Dev-focused |
-| 46 | NIP-C7 | Chats | Medium | Chat events |
-| 47 | NIP-CC | Geocaching | Low | Niche |
-| 48 | NIP-F4 | Podcasts | Low | Podcast events |
+The current scripts are listed in [`relay/tests/nips/README.md`](../relay/tests/nips/README.md). The coverage set is:
 
----
+| Area | Scripts |
+|---|---|
+| Core and event lifecycle | NIP-01, 02, 03, 04, 09, 15, 16, 17, 20, 22, 23, 25, 28, 33, 40 |
+| Encryption, privacy, and counting | NIP-44, 45, 50, 59, 60, 61, 65, 72, 78 |
+| Metadata, social, and application events | NIP-11, 47, 51, 52, 53, 54, 56, 57, 58 |
+| Project extensions | XX Time Capsules and YY Nostr Web Pages |
 
-## 🔵 LOW: Niche/Specialized NIPs
+The suite is not a conformance certificate. For example, some scripts exercise event acceptance and round trips but do not cover every validator branch, storage invariant, authorization path, or negative case in the related specification.
 
-| # | NIP | Description | Notes |
-|---|-----|-------------|-------|
-| 49 | NIP-06 | Mnemonic seed phrase | Unrecommended |
-| 50 | NIP-08 | Mentions | Unrecommended (use NIP-27) |
-| 51 | NIP-14 | Subject tag | Niche |
-| 52 | NIP-20 | Command Results | Niche |
-| 53 | NIP-31 | Unknown Events | Unrecommended |
-| 54 | NIP-35 | Torrents | Niche |
-| 55 | NIP-55 | Android Signer | Client-side |
-| 56 | NIP-66 | Relay Discovery | Already have NIP-65/66 |
-| 57 | NIP-75 | Zap Goals | Implemented? |
-| 58 | NIP-77 | Negentropy Syncing | Implemented? |
-| 59 | NIP-7D | Forum Threads | Implemented? |
-| 60 | NIP-84 | Highlights | Implemented? |
-| 61 | NIP-85 | Trusted Assertions | Implemented? |
-| 62 | NIP-88 | Polls | Implemented? |
-| 63 | NIP-89 | App Handlers | Low |
-| 64 | NIP-99 | Classified Listings | Implemented? |
+## Current implementation areas
 
----
+The following areas have direct relay code or operational coverage and should remain synchronized with the advertised list:
 
-## 📋 Blossom-Specific NIPs
+| Area | Primary implementation locations | Current verification |
+|---|---|---|
+| Basic relay protocol, subscriptions, filters, and event lifecycle | `relay/internal/relay/connection.go`, `subscription.go`, `filter.go`, `event_processor.go` | Go unit tests and NIP shell scripts |
+| Relay metadata and supported registry | `relay/internal/constants/relay_metadata.go`, `relay/internal/web/handler.go` | NIP-11 checks and exact 77-entry regression test |
+| Authentication and protected events | `relay/internal/relay/connection.go`, `nips/nip42.go` | Go tests and targeted integration tests |
+| Deletion and vanish flows | `relay/internal/storage/queries.go`, `event_processor.go` | Go storage tests and NIP-09 coverage |
+| COUNT, search, and negentropy | `relay/internal/relay/nip45.go`, `filter.go`, `nip77.go` | Go tests and targeted relay tests |
+| Relay groups and access metadata | `relay/internal/relay/nip29.go`, `nip43.go` | Go tests; expand integration coverage |
+| Nostr Wallet Connect and encrypted payloads | `relay/internal/relay/nips/nip47.go`, `nip44.go` | Targeted NIP scripts and validator tests |
+| Media-related event metadata | `relay/internal/relay/nips/nip92.go`, `nip94.go`; `blossom/` | Partial; add negative and round-trip cases |
+| Blossom storage and authentication | `blossom/src/`, `deploy/blossom.service` | Service-level tests and authorized smoke tests |
+| Dashboard telemetry and event cache | `relay/internal/web/handler.go`, `relay/web/` | Go handler tests, JS syntax check, browser preview |
+| Project extensions | `relay/internal/relay/nips/`, `relay/tests/nips/test_nip_time_capsules.sh`, `test_nip_nostr_web.sh` | Specialized integration tests; external dependencies may be required |
 
-| # | NIP | Status | Notes |
-|---|-----|--------|-------|
-| 65 | NIP-B7 | ✅ **Implemented** | Blossom protocol - media server |
-| 66 | NIP-96 | ❌ Deprecated | Replaced by NIP-B7 (Blossom) |
-| 67 | NIP-92 | ❌ Missing | **Critical** - imeta tags for media metadata |
-| 68 | NIP-94 | ❌ Missing | File metadata events |
-| 69 | NIP-98 | ❌ Missing | HTTP Auth for Blossom API |
+## Upgrade backlog
 
----
+### Priority 1: maintain truthful advertising and repeatable tests
 
-## 📊 Implementation Status Summary
+1. Keep `DefaultSupportedNIPs`, NIP-11 output, the dashboard registry, and the exact-count regression test synchronized.
+2. Keep all integration scripts on the shared `RELAY_URL` and `HTTP_URL` variables, with local `ws://localhost:8080` and `http://localhost:8080` defaults.
+3. Run `relay/tests/nips/run_all.sh` only against a disposable or authorized test relay, and preserve its non-zero exit status when a script fails.
+4. Add negative cases for validator rejection, authorization failures, malformed filters, tag limits, and rate limits before calling a NIP behavior complete.
 
-| Category | Count |
-|----------|-------|
-| 🔴 Critical (Remove/Deprecate) | 9 |
-| 🟡 High (Recent Updates) | 13 |
-| 🟢 Medium (Missing High-Value) | 20 |
-| 🔵 Low (Niche) | 15 |
-| ✅ Already Implemented & Current | ~40 |
-| **Total Tracked** | **~97** |
+### Priority 2: review high-impact and recently changing behavior
 
----
+Review the current specifications and implementation together for NIP-29, NIP-42, NIP-44, NIP-45, NIP-47, NIP-51, NIP-67, NIP-77, NIP-86, NIP-87, NIP-92, NIP-94, NIP-98, and NIP-B7. Each review should produce one of three outcomes: a focused code change with tests, a documented reason the existing behavior is sufficient, or a clearly scoped follow-up issue.
 
-## 🎯 Next Steps Priority Order
+Pay particular attention to authentication boundaries, protected events, event deletion and vanish semantics, relay-management authorization, COUNT/negentropy correctness, media metadata, and the distinction between relay event handling and client-side NIPs.
 
-### Phase 1: Cleanup (Week 1)
-- [ ] Remove NIP-03, NIP-04, NIP-15, NIP-26, NIP-28, NIP-72, NIP-90, NIP-96, NIP-EE from advertised list
-- [ ] Add deprecation notices to validators
+### Priority 3: expand behavior coverage
 
-### Phase 2: Spec Compliance (Week 2-3)
-- [ ] Update validators for NIP-29, NIP-47, NIP-78, NIP-45, NIP-44, NIP-43, NIP-86, NIP-51, NIP-34, NIP-46, NIP-69, NIP-60
-- [ ] Implement NIP-92 (imeta) for Blossom
+Add focused integration or Go tests for currently advertised areas that have little direct coverage, including NIP-05, NIP-07, NIP-10, NIP-19, NIP-21, NIP-27, NIP-36, NIP-46, NIP-48, NIP-49, NIP-5A, NIP-64, NIP-66, NIP-69, NIP-70, NIP-71, NIP-75, NIP-84, NIP-85, NIP-88, NIP-89, NIP-99, NIP-A0, NIP-A4, NIP-B0, NIP-C0, NIP-C7, NIP-CC, and NIP-F4. Prioritize relay-enforced behavior; client-only specifications should be documented as metadata or ecosystem support rather than over-claimed as server validation.
 
-### Phase 3: High-Value Additions (Week 3-5)
-- [ ] Implement NIP-05, NIP-07, NIP-10, NIP-27, NIP-46, NIP-98
-- [ ] Add NIP-19, NIP-21, NIP-36, NIP-48, NIP-49
+### Priority 4: dependency and operations hygiene
 
-### Phase 4: Nice-to-Have (Ongoing)
-- [ ] NIP-5A, NIP-67, NIP-87, NIP-C7, NIP-F4, etc.
+Review Go and Node dependencies on a planned cadence, test upgrades in isolation, and record compatibility changes. Keep production configuration free of secrets, verify systemd hardening after service changes, and run the ARM64 build before deploying to the AWS Graviton host.
 
----
+## Validation commands
 
-## 📝 GitHub Issues to Create
+From the repository root:
 
-Each row above should become a GitHub issue with:
-- **Title**: `[NIP-XX] Description`
-- **Labels**: `nip`, `priority: critical/high/medium/low`, `type: cleanup/update/new`
-- **Description**: Links to spec, files to modify, acceptance criteria
-- **Assignee**: (to be assigned)
-- **Milestone**: Phase 1/2/3/4
+```bash
+# Relay unit, race, vet, and build checks
+cd relay
+go test ./...
+go test -race ./...
+go vet ./...
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bin/relay-arm64 ./cmd
+node --check web/static/script.js
 
----
+# NIP shell syntax checks
+for test in tests/nips/test_nip*.sh; do bash -n "$test"; done
 
-## 🔗 References
-- Official NIPs: https://github.com/nostr-protocol/nips
-- NIP Registry: https://github.com/nostr-protocol/registry-of-kinds
-- Project Repo: https://github.com/psam21/ns
+# Authorized integration run against a disposable relay
+RELAY_URL=ws://localhost:8080 HTTP_URL=http://localhost:8080 \
+  ./tests/nips/run_all.sh
+```
+
+From the repository root, the relay smoke test is:
+
+```bash
+RELAY_URL=ws://localhost:8080 HTTP_URL=http://localhost:8080 \
+  ./deploy/test_relay.sh
+```
+
+## References
+
+- [Nostr NIP repository](https://github.com/nostr-protocol/nips)
+- [Nostr protocol site](https://nostr.org/)
+- [Blossom protocol and server ecosystem](https://github.com/hzrd149/blossom-server)
+- [Project repository](https://github.com/psam21/ns)

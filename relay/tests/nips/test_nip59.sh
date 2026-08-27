@@ -17,7 +17,7 @@ successful_tests=0
 failed_tests=0
 
 # Relay URL - use local relay for testing
-RELAY="ws://localhost:8085"
+RELAY="${RELAY:-${RELAY_URL:-ws://localhost:8080}}"
 
 # Function to check dependencies
 check_dependencies() {
@@ -37,7 +37,7 @@ check_dependencies
 check_relay() {
     echo "🔗 Checking relay connection..."
     if ! timeout 5 bash -c "</dev/tcp/localhost/8085" 2>/dev/null; then
-        echo -e "${RED}❌ Relay not accessible on localhost:8085${NC}"
+        echo -e "${RED}❌ Relay not accessible on localhost:8080${NC}"
         echo "Start the relay with: ./bin/relay start --config config/development.yaml"
         exit 1
     fi

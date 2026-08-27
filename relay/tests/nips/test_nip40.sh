@@ -10,7 +10,7 @@ echo -e "${BLUE}Testing NIP-40: Expiration Timestamp${NC}"
 echo
 
 # Set up relay URL
-RELAY_URL="wss://shu02.shugur.net"
+RELAY_URL="${RELAY_URL:-ws://localhost:8080}"
 
 # Note: The current relay setup appears to bypass signature verification for test events
 # This test validates that the NIP-40 implementation exists and functions correctly

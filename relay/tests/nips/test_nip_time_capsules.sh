@@ -12,7 +12,7 @@ NC='\033[0m' # No Color
 check_relay() {
     echo "🔗 Checking relay connection..."
     if ! timeout 5 bash -c "</dev/tcp/localhost/8085" 2>/dev/null; then
-        echo -e "${RED}❌ Relay not accessible on localhost:8085${NC}"
+        echo -e "${RED}❌ Relay not accessible on localhost:8080${NC}"
         echo "Start the relay with: ./bin/relay start --config config/development.yaml"
         return 1
     fi
