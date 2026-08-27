@@ -55,36 +55,26 @@ simulate_sender() {
     local sender_privkey=$3
     
     echo -e "${YELLOW}Sender: Encrypting message...${NC}"
-    # First encrypt the message using NIP-44 v2
-    ENCRYPTED_MESSAGE=$(nak encrypt --recipient-pubkey "$recipient_pubkey" --sec "$sender_privkey" "$message")
-    # Create unsigned chat event (kind 14)
-    echo -e "${YELLOW}Sender: Creating encrypted chat event...${NC}"
-    CHAT_EVENT=$(nak event -k 14 -c "$ENCRYPTED_MESSAGE" --sec "$sender_privkey" -p "$recipient_pubkey")
-    # Seal the chat message (kind 13)
+    # Create a plaintext kind-14 rumor, then remove its signature before sealing.
+    echo -e "${YELLOW}Sender: Creating plaintext kind-14 rumor...${NC}"
+    SIGNED_RUMOR=$(nak event -k 14 -c "$message" --sec "$sender_privkey" -p "$recipient_pubkey")
+    RUMOR_EVENT=$(echo "$SIGNED_RUMOR" | jq -c 'del(.sig)')
+
+    # Seal the unsigned rumor with the sender's real key.
     echo -e "${YELLOW}Sender: Sealing message...${NC}"
-    SEALED_EVENT=$(nak event -k 13 -c "$CHAT_EVENT" --sec "$sender_privkey" --created-at $(get_random_timestamp))
-    # Gift-wrap the sealed message (kind 1059) - encrypt the seal with NIP-44
+    SEALED_EVENT=$(nak event -k 13 -c "$(nak encrypt --recipient-pubkey "$recipient_pubkey" --sec "$sender_privkey" "$RUMOR_EVENT")" --sec "$sender_privkey" --created-at "$(get_random_timestamp)")
+
+    # Gift-wrap the seal with a fresh one-time wrapper key, as required by NIP-59.
     echo -e "${YELLOW}Sender: Gift-wrapping message...${NC}"
-    # First encrypt the sealed event using NIP-44
-    ENCRYPTED_SEAL=$(nak encrypt --recipient-pubkey "$recipient_pubkey" --sec "$sender_privkey" "$SEALED_EVENT")
-    # Then create the gift wrap event with encrypted content
-    GIFT_WRAPPED=$(nak event -k 1059 -c "$ENCRYPTED_SEAL" --sec "$sender_privkey" -p "$recipient_pubkey" --created-at $(get_random_timestamp))
-    # Extract the event ID for later use
-    EVENT_ID=$(echo "$GIFT_WRAPPED" | jq -r '.id')
-    
-    # Publish to relay
+    WRAPPER_PRIVKEY=$(nak key generate)
+    WRAPPER_PUBKEY=$(nak key public "$WRAPPER_PRIVKEY")
+    ENCRYPTED_SEAL=$(nak encrypt --recipient-pubkey "$recipient_pubkey" --sec "$WRAPPER_PRIVKEY" "$SEALED_EVENT")
+    GIFT_WRAPPED=$(nak event -k 1059 -c "$ENCRYPTED_SEAL" --sec "$WRAPPER_PRIVKEY" -p "$recipient_pubkey" --created-at "$(get_random_timestamp)")
+    EVENT_ID=$(echo "$GIFT_WRAPPED" | jq -er '.id')
+
+    # Publish and await the relay's OK on the same authenticated connection.
     echo -e "${YELLOW}Sender: Publishing gift-wrapped message...${NC}"
-    echo "$GIFT_WRAPPED" | nak --sec "$sender_privkey" --auth event "$RELAY"
-    
-    # Wait a moment for the event to be processed
-    sleep 2
-    
-    # Verify the event was stored
-    echo -e "${YELLOW}Sender: Verifying event was stored...${NC}"
-    RESPONSE=$(authenticated_fetch "$sender_privkey" "$EVENT_ID") || {
-        echo -e "${RED}Error: Sender could not retrieve the stored gift-wrap event${NC}" >&2
-        return 1
-    }
+    authenticated_publish "$sender_privkey" "$GIFT_WRAPPED"
     echo -e "${GREEN}Sender: Message sent successfully with ID: $EVENT_ID${NC}"
     
     # Export the EVENT_ID for use in the receiver function
@@ -112,6 +102,7 @@ simulate_receiver() {
     local recipient_privkey=$1
     local sender_pubkey=$2
     local recipient_pubkey=$3
+    local message=${NIP17_MESSAGE:-automated NIP-17 integration test message}
     local event_id=$EVENT_ID
     
     echo -e "${YELLOW}Receiver: Checking for message with ID: $event_id${NC}"
@@ -129,25 +120,28 @@ simulate_receiver() {
     RECIPIENT_TAGS=$(echo "$RECIPIENT_SUB" | jq -r '.tags[] | select(.[0] == "p") | .[1]')
     echo -e "${YELLOW}Receiver: Found recipient tags in gift-wrapped event: $RECIPIENT_TAGS${NC}"
     
-    # Extract and decrypt the gift-wrapped content
-    GIFT_WRAPPED_CONTENT=$(echo "$RECIPIENT_SUB" | jq -r '.content')
+    # Decrypt the outer wrapper with the recipient key and one-time wrapper pubkey.
+    GIFT_WRAPPED_CONTENT=$(echo "$RECIPIENT_SUB" | jq -er '.content')
+    WRAPPER_PUBKEY=$(echo "$RECIPIENT_SUB" | jq -er '.pubkey')
     echo -e "${YELLOW}Receiver: Decrypting gift-wrapped content...${NC}"
-    
-    # Decrypt the gift-wrapped content to get the sealed event
-    SEALED_EVENT=$(nak decrypt --sec "$recipient_privkey" -p "$sender_pubkey" "$GIFT_WRAPPED_CONTENT")
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}Error: Failed to decrypt gift-wrapped content${NC}"
-        echo -e "${RED}Content was: $GIFT_WRAPPED_CONTENT${NC}"
+    SEALED_EVENT=$(nak decrypt --sec "$recipient_privkey" -p "$WRAPPER_PUBKEY" "$GIFT_WRAPPED_CONTENT") || {
+        echo -e "${RED}Error: Failed to decrypt gift-wrapped content${NC}" >&2
+        return 1
+    }
+    SEALED_PUBKEY=$(echo "$SEALED_EVENT" | jq -er '.pubkey')
+    SEALED_KIND=$(echo "$SEALED_EVENT" | jq -er '.kind')
+    SEALED_TAG_COUNT=$(echo "$SEALED_EVENT" | jq -er '.tags | length')
+    if [[ "$SEALED_PUBKEY" != "$sender_pubkey" || "$SEALED_KIND" != "13" || "$SEALED_TAG_COUNT" != "0" ]]; then
+        echo -e "${RED}Error: Invalid NIP-59 seal structure${NC}" >&2
         return 1
     fi
-    # Parse the chat event
-    CHAT_EVENT=$(echo "$SEALED_EVENT" | jq -r '.content')
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}Error: Failed to parse chat event${NC}"
-        echo -e "${RED}Content was: $SEALED_EVENT${NC}"
+
+    # Decrypt the seal to recover the unsigned plaintext kind-14 rumor.
+    SEALED_CONTENT=$(echo "$SEALED_EVENT" | jq -er '.content')
+    CHAT_EVENT=$(nak decrypt --sec "$recipient_privkey" -p "$sender_pubkey" "$SEALED_CONTENT") || {
+        echo -e "${RED}Error: Failed to decrypt sealed rumor${NC}" >&2
         return 1
-    fi
-    # Extract recipient tags from chat event
+    }
     CHAT_RECIPIENT_TAGS=$(echo "$CHAT_EVENT" | jq -r '.tags[] | select(.[0] == "p") | .[1]')
     echo -e "${YELLOW}Receiver: Found recipient tags in chat event: $CHAT_RECIPIENT_TAGS${NC}"
     
@@ -192,18 +186,10 @@ simulate_receiver() {
     if [ $FOUND_MATCH -eq 1 ]; then
         echo -e "${GREEN}Receiver: Found message addressed to us!${NC}"
         
-        # Extract the encrypted content from the chat event
-        ENCRYPTED_MESSAGE=$(echo "$CHAT_EVENT" | jq -r '.content')
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}Error: Failed to extract encrypted content${NC}"
-            echo -e "${RED}Content was: $CHAT_EVENT${NC}"
-            return 1
-        fi
-        # Decrypt the message
-        echo -e "${YELLOW}Receiver: Attempting to decrypt message...${NC}"
-        DECRYPTED_MESSAGE=$(nak decrypt --sec "$recipient_privkey" -p "$sender_pubkey" "$ENCRYPTED_MESSAGE")
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}Error: Failed to decrypt message${NC}"
+        CHAT_KIND=$(echo "$CHAT_EVENT" | jq -er '.kind')
+        CHAT_CONTENT=$(echo "$CHAT_EVENT" | jq -er '.content')
+        if [[ "$CHAT_KIND" != "14" || "$CHAT_CONTENT" != "$message" ]]; then
+            echo -e "${RED}Error: Rumor kind/content mismatch${NC}" >&2
             return 1
         fi
         echo -e "${GREEN}Receiver: Successfully decrypted the automated test message.${NC}"

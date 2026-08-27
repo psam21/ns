@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -13,19 +14,17 @@ import (
 	"github.com/nbd-wtf/go-nostr/nip42"
 )
 
+const probeTimeout = 45 * time.Second
+
 func main() {
 	relayURL := flag.String("relay", "wss://www.nostr.ltd", "relay WebSocket URL")
 	authRelayURL := flag.String("auth-relay", "wss://nostr.ltd", "relay URL included in the AUTH event")
 	queryID := flag.String("query-id", "", "optional event ID to retrieve after authentication")
+	publish := flag.Bool("publish", false, "read one signed event from stdin and publish it after authentication")
 	flag.Parse()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
 	defer cancel()
-	conn, _, err := websocket.Dial(ctx, *relayURL, nil)
-	if err != nil {
-		fail("dial relay", err)
-	}
-	defer conn.Close(websocket.StatusNormalClosure, "NIP-42 probe complete")
 
 	secretKey := os.Getenv("NIP_TEST_SECRET_KEY")
 	if secretKey == "" {
@@ -35,6 +34,23 @@ func main() {
 	if err != nil {
 		fail("derive probe public key", err)
 	}
+
+	var eventJSON []byte
+	if *publish {
+		eventJSON, err = io.ReadAll(io.LimitReader(os.Stdin, 2<<20))
+		if err != nil {
+			fail("read event from stdin", err)
+		}
+		if len(eventJSON) == 0 {
+			fail("read event from stdin", fmt.Errorf("empty event input"))
+		}
+	}
+
+	conn, _, err := websocket.Dial(ctx, *relayURL, nil)
+	if err != nil {
+		fail("dial relay", err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "NIP-42 probe complete")
 
 	for {
 		messageType, data, err := conn.Read(ctx)
@@ -49,11 +65,11 @@ func main() {
 			continue
 		}
 
-		event := nip42.CreateUnsignedAuthEvent(challenge, pubkey, *authRelayURL)
-		if err := event.Sign(secretKey); err != nil {
+		authEvent := nip42.CreateUnsignedAuthEvent(challenge, pubkey, *authRelayURL)
+		if err := authEvent.Sign(secretKey); err != nil {
 			fail("sign AUTH event", err)
 		}
-		message, err := json.Marshal([]interface{}{"AUTH", event})
+		message, err := json.Marshal([]interface{}{"AUTH", authEvent})
 		if err != nil {
 			fail("encode AUTH event", err)
 		}
@@ -62,26 +78,74 @@ func main() {
 		}
 
 		for {
-			_, response, err := conn.Read(ctx)
+			messageType, response, err := conn.Read(ctx)
 			if err != nil {
 				fail("read AUTH acknowledgement", err)
 			}
-			accepted, reason, matches := authAcknowledgement(response, event.ID)
+			if messageType != websocket.MessageText {
+				continue
+			}
+			accepted, reason, matches := authAcknowledgement(response, authEvent.ID)
 			if !matches {
 				continue
 			}
 			if !accepted {
 				fail("AUTH rejected", fmt.Errorf("%s", reason))
 			}
-			if *queryID == "" {
+
+			switch {
+			case *publish:
+				if err := publishEvent(ctx, conn, eventJSON); err != nil {
+					fail("authenticated event publish", err)
+				}
+				return
+			case *queryID != "":
+				if err := queryEvent(ctx, conn, *queryID); err != nil {
+					fail("authenticated event query", err)
+				}
+				return
+			default:
 				fmt.Printf("NIP-42 AUTH accepted for probe pubkey %s\n", pubkey)
 				return
 			}
-			if err := queryEvent(ctx, conn, *queryID); err != nil {
-				fail("authenticated event query", err)
-			}
-			return
 		}
+	}
+}
+
+func publishEvent(ctx context.Context, conn *websocket.Conn, eventJSON []byte) error {
+	var event nostr.Event
+	if err := json.Unmarshal(eventJSON, &event); err != nil {
+		return fmt.Errorf("decode event: %w", err)
+	}
+	if event.ID == "" {
+		return fmt.Errorf("event has no id")
+	}
+
+	message, err := json.Marshal([]interface{}{"EVENT", event})
+	if err != nil {
+		return fmt.Errorf("encode EVENT: %w", err)
+	}
+	if err := conn.Write(ctx, websocket.MessageText, message); err != nil {
+		return fmt.Errorf("send EVENT: %w", err)
+	}
+
+	for {
+		messageType, data, err := conn.Read(ctx)
+		if err != nil {
+			return fmt.Errorf("read EVENT acknowledgement: %w", err)
+		}
+		if messageType != websocket.MessageText {
+			continue
+		}
+		accepted, reason, matches := eventAcknowledgement(data, event.ID)
+		if !matches {
+			continue
+		}
+		if !accepted {
+			return fmt.Errorf("relay rejected event %s: %s", event.ID, reason)
+		}
+		fmt.Printf("NIP-42 authenticated publish accepted for event %s\n", event.ID)
+		return nil
 	}
 }
 
@@ -107,31 +171,44 @@ func queryEvent(ctx context.Context, conn *websocket.Conn, eventID string) error
 		if messageType != websocket.MessageText {
 			continue
 		}
-		command, ok := frameCommand(data)
-		if !ok {
+		event, done, err := parseQueryResponse(data, eventID)
+		if err != nil {
+			return err
+		}
+		if !done || event == nil {
 			continue
 		}
-		switch command {
-		case "EVENT":
-			var frame []json.RawMessage
-			if err := json.Unmarshal(data, &frame); err != nil || len(frame) < 3 {
-				continue
-			}
-			var event nostr.Event
-			if err := json.Unmarshal(frame[2], &event); err != nil || event.ID != eventID {
-				continue
-			}
-			encoded, err := json.Marshal(event)
-			if err != nil {
-				return fmt.Errorf("encode event: %w", err)
-			}
-			fmt.Println(string(encoded))
-			return nil
-		case "EOSE":
-			return fmt.Errorf("event %s not found", eventID)
-		case "CLOSED", "NOTICE":
-			return fmt.Errorf("relay rejected event query: %s", string(data))
+		encoded, err := json.Marshal(event)
+		if err != nil {
+			return fmt.Errorf("encode event: %w", err)
 		}
+		fmt.Println(string(encoded))
+		return nil
+	}
+}
+
+func parseQueryResponse(data []byte, eventID string) (*nostr.Event, bool, error) {
+	command, ok := frameCommand(data)
+	if !ok {
+		return nil, false, nil
+	}
+	switch command {
+	case "EVENT":
+		var frame []json.RawMessage
+		if err := json.Unmarshal(data, &frame); err != nil || len(frame) < 3 {
+			return nil, false, nil
+		}
+		var event nostr.Event
+		if err := json.Unmarshal(frame[2], &event); err != nil || event.ID != eventID {
+			return nil, false, nil
+		}
+		return &event, true, nil
+	case "EOSE":
+		return nil, true, fmt.Errorf("event %s not found", eventID)
+	case "CLOSED", "NOTICE":
+		return nil, true, fmt.Errorf("relay rejected event query: %s", string(data))
+	default:
+		return nil, false, nil
 	}
 }
 
@@ -160,6 +237,14 @@ func authChallenge(data []byte) (string, bool) {
 }
 
 func authAcknowledgement(data []byte, eventID string) (bool, string, bool) {
+	return acknowledgement(data, eventID)
+}
+
+func eventAcknowledgement(data []byte, eventID string) (bool, string, bool) {
+	return acknowledgement(data, eventID)
+}
+
+func acknowledgement(data []byte, eventID string) (bool, string, bool) {
 	var frame []json.RawMessage
 	if err := json.Unmarshal(data, &frame); err != nil || len(frame) < 3 {
 		return false, "", false
@@ -180,5 +265,6 @@ func authAcknowledgement(data []byte, eventID string) (bool, string, bool) {
 }
 
 func fail(operation string, err error) {
-	panic(fmt.Errorf("%s: %w", operation, err))
+	fmt.Fprintf(os.Stderr, "%s: %v\n", operation, err)
+	os.Exit(1)
 }
