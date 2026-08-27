@@ -1,8 +1,8 @@
-# Shugur Relay - AI Coding Agent Instructions
+# nostr.ltd Relay - AI Coding Agent Instructions
 
 ## Architecture Overview
 
-**Shugur Relay** is a production-grade Nostr relay built in Go with PostgreSQL. The architecture follows a layered design:
+**nostr.ltd Relay** is a production-grade Nostr relay built in Go with PostgreSQL. The architecture follows a layered design:
 
 - **`cmd/`** - CLI entry points using Cobra (`main.go`, `root.go`, `version.go`)
 - **`internal/application/`** - Application orchestration (`Node` struct coordinates all components)

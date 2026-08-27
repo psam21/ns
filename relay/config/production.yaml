@@ -1,4 +1,4 @@
-# Production Configuration for Shugur Relay
+# Production Configuration for nostr.ltd Relay
 # Security-hardened settings for production deployment
 
 GENERAL:
