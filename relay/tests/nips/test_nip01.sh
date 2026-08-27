@@ -17,7 +17,8 @@ fail_count=0
 RELAY="${RELAY:-${RELAY_URL:-ws://localhost:8080}}"
 TEST_SECRET_KEY="$(nak key generate)"
 TEST_PUBKEY="$(nak key public "$TEST_SECRET_KEY")"
-SECOND_TEST_PUBKEY="82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2"
+SECOND_TEST_SECRET_KEY="$(nak key generate)"
+SECOND_TEST_PUBKEY="$(nak key public "$SECOND_TEST_SECRET_KEY")"
 
 # Helper function to print test results
 print_result() {
@@ -122,6 +123,8 @@ fi
 
 # Seed a known signed event for author and compound filter assertions.
 FILTER_SEED_EVENT=$(nak event -k 1 -c "NIP-01 filter seed" -t t=test --sec "$TEST_SECRET_KEY" "$RELAY")
+FILTER_SEED_EVENT_2=$(nak event -k 1 -c "NIP-01 second-author filter seed" -t t=test --sec "$SECOND_TEST_SECRET_KEY" "$RELAY")
+sleep "${NIP01_INDEX_DELAY:-1}"
 
 # Test NIP-01: Filter Tests
 echo -e "\n${YELLOW}Testing NIP-01: Filter Semantics${NC}"
@@ -135,8 +138,8 @@ else
 fi
 
 # Test 12: Filter by author
-AUTHOR_FILTER=$(nak req -k 1 --author $TEST_PUBKEY $RELAY)
-if [ ! -z "$AUTHOR_FILTER" ]; then
+AUTHOR_FILTER=$(nak req -k 1 --author "$TEST_PUBKEY" -l 10 "$RELAY")
+if printf '%s\n' "$AUTHOR_FILTER" | grep -Fq "\"pubkey\":\"$TEST_PUBKEY\""; then
     print_result "Filter by author" true "01"
 else
     print_result "Filter by author" false "01"
@@ -167,7 +170,7 @@ else
 fi
 
 # Test 16: Complex filter (multiple conditions)
-COMPLEX_FILTER=$(nak req -k 1 --author $TEST_PUBKEY -t t=test --since $(($(date +%s) - 3600)) --until $(date +%s) -l 1 $RELAY)
+COMPLEX_FILTER=$(nak req -k 1 --author "$TEST_PUBKEY" -t t=test --since $(($(date +%s) - 3600)) --until $(date +%s) -l 1 "$RELAY")
 if [ ! -z "$COMPLEX_FILTER" ]; then
     print_result "Complex filter" true "01"
 else
@@ -199,8 +202,8 @@ else
 fi
 
 # Test 20: Filter with multiple authors
-MULTI_AUTHOR_FILTER=$(nak req -k 1 --author $TEST_PUBKEY --author $SECOND_TEST_PUBKEY $RELAY)
-if [ ! -z "$MULTI_AUTHOR_FILTER" ]; then
+MULTI_AUTHOR_FILTER=$(nak req -k 1 --author "$TEST_PUBKEY" --author "$SECOND_TEST_PUBKEY" -l 10 "$RELAY")
+if printf '%s\n' "$MULTI_AUTHOR_FILTER" | grep -Eq "\"pubkey\":\"($TEST_PUBKEY|$SECOND_TEST_PUBKEY)\""; then
     print_result "Filter with multiple authors" true "01"
 else
     print_result "Filter with multiple authors" false "01"

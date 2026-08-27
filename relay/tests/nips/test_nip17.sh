@@ -12,6 +12,9 @@ YELLOW='\033[1;33m'
 # Relay URL - should be from kind 10050 list
 RELAY="${RELAY:-${RELAY_URL:-ws://localhost:8080}}"
 # RELAY="wss://relay.example.com"
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/tools/nip42_fetch.sh"
 
 # Function to check if nak is installed
 check_nak() {
@@ -78,7 +81,10 @@ simulate_sender() {
     
     # Verify the event was stored
     echo -e "${YELLOW}Sender: Verifying event was stored...${NC}"
-    RESPONSE=$(nak --sec "$sender_privkey" --auth req -i "$EVENT_ID" "$RELAY")
+    RESPONSE=$(authenticated_fetch "$sender_privkey" "$EVENT_ID") || {
+        echo -e "${RED}Error: Sender could not retrieve the stored gift-wrap event${NC}" >&2
+        return 1
+    }
     echo -e "${GREEN}Sender: Message sent successfully with ID: $EVENT_ID${NC}"
     
     # Export the EVENT_ID for use in the receiver function
@@ -90,7 +96,7 @@ fetch_published_event() {
     local attempts=${NIP17_FETCH_ATTEMPTS:-6}
     local response
     for ((attempt = 1; attempt <= attempts; attempt++)); do
-        if response=$(nak --sec "$RECIPIENT_PRIVKEY" --auth req -i "$event_id" "$RELAY" 2>/dev/null) && \
+        if response=$(authenticated_fetch "$RECIPIENT_PRIVKEY" "$event_id" 2>/dev/null) && \
             printf '%s' "$response" | jq -e --arg id "$event_id" 'select(type == "object" and .id == $id)' >/dev/null 2>&1; then
             printf '%s' "$response"
             return 0

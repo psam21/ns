@@ -18,6 +18,9 @@ failed_tests=0
 
 # Relay URL - use local relay for testing
 RELAY="${RELAY:-${RELAY_URL:-ws://localhost:8080}}"
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/tools/nip42_fetch.sh"
 
 # Function to check dependencies
 check_dependencies() {
@@ -146,7 +149,7 @@ fi
 # Test 6: Retrieve gift wrap events
 echo -e "\n${YELLOW}Test 6: Retrieving gift wrap events${NC}"
 sleep 2  # Give events time to be indexed
-search_response=$(nak --sec "$RECIPIENT_PRIVKEY" --auth req -k 1059 -l 5 "$RELAY" 2>&1)
+search_response=$(authenticated_fetch "$RECIPIENT_PRIVKEY" "${GIFT_WRAP_ID:-}") 2>&1
 echo "Response: $search_response"
 if [[ "$search_response" == *"\"pubkey\""* && "$search_response" == *"\"content\""* ]]; then
     print_result "Retrieve gift wrap events" true "Successfully found events"
@@ -157,7 +160,7 @@ fi
 # Test 7: Test retrieving specific gift wrap by ID (if we have one)
 if [ ! -z "$GIFT_WRAP_ID" ]; then
     echo -e "\n${YELLOW}Test 7: Retrieving specific gift wrap by ID${NC}"
-    specific_response=$(nak --sec "$RECIPIENT_PRIVKEY" --auth req -i "$GIFT_WRAP_ID" "$RELAY" 2>&1)
+    specific_response=$(authenticated_fetch "$RECIPIENT_PRIVKEY" "$GIFT_WRAP_ID" 2>&1)
     if [[ "$specific_response" == *"$GIFT_WRAP_ID"* ]]; then
         print_result "Retrieve specific gift wrap" true "Successfully found event by ID"
     else
@@ -172,7 +175,7 @@ fi
 if [ ! -z "$GIFT_WRAP_ID" ]; then
     echo -e "\n${YELLOW}Test 8: Testing gift wrap decryption${NC}"
     # Retrieve the gift wrap
-    retrieved_event=$(nak --sec "$RECIPIENT_PRIVKEY" --auth req -i "$GIFT_WRAP_ID" "$RELAY" 2>&1)
+    retrieved_event=$(authenticated_fetch "$RECIPIENT_PRIVKEY" "$GIFT_WRAP_ID" 2>&1)
     if [[ "$retrieved_event" == *"$GIFT_WRAP_ID"* ]]; then
         # Extract the content and try to decrypt
         ENCRYPTED_CONTENT=$(echo "$retrieved_event" | grep -o '"content":"[^"]*"' | cut -d'"' -f4)

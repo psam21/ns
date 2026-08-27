@@ -121,11 +121,12 @@ if [ ! -z "$RELAY_INFO" ]; then
         print_result "Relay supports NIP-02" false "11"
     fi
 
-    # Check if NIP-04 is supported
-    if echo "$RELAY_INFO" | jq -e '.supported_nips[] | select(. == 4)' >/dev/null 2>&1; then
-        print_result "Relay supports NIP-04" true "11"
+    # Check a currently advertised matrix NIP instead of the legacy NIP-04
+    # expectation, which is intentionally absent from nostr.ltd’s 77-NIP set.
+    if echo "$RELAY_INFO" | jq -e '.supported_nips[] | select(. == 42)' >/dev/null 2>&1; then
+        print_result "Relay supports NIP-42" true "11"
     else
-        print_result "Relay supports NIP-04" false "11"
+        print_result "Relay supports NIP-42" false "11"
     fi
 
     # Check if NIP-09 is supported

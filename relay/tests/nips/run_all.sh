@@ -10,6 +10,7 @@ HTTP_URL="${HTTP_URL:-http://localhost:8080}"
 TEST_TIMEOUT="${TEST_TIMEOUT:-120}"
 NIP_AUTH_BRIDGE="${NIP_AUTH_BRIDGE:-true}"
 NIP_AUTH_RELAY_URL="${NIP_AUTH_RELAY_URL:-$RELAY_URL}"
+UPSTREAM_RELAY_URL="$RELAY_URL"
 
 required_commands=(bash curl jq timeout)
 missing=()
@@ -152,7 +153,7 @@ for test_file in "${tests[@]}"; do
 		run_relay_url="$RELAY_URL"
 	fi
 	if RELAY_URL="$run_relay_url" HTTP_URL="$HTTP_URL" \
-		NIP_AUTH_UPSTREAM_URL="$RELAY_URL" NIP_AUTH_RELAY_URL="$NIP_AUTH_RELAY_URL" \
+		NIP_AUTH_UPSTREAM_URL="$UPSTREAM_RELAY_URL" NIP_AUTH_RELAY_URL="$NIP_AUTH_RELAY_URL" \
 		NIP_AUTH_PROBE_BINARY="$auth_probe_binary" \
 		timeout --foreground "$TEST_TIMEOUT" bash "$test_file"; then
         ((passed += 1))
