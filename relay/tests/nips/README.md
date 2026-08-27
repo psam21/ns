@@ -14,6 +14,7 @@ Required tools for the common suite are:
 - [`nak`](https://github.com/fiatjaf/nak) for event publishing and querying
 - `curl` and `jq` for NIP-11 and HTTP checks
 - `python3`, `openssl`, `base64`, `od`, and `sha256sum` for selected scripts
+- `go` when the runner’s authenticated WebSocket bridge or NIP-42 probe is enabled
 
 The project-specific Time Capsules test may require additional Python packages listed in `nip-xx-time-capsules/requirements-test.txt` when that directory is present.
 
@@ -26,6 +27,8 @@ export RELAY_URL="ws://localhost:8080"   # WebSocket endpoint
 export HTTP_URL="http://localhost:8080"  # HTTP/NIP-11 endpoint
 export TEST_TIMEOUT=30                    # Optional per-test timeout
 export VERBOSE=1                          # Optional script-specific verbosity
+export NIP_AUTH_BRIDGE=true                 # Bridge upstream AUTH challenges for nak
+export NIP_AUTH_RELAY_URL=wss://nostr.ltd   # URL placed in NIP-42 AUTH events
 ```
 
 The default is intentionally local. The suite no longer contains hard-coded production or legacy fork-domain endpoints. Override `RELAY_URL` and `HTTP_URL` only when you have permission to test another relay.
@@ -48,7 +51,7 @@ HTTP_URL=http://localhost:8080 \
   ./tests/nips/run_all.sh
 ```
 
-`run_all.sh` checks prerequisites, runs each `test_nip*.sh` script in sorted order, prints a pass/fail summary, and exits non-zero if any script fails. The suite is intentionally not part of the default unit-test command because it needs a live relay and mutates test data.
+`run_all.sh` checks prerequisites, builds a repository-owned authenticated WebSocket bridge when enabled, runs each `test_nip*.sh` script in sorted order, prints a pass/fail summary, and exits non-zero if any script fails. The bridge answers an upstream NIP-42 challenge with an ephemeral test signer and keeps the existing `nak`-based scripts unchanged. Set `NIP_AUTH_BRIDGE=false` for a local relay that does not issue eager AUTH challenges. The suite is intentionally not part of the default unit-test command because it needs a live relay and mutates test data.
 
 ### Validate all 77 advertised identifiers
 
@@ -64,7 +67,14 @@ Run live checks only against a disposable or explicitly authorized relay:
 
 ```bash
 RELAY_URL=ws://localhost:8080 HTTP_URL=http://localhost:8080 \
-  ./tests/nips/run_coverage.sh --live
+  NIP_AUTH_BRIDGE=false ./tests/nips/run_coverage.sh --live
+```
+
+For an explicitly authorized remote relay that sends eager NIP-42 challenges:
+
+```bash
+RELAY_URL=wss://www.nostr.ltd HTTP_URL=https://www.nostr.ltd \
+  NIP_AUTH_RELAY_URL=wss://nostr.ltd ./tests/nips/run_coverage.sh --live
 ```
 
 Static validation marks client-only and external-service NIPs as intentional `manual` coverage. Live validation additionally compares the relay’s NIP-11 registry with all 77 matrix identifiers and runs the mutating integration suite.
@@ -102,7 +112,8 @@ RELAY_URL=ws://localhost:8080 HTTP_URL=http://localhost:8080 ./deploy/test_relay
 | `test_nip25.sh` | NIP-25 | Reactions |
 | `test_nip28.sh` | NIP-28 | Public chat |
 | `test_nip33.sh` | NIP-33 | Addressable events |
-| `test_nip40.sh` | NIP-40 | Expiration timestamps |
+| `test_nip40.sh` | NIP-40 | Signed future, expired, and malformed expiration events |
+| `test_nip42.sh` | NIP-42 | Auth challenge and signed AUTH acknowledgement |
 | `test_nip44.sh` | NIP-44 | Versioned encrypted payloads |
 | `test_nip45.sh` | NIP-45 | COUNT requests and counting results |
 | `test_nip47.sh` | NIP-47 | Nostr Wallet Connect event validation |
@@ -137,7 +148,7 @@ This test exercises the project-specific static website event flow and content-a
 
 ## Troubleshooting
 
-If the suite cannot connect, verify that the relay is running on port 8080 and that PostgreSQL is available. Check the HTTP metadata endpoint with:
+If the suite cannot connect, verify that the relay is running on port 8080 and that PostgreSQL is available. For a remote relay, confirm that `NIP_AUTH_RELAY_URL` matches the relay’s configured public URL. The bridge log is kept in the temporary directory and is shown when `VERBOSE=1`. Check the HTTP metadata endpoint with:
 
 ```bash
 curl -sS -H 'Accept: application/nostr+json' "$HTTP_URL" | jq .

@@ -15,6 +15,9 @@ fail_count=0
 # Relay URL
 # RELAY="ws://localhost:8080"
 RELAY="${RELAY:-${RELAY_URL:-ws://localhost:8080}}"
+TEST_SECRET_KEY="$(nak key generate)"
+TEST_PUBKEY="$(nak key public "$TEST_SECRET_KEY")"
+SECOND_TEST_PUBKEY="82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2"
 
 # Helper function to print test results
 print_result() {
@@ -70,7 +73,7 @@ else
 fi
 
 # Test 5: Event with pubkey
-PUBKEY_EVENT=$(nak event -c "Testing NIP-01 event with pubkey" -p 79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798 $RELAY)
+PUBKEY_EVENT=$(nak event -c "Testing NIP-01 event with pubkey" -p $TEST_PUBKEY $RELAY)
 if [ ! -z "$PUBKEY_EVENT" ]; then
     print_result "Event with pubkey" true "01"
 else
@@ -78,7 +81,7 @@ else
 fi
 
 # Test 6: Event with all fields (without signature)
-COMPLETE_EVENT=$(nak event -k 1 -c "Testing NIP-01 complete event" -t t=test --created-at $(date +%s) -p 79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798 $RELAY)
+COMPLETE_EVENT=$(nak event -k 1 -c "Testing NIP-01 complete event" -t t=test --created-at $(date +%s) -p $TEST_PUBKEY $RELAY)
 if [ ! -z "$COMPLETE_EVENT" ]; then
     print_result "Event with all fields" true "01"
 else
@@ -117,6 +120,9 @@ else
     print_result "Event with empty content" false "01"
 fi
 
+# Seed a known signed event for author and compound filter assertions.
+FILTER_SEED_EVENT=$(nak event -k 1 -c "NIP-01 filter seed" -t t=test --sec "$TEST_SECRET_KEY" "$RELAY")
+
 # Test NIP-01: Filter Tests
 echo -e "\n${YELLOW}Testing NIP-01: Filter Semantics${NC}"
 
@@ -129,7 +135,7 @@ else
 fi
 
 # Test 12: Filter by author
-AUTHOR_FILTER=$(nak req -k 1 --author 79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798 $RELAY)
+AUTHOR_FILTER=$(nak req -k 1 --author $TEST_PUBKEY $RELAY)
 if [ ! -z "$AUTHOR_FILTER" ]; then
     print_result "Filter by author" true "01"
 else
@@ -161,7 +167,7 @@ else
 fi
 
 # Test 16: Complex filter (multiple conditions)
-COMPLEX_FILTER=$(nak req -k 1 --author 79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798 -t t=test --since $(($(date +%s) - 3600)) --until $(date +%s) -l 1 $RELAY)
+COMPLEX_FILTER=$(nak req -k 1 --author $TEST_PUBKEY -t t=test --since $(($(date +%s) - 3600)) --until $(date +%s) -l 1 $RELAY)
 if [ ! -z "$COMPLEX_FILTER" ]; then
     print_result "Complex filter" true "01"
 else
@@ -193,7 +199,7 @@ else
 fi
 
 # Test 20: Filter with multiple authors
-MULTI_AUTHOR_FILTER=$(nak req -k 1 --author 79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798 --author 82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2 $RELAY)
+MULTI_AUTHOR_FILTER=$(nak req -k 1 --author $TEST_PUBKEY --author $SECOND_TEST_PUBKEY $RELAY)
 if [ ! -z "$MULTI_AUTHOR_FILTER" ]; then
     print_result "Filter with multiple authors" true "01"
 else

@@ -26,7 +26,7 @@ NIP-37	relay-event	contract	registry-contract	Draft wrap events
 NIP-38	relay-event	contract	registry-contract	User status events
 NIP-39	relay-event	contract	registry-contract	External identity fields
 NIP-40	relay-event	integration	test_nip40.sh	Expiration timestamps
-NIP-42	relay-control	contract	registry-contract	Client authentication
+NIP-42	relay-control	integration	test_nip42.sh	Client authentication challenge and signed AUTH event
 NIP-43	relay-control	contract	registry-contract	Relay access metadata
 NIP-44	relay-event	integration	test_nip44.sh	Versioned encrypted payloads
 NIP-45	relay-control	integration	test_nip45.sh	COUNT requests

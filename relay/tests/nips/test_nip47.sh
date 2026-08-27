@@ -21,12 +21,10 @@ RELAY_URL="${RELAY_URL:-ws://localhost:8080}"
 
 # Function to check dependencies
 check_dependencies() {
-    for cmd in nak websocat; do
-        if ! command -v $cmd &> /dev/null; then
-            echo -e "${RED}Error: $cmd is not installed${NC}"
-            exit 1
-        fi
-    done
+    if ! command -v nak &> /dev/null; then
+        echo -e "${RED}Error: nak is not installed${NC}"
+        exit 1
+    fi
 }
 
 # Check dependencies

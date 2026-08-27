@@ -4,9 +4,12 @@
 set -u
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+RELAY_ROOT=$(cd -- "$SCRIPT_DIR/../.." && pwd)
 RELAY_URL="${RELAY_URL:-ws://localhost:8080}"
 HTTP_URL="${HTTP_URL:-http://localhost:8080}"
 TEST_TIMEOUT="${TEST_TIMEOUT:-120}"
+NIP_AUTH_BRIDGE="${NIP_AUTH_BRIDGE:-true}"
+NIP_AUTH_RELAY_URL="${NIP_AUTH_RELAY_URL:-$RELAY_URL}"
 
 required_commands=(bash curl jq nak timeout)
 missing=()
@@ -22,10 +25,13 @@ if ((${#missing[@]} > 0)); then
     exit 2
 fi
 
+MATRIX="$SCRIPT_DIR/coverage.tsv"
 printf 'NIP integration suite\n'
+printf 'Coverage matrix: %s\n' "$MATRIX"
 printf 'Relay: %s\n' "$RELAY_URL"
 printf 'HTTP:  %s\n' "$HTTP_URL"
-printf 'Per-test timeout: %ss\n\n' "$TEST_TIMEOUT"
+printf 'Per-test timeout: %ss\n' "$TEST_TIMEOUT"
+printf 'NIP-42 auth bridge: %s\n\n' "$NIP_AUTH_BRIDGE"
 
 if ! curl --fail --silent --show-error --max-time 10 \
     -H 'Accept: application/nostr+json' "$HTTP_URL" >/dev/null; then
@@ -33,19 +39,82 @@ if ! curl --fail --silent --show-error --max-time 10 \
     exit 2
 fi
 
-mapfile -t tests < <(find "$SCRIPT_DIR" -maxdepth 1 -type f -name 'test_nip*.sh' -print | sort)
-if ((${#tests[@]} == 0)); then
-    printf 'No NIP test scripts found in %s\n' "$SCRIPT_DIR" >&2
+if [[ ! -f "$MATRIX" ]]; then
+    printf 'Coverage matrix is missing: %s\n' "$MATRIX" >&2
     exit 2
 fi
+mapfile -t tests < <(awk -F '\t' -v dir="$SCRIPT_DIR" '$1 !~ /^#/ && NF >= 5 && $3 == "integration" {print dir "/" $4}' "$MATRIX" | sort -u)
+if ((${#tests[@]} == 0)); then
+    printf 'No integration tests are declared in %s\n' "$MATRIX" >&2
+    exit 2
+fi
+for test_file in "${tests[@]}"; do
+    if [[ ! -x "$test_file" ]]; then
+        printf 'Integration test is missing or not executable: %s\n' "$test_file" >&2
+        exit 2
+    fi
+done
 
 passed=0
 failed=0
+bridge_pid=""
+bridge_log=""
+auth_probe_binary=""
+test_relay_url="$RELAY_URL"
+
+cleanup_bridge() {
+    if [[ -n "$bridge_pid" ]]; then
+        kill "$bridge_pid" 2>/dev/null || true
+        wait "$bridge_pid" 2>/dev/null || true
+    fi
+    if [[ -n "$bridge_log" && "${VERBOSE:-0}" == "1" && -s "$bridge_log" ]]; then
+        printf '\nNIP-42 bridge log:\n' >&2
+        sed -n '1,120p' "$bridge_log" >&2
+    fi
+}
+trap cleanup_bridge EXIT INT TERM
+
+if [[ "$NIP_AUTH_BRIDGE" == "true" && "$RELAY_URL" =~ ^wss?:// ]]; then
+    if ! command -v go >/dev/null 2>&1; then
+        printf 'NIP_AUTH_BRIDGE requires go to build the authenticated proxy\n' >&2
+        exit 2
+    fi
+    bridge_binary="${NIP_AUTH_BRIDGE_BINARY:-${TMPDIR:-/tmp}/nostr-nip-relay-proxy}"
+    auth_probe_binary="${NIP_AUTH_PROBE_BINARY:-${TMPDIR:-/tmp}/nostr-nip42-probe}"
+    bridge_log="${TMPDIR:-/tmp}/nostr-nip-relay-proxy.$$.log"
+    if ! (cd "$RELAY_ROOT" && CGO_ENABLED=0 go build -trimpath -o "$bridge_binary" ./tests/nips/tools/relay_proxy); then
+        printf 'failed to build the NIP-42 authenticated proxy\n' >&2
+        exit 2
+    fi
+    if ! (cd "$RELAY_ROOT" && CGO_ENABLED=0 go build -trimpath -o "$auth_probe_binary" ./tests/nips/tools/nip42_probe); then
+        printf 'failed to build the NIP-42 probe\n' >&2
+        exit 2
+    fi
+    bridge_port="${NIP_AUTH_BRIDGE_PORT:-18080}"
+    "$bridge_binary" --listen "127.0.0.1:$bridge_port" --upstream "$RELAY_URL" --relay-url "$NIP_AUTH_RELAY_URL" >"$bridge_log" 2>&1 &
+    bridge_pid=$!
+    ready=false
+    for _ in {1..20}; do
+        if timeout 1 bash -c "</dev/tcp/127.0.0.1/$bridge_port" 2>/dev/null; then
+            ready=true
+            break
+        fi
+        sleep 0.25
+    done
+    if [[ "$ready" != true ]]; then
+        printf 'NIP-42 authenticated proxy did not start on port %s\n' "$bridge_port" >&2
+        exit 2
+    fi
+    test_relay_url="ws://127.0.0.1:$bridge_port"
+    printf 'Authenticated test bridge: %s -> %s\n' "$test_relay_url" "$RELAY_URL"
+fi
 
 for test_file in "${tests[@]}"; do
     test_name=$(basename "$test_file")
     printf '\n=== %s ===\n' "$test_name"
-    if RELAY_URL="$RELAY_URL" HTTP_URL="$HTTP_URL" \
+    if RELAY_URL="$test_relay_url" HTTP_URL="$HTTP_URL" \
+        NIP_AUTH_UPSTREAM_URL="$RELAY_URL" NIP_AUTH_RELAY_URL="$NIP_AUTH_RELAY_URL" \
+        NIP_AUTH_PROBE_BINARY="$auth_probe_binary" \
         timeout --foreground "$TEST_TIMEOUT" bash "$test_file"; then
         ((passed += 1))
         printf 'PASS: %s\n' "$test_name"

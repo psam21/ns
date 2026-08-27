@@ -1,71 +1,83 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# NIP-40: Expiration Timestamp integration tests.
 
-# Colors for output
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
-BLUE='\033[0;34m'
+set -u
 
-echo -e "${BLUE}Testing NIP-40: Expiration Timestamp${NC}"
-echo
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+RELAY_ROOT=$(cd -- "$SCRIPT_DIR/../.." && pwd)
+RELAY="${RELAY:-${RELAY_URL:-ws://localhost:8080}}"
+TEST_TIMEOUT="${TEST_TIMEOUT:-30}"
+passed=0
+failed=0
 
-# Set up relay URL
-RELAY_URL="${RELAY_URL:-ws://localhost:8080}"
+pass() {
+    printf 'PASS: %s\n' "$1"
+    passed=$((passed + 1))
+}
 
-# Note: The current relay setup appears to bypass signature verification for test events
-# This test validates that the NIP-40 implementation exists and functions correctly
+fail() {
+    printf 'FAIL: %s\n' "$1" >&2
+    failed=$((failed + 1))
+}
 
-# Test 1: Validate NIP-40 implementation exists
-echo "Test 1: Checking NIP-40 implementation..."
-if grep -q "GetExpirationTime" /home/ubuntu/shugur/relay/internal/relay/nips/nip40.go 2>/dev/null; then
-    echo -e "${GREEN}✓ NIP-40 GetExpirationTime function exists${NC}"
+printf '=== NIP-40 Expiration Timestamp Tests ===\n'
+printf 'Relay: %s\n\n' "$RELAY"
+
+if grep -q 'func GetExpirationTime' "$RELAY_ROOT/internal/relay/nips/nip40.go" && \
+   grep -q 'func IsExpired' "$RELAY_ROOT/internal/relay/nips/nip40.go" && \
+   grep -q 'func ValidateExpirationTag' "$RELAY_ROOT/internal/relay/nips/nip40.go"; then
+    pass 'NIP-40 helper implementation is present'
 else
-    echo -e "${RED}✗ NIP-40 GetExpirationTime function missing${NC}"
+    fail 'NIP-40 helper implementation is missing'
 fi
 
-if grep -q "IsExpired" /home/ubuntu/shugur/relay/internal/relay/nips/nip40.go 2>/dev/null; then
-    echo -e "${GREEN}✓ NIP-40 IsExpired function exists${NC}"
+if grep -q 'GetExpirationTime' "$RELAY_ROOT/internal/relay/plugin_validator.go" && \
+   grep -q 'event has expired' "$RELAY_ROOT/internal/relay/plugin_validator.go"; then
+    pass 'NIP-40 validation is integrated into the relay validator'
 else
-    echo -e "${RED}✗ NIP-40 IsExpired function missing${NC}"
+    fail 'NIP-40 validation is not integrated into the relay validator'
 fi
 
-if grep -q "ValidateExpirationTag" /home/ubuntu/shugur/relay/internal/relay/nips/nip40.go 2>/dev/null; then
-    echo -e "${GREEN}✓ NIP-40 ValidateExpirationTag function exists${NC}"
+SECRET_KEY="$(nak key generate)"
+FUTURE_EXPIRATION=$(( $(date +%s) + 3600 ))
+PAST_EXPIRATION=$(( $(date +%s) - 3600 ))
+
+if output=$(timeout --foreground "$TEST_TIMEOUT" nak event -k 1 -c 'NIP-40 future expiration test' \
+    -t expiration="$FUTURE_EXPIRATION" --sec "$SECRET_KEY" "$RELAY" 2>&1) && [[ "$output" == *success* ]]; then
+    pass 'future expiration event is accepted'
 else
-    echo -e "${RED}✗ NIP-40 ValidateExpirationTag function missing${NC}"
+    fail 'future expiration event was not accepted'
 fi
 
-# Test 2: Check that expiration validation is integrated into the relay
-echo "Test 2: Checking NIP-40 integration..."
-if grep -q "GetExpirationTime" /home/ubuntu/shugur/relay/internal/relay/plugin_validator.go 2>/dev/null; then
-    echo -e "${GREEN}✓ NIP-40 expiration check integrated in validator${NC}"
+if output=$(timeout --foreground "$TEST_TIMEOUT" nak event -k 1 -c 'NIP-40 expired event test' \
+    -t expiration="$PAST_EXPIRATION" --sec "$SECRET_KEY" "$RELAY" 2>&1); then
+    if [[ "$output" == *'event has expired'* || "$output" == *'rejected'* || "$output" == *'failed'* ]]; then
+        pass 'expired event is rejected'
+    else
+        fail 'expired event was accepted unexpectedly'
+    fi
 else
-    echo -e "${RED}✗ NIP-40 expiration check not integrated${NC}"
+    if [[ "$output" == *'event has expired'* || "$output" == *'rejected'* || "$output" == *'failed'* ]]; then
+        pass 'expired event is rejected'
+    else
+        fail 'expired event test did not produce an identifiable rejection'
+    fi
 fi
 
-if grep -q "event has expired" /home/ubuntu/shugur/relay/internal/relay/plugin_validator.go 2>/dev/null; then
-    echo -e "${GREEN}✓ Expired event rejection logic present${NC}"
+if output=$(timeout --foreground "$TEST_TIMEOUT" nak event -k 1 -c 'NIP-40 invalid expiration test' \
+    -t expiration=not-a-timestamp --sec "$SECRET_KEY" "$RELAY" 2>&1); then
+    if [[ "$output" == *'failed: msg:'* || "$output" == *'invalid expiration tag'* || "$output" == *'rejected'* ]]; then
+        pass 'malformed expiration tag is rejected'
+    else
+        fail 'malformed expiration tag was accepted unexpectedly'
+    fi
 else
-    echo -e "${RED}✗ Expired event rejection logic missing${NC}"
+    if [[ "$output" == *'failed: msg:'* || "$output" == *'invalid expiration tag'* || "$output" == *'rejected'* ]]; then
+        pass 'malformed expiration tag is rejected'
+    else
+        fail 'malformed expiration test did not produce an identifiable rejection'
+    fi
 fi
 
-# Test 3: Basic connectivity test
-echo "Test 3: Basic relay connectivity..."
-CURRENT_TIME=$(date +%s)
-RESPONSE=$(timeout 5s bash -c "echo '["EVENT",{"kind":1,"content":"Test connectivity","tags":[],"created_at":$CURRENT_TIME,"pubkey":"79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798","id":"488de6b4cbda120d5ca220d172c1afa84ec31365994f686f4a73feff22ce13b8","sig":"7bb686645b4b84b0a7e74c3e3fb1b0e5b8cfd7a4e1c4e6e9b7f8a1d2c3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5"}]' | /tmp/websocat $RELAY_URL") 2>/dev/null
-if [[ "$RESPONSE" == *"OK"* ]]; then
-    echo -e "${GREEN}✓ Relay connectivity working${NC}"
-else
-    echo -e "${RED}✗ Relay connectivity issue: $RESPONSE${NC}"
-fi
-
-echo
-echo -e "${BLUE}NIP-40 Implementation Status:${NC}"
-echo "• ✓ Expiration timestamp parsing implemented"
-echo "• ✓ Expired event detection logic present"
-echo "• ✓ Validation integrated into relay pipeline"
-echo "• ✓ Invalid expiration tag format validation"
-echo
-echo -e "${BLUE}Note: Full end-to-end testing requires properly signed events.${NC}"
-echo "The NIP-40 implementation is complete and will reject expired events"
-echo "when they have valid signatures and reach the validation stage."
+printf '\nSummary: passed=%d failed=%d\n' "$passed" "$failed"
+((failed == 0))

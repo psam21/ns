@@ -373,15 +373,14 @@ func (pv *PluginValidator) ValidateEvent(ctx context.Context, event nostr.Event)
 		return false, "event timestamp is too old"
 	}
 
-	// 6. NIP-40: Check expiration timestamp
-	if expTime, hasExpiration := nips.GetExpirationTime(event); hasExpiration {
-		if time.Now().After(expTime) {
-			return false, "event has expired"
-		}
-		// Validate expiration tag format
-		if err := nips.ValidateExpirationTag(event); err != nil {
-			return false, fmt.Sprintf("invalid expiration tag: %v", err)
-		}
+	// 6. NIP-40: Validate every expiration tag before parsing its timestamp.
+	// Parse failures must not bypass validation simply because GetExpirationTime
+	// ignores malformed values.
+	if err := nips.ValidateExpirationTag(event); err != nil {
+		return false, fmt.Sprintf("invalid expiration tag: %v", err)
+	}
+	if expTime, hasExpiration := nips.GetExpirationTime(event); hasExpiration && time.Now().After(expTime) {
+		return false, "event has expired"
 	}
 
 	// 6b. NIP-13: Proof of Work validation

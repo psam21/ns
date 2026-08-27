@@ -1,35 +1,38 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# NIP-45 COUNT command integration tests.
 
-# NIP-45 COUNT Command Test Script
-# Tests the COUNT command implementation
+set -u
 
-echo "=== NIP-45 COUNT Command Tests ==="
-echo
+RELAY="${RELAY:-${RELAY_URL:-ws://localhost:8080}}"
+passed=0
+failed=0
 
-# Test 1: Basic COUNT request
-echo "1. Testing basic COUNT request for kind 1 events..."
-nak count wss://backup.example.com -k 1
-echo
+check_count() {
+    local label="$1"
+    shift
+    local output
+    if output=$(nak count "$RELAY" "$@" 2>&1); then
+        if printf '%s\n' "$output" | tail -1 | grep -Eq '(^|: )[0-9]+$|"count"[[:space:]]*:[[:space:]]*[0-9]+'; then
+            printf 'PASS: %s (%s)\n' "$label" "$(printf '%s' "$output" | tail -1)"
+            passed=$((passed + 1))
+        else
+            printf 'FAIL: %s (unexpected COUNT response)\n%s\n' "$label" "$output" >&2
+            failed=$((failed + 1))
+        fi
+    else
+        printf 'FAIL: %s\n%s\n' "$label" "$output" >&2
+        failed=$((failed + 1))
+    fi
+}
 
-# Test 2: COUNT with author filter
-echo "2. Testing COUNT with author filter..."
-nak count wss://backup.example.com -k 1 -a 79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798
-echo
+printf '=== NIP-45 COUNT Command Tests ===\n'
+printf 'Relay: %s\n\n' "$RELAY"
 
-# Test 3: COUNT for kind 10002 (relay lists)
-echo "3. Testing COUNT for kind 10002 (relay lists)..."
-nak count wss://backup.example.com -k 10002
-echo
+check_count 'basic COUNT request for kind 1 events' -k 1
+check_count 'COUNT with author filter' -k 1 -a 79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798
+check_count 'COUNT for kind 10002 relay lists' -k 10002
+check_count 'COUNT with multiple kinds' -k 1 -k 10002
+check_count 'COUNT with time range' -k 1 --since "$(date -d '24 hours ago' +%s)"
 
-# Test 4: COUNT with multiple kinds
-echo "4. Testing COUNT with multiple kinds..."
-nak count wss://backup.example.com -k 1 -k 10002
-echo
-
-# Test 5: COUNT with time range
-echo "5. Testing COUNT with time range (last 24 hours)..."
-SINCE=$(date -d "24 hours ago" +%s)
-nak count wss://backup.example.com -k 1 --since $SINCE
-echo
-
-echo "=== NIP-45 Tests Complete ==="
+printf '\nSummary: passed=%d failed=%d\n' "$passed" "$failed"
+((failed == 0))
