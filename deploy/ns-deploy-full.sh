@@ -331,6 +331,16 @@ if ! command -v pnpm >/dev/null 2>&1; then
     echo "ERROR: pnpm is required on the AWS host to install Blossom production dependencies"
     exit 1
 fi
+if ! command -v make >/dev/null 2>&1 || ! command -v g++ >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+        echo "Installing native build prerequisites for Blossom dependencies..."
+        sudo apt-get update
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential python3
+    else
+        echo "ERROR: Blossom native dependencies require make, g++, and python3; apt-get is unavailable"
+        exit 1
+    fi
+fi
 sudo chown -R www-data:www-data "$BLOSSOM_NEW"
 sudo -u www-data env HOME=/tmp pnpm --dir "$BLOSSOM_NEW" install --prod --frozen-lockfile
 sudo chown -R root:root "$BLOSSOM_NEW"
