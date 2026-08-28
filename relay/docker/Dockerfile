@@ -1,4 +1,4 @@
-# Multi-stage production Dockerfile for Shugur Relay
+# Multi-stage production Dockerfile for nostr.ltd Relay
 # Security-hardened with minimal attack surface
 
 # Stage 1: Build the binary
@@ -66,9 +66,8 @@ EXPOSE 8181
 
 # Environment variables
 ENV PATH="/usr/local/bin:${PATH}" \
-    SHUGUR_ENV=production \
-    SHUGUR_LOG_LEVEL=info \
-    SHUGUR_LOG_FORMAT=json
+    NOSTR_LOG_LEVEL=info \
+    NOSTR_LOG_FORMAT=json
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
@@ -108,9 +107,8 @@ EXPOSE 8080
 EXPOSE 8181
 
 # Environment variables for development
-ENV SHUGUR_ENV=development \
-    SHUGUR_LOG_LEVEL=debug \
-    SHUGUR_LOG_FORMAT=text \
+ENV NOSTR_LOG_LEVEL=debug \
+    NOSTR_LOG_FORMAT=text \
     CGO_ENABLED=0
 
 # Default command uses Air for live reloading

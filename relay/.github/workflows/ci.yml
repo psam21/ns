@@ -270,10 +270,10 @@ jobs:
           echo "🔗 Running integration tests..."
           go test -v -race -run="Integration" -coverprofile=coverage-integration.out -timeout=15m ./...
         env:
-          SHUGUR_DB_HOST: localhost
-          SHUGUR_DB_PORT: 5432
-          SHUGUR_DB_USER: root
-          SHUGUR_DB_SSL_MODE: disable
+          NOSTR_DB_HOST: localhost
+          NOSTR_DB_PORT: 5432
+          NOSTR_DB_USER: root
+          NOSTR_DB_SSL_MODE: disable
 
       - name: Run benchmarks
         if: matrix.test-type == 'unit'

@@ -574,20 +574,14 @@ services:
     container_name: relay
     restart: unless-stopped
     environment:
-      - SHUGUR_ENV=production
-      - SHUGUR_DB_HOST=postgres
-      - SHUGUR_DB_PORT=5432
-      - SHUGUR_DB_DATABASE=shugur
-      - SHUGUR_DB_USER=relay
-      - SHUGUR_DB_PASSWORD=relay
-      - SHUGUR_DB_SSL_MODE=disable
-      - SHUGUR_LOG_LEVEL=info
-      - SHUGUR_LOG_FORMAT=json
-      - SHUGUR_METRICS_ENABLED=true
-      - SHUGUR_WS_PORT=8080
-      - SHUGUR_METRICS_PORT=8181
-      - SHUGUR_MAX_CONNECTIONS=100
-      - SHUGUR_RATE_LIMIT=20
+      - NOSTR_DB_HOST=postgres
+      - NOSTR_DB_PORT=5432
+      - NOSTR_LOG_LEVEL=info
+      - NOSTR_LOG_FORMAT=json
+      - NOSTR_METRICS_ENABLED=true
+      - NOSTR_WS_ADDR=:8080
+      - NOSTR_METRICS_PORT=8181
+      - NOSTR_MAX_CONNECTIONS=100
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./logs:/app/logs

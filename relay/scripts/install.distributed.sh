@@ -404,20 +404,14 @@ services:
     container_name: relay
     hostname: relay
     environment:
-      - SHUGUR_ENV=production
-      - SHUGUR_DB_HOST=\${DB_HOST}
-      - SHUGUR_DB_PORT=5432
-      - SHUGUR_DB_DATABASE=shugur
-      - SHUGUR_DB_USER=relay
-      - SHUGUR_DB_PASSWORD=\${DB_PASSWORD}
-      - SHUGUR_DB_SSL_MODE=require
-      - SHUGUR_LOG_LEVEL=info
-      - SHUGUR_LOG_FORMAT=json
-      - SHUGUR_METRICS_ENABLED=true
-      - SHUGUR_WS_PORT=8080
-      - SHUGUR_METRICS_PORT=8181
-      - SHUGUR_MAX_CONNECTIONS=2000
-      - SHUGUR_CLUSTER_NODE=$node_id
+      - NOSTR_DB_HOST=\${DB_HOST}
+      - NOSTR_DB_PORT=5432
+      - NOSTR_LOG_LEVEL=info
+      - NOSTR_LOG_FORMAT=json
+      - NOSTR_METRICS_ENABLED=true
+      - NOSTR_WS_ADDR=:8080
+      - NOSTR_METRICS_PORT=8181
+      - NOSTR_MAX_CONNECTIONS=2000
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./logs/relay:/app/logs

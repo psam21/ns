@@ -1,4 +1,4 @@
-# Shugur Distributed Relay - Multi-Node Docker Compose
+# nostr.ltd Distributed Relay - Multi-Node Docker Compose
 # This is a reference template for a distributed relay setup
 # Each node runs a relay instance connecting to a shared Aurora PostgreSQL cluster
 # Generated files are created automatically by install.distributed.sh
@@ -11,20 +11,14 @@ services:
     hostname: relay-node1
     restart: unless-stopped
     environment:
-      - SHUGUR_ENV=production
-      - SHUGUR_DB_HOST=${DB_HOST}  # Aurora PostgreSQL endpoint
-      - SHUGUR_DB_PORT=5432
-      - SHUGUR_DB_DATABASE=shugur
-      - SHUGUR_DB_USER=relay
-      - SHUGUR_DB_PASSWORD=${DB_PASSWORD}
-      - SHUGUR_DB_SSL_MODE=require
-      - SHUGUR_LOG_LEVEL=info
-      - SHUGUR_LOG_FORMAT=json
-      - SHUGUR_METRICS_ENABLED=true
-      - SHUGUR_WS_PORT=8080
-      - SHUGUR_METRICS_PORT=8181
-      - SHUGUR_MAX_CONNECTIONS=2000
-      - SHUGUR_NODE=node1
+      - NOSTR_DB_HOST=${DB_HOST}  # Aurora PostgreSQL endpoint
+      - NOSTR_DB_PORT=5432
+      - NOSTR_LOG_LEVEL=info
+      - NOSTR_LOG_FORMAT=json
+      - NOSTR_METRICS_ENABLED=true
+      - NOSTR_WS_ADDR=:8080
+      - NOSTR_METRICS_PORT=8181
+      - NOSTR_MAX_CONNECTIONS=2000
     volumes:
       - ./config/config.yaml:/app/config.yaml:ro
       - ./certs:/app/certs:ro
@@ -77,5 +71,5 @@ networks:
 # - Different node IDs (node2, node3, etc.)
 # - Different hostnames and container names
 # - Unique volume names
-# - Same Aurora PostgreSQL connection (DB_HOST, DB_PASSWORD from .env)
+# - Same Aurora PostgreSQL connection (DB_HOST from .env)
 # - Same network configuration
