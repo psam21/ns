@@ -74,6 +74,16 @@ else
 fi
 
 log_info "Code successfully fetched from GitHub"
+
+# If this script was launched from Downloads or another old checkout, hand
+# execution to the freshly fetched canonical copy. This prevents a stale
+# bootstrap from fetching new code and then continuing with its old logic.
+CURRENT_SCRIPT=$(readlink -f "${BASH_SOURCE[0]}")
+CANONICAL_SCRIPT=$(readlink -f "$NS_DIR/deploy/ns-deploy-full.sh")
+if [[ "${NS_DEPLOY_CANONICAL:-0}" != "1" && -f "$CANONICAL_SCRIPT" && "$CURRENT_SCRIPT" != "$CANONICAL_SCRIPT" ]]; then
+    log_info "Handing off to canonical deployment script at $CANONICAL_SCRIPT"
+    exec env NS_DEPLOY_CANONICAL=1 bash "$CANONICAL_SCRIPT" "$@"
+fi
 echo ""
 
 # ============================================
