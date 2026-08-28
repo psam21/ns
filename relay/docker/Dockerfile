@@ -2,7 +2,7 @@
 # Security-hardened with minimal attack surface
 
 # Stage 1: Build the binary
-FROM golang:1.25rc3-alpine3.22 AS builder
+FROM golang:1.25-alpine3.22 AS builder
 
 # Install build dependencies
 RUN apk update && apk upgrade && apk add --no-cache \
@@ -42,7 +42,7 @@ RUN CGO_ENABLED=0 \
 RUN ./relay version || echo "Binary built successfully"
 
 # Stage 2: Minimal production image
-FROM alpine:latest AS production
+FROM alpine:3.22 AS production
 
 # Install minimal runtime dependencies and create user
 RUN apk add --no-cache ca-certificates tzdata && \
@@ -79,7 +79,7 @@ CMD ["relay", "start"]
 
 # =============================================================================
 # Development stage for live reloading and debugging
-FROM golang:1.25rc3-alpine3.22 AS development
+FROM golang:1.25-alpine3.22 AS development
 
 # Install development dependencies
 RUN apk update && apk upgrade && apk add --no-cache \
