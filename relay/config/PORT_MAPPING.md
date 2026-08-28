@@ -83,21 +83,31 @@ All ports are carefully assigned to avoid conflicts:
 
 ## Environment Variables
 
-You can override ports using environment variables:
+You can override ports using the canonical `NOSTR_*` environment variables. The relay also accepts the older `SHUGUR_*` names during the migration window; when both names are set, the `NOSTR_*` value wins. The aliases are resolved by the configuration loader and the legacy variable names are reported as deprecated without logging their values.
 
 ```bash
 # Development
-export SHUGUR_WS_ADDR=":8081"
-export SHUGUR_METRICS_PORT="8182"
-export SHUGUR_DB_PORT="5433"
+export NOSTR_WS_ADDR=":8081"
+export NOSTR_METRICS_PORT="8182"
+export NOSTR_DB_PORT="5433"
 
 # Testing
-export SHUGUR_WS_ADDR=":8082"
-export SHUGUR_METRICS_PORT="8183"
-export SHUGUR_DB_PORT="5434"
+export NOSTR_WS_ADDR=":8082"
+export NOSTR_METRICS_PORT="8183"
+export NOSTR_DB_PORT="5434"
 
 # Production
-export SHUGUR_WS_ADDR=":8080"
-export SHUGUR_METRICS_PORT="8181"
-export SHUGUR_DB_PORT="5432"
+export NOSTR_WS_ADDR=":8080"
+export NOSTR_METRICS_PORT="8181"
+export NOSTR_DB_PORT="5432"
 ```
+
+Equivalent legacy names remain temporarily supported:
+
+```text
+SHUGUR_WS_ADDR       -> NOSTR_WS_ADDR
+SHUGUR_METRICS_PORT  -> NOSTR_METRICS_PORT
+SHUGUR_DB_PORT       -> NOSTR_DB_PORT
+```
+
+For nested settings, the canonical full-path form is also accepted. For example, `NOSTR_RELAY_THROTTLING_MAX_CONNECTIONS` maps to `relay.throttling.max_connections`, while `NOSTR_MAX_CONNECTIONS` remains supported for compatibility with existing installers.

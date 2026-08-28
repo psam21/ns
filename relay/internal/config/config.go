@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -39,7 +40,7 @@ type Config struct {
 func init() {
 	// Register custom validators
 	registerCustomValidators()
-	
+
 	validate.RegisterStructValidation(func(sl validator.StructLevel) {
 		cfg := sl.Current().Interface().(Config)
 
@@ -65,7 +66,7 @@ func init() {
 		if err := validate.Struct(cfg.Capsules); err != nil {
 			sl.ReportError(cfg.Capsules, "Capsules", "Capsules", "required", "")
 		}
-		
+
 		// Cross-field validation
 		performCrossFieldValidation(sl, cfg)
 	}, Config{})
@@ -79,7 +80,7 @@ func registerCustomValidators() {
 		if addr == "" {
 			return false
 		}
-		
+
 		// Check if it starts with : (port only) or host:port format
 		if strings.HasPrefix(addr, ":") {
 			// Port only format like ":8080"
@@ -93,18 +94,18 @@ func registerCustomValidators() {
 			}
 			return true
 		}
-		
+
 		// Host:port format
 		host, port, err := net.SplitHostPort(addr)
 		if err != nil {
 			return false
 		}
-		
+
 		// Validate port
 		if _, err := net.LookupPort("tcp", port); err != nil {
 			return false
 		}
-		
+
 		// Validate host (can be IP, hostname, or empty for all interfaces)
 		if host != "" {
 			if ip := net.ParseIP(host); ip == nil {
@@ -114,12 +115,12 @@ func registerCustomValidators() {
 				}
 			}
 		}
-		
+
 		return true
 	}); err != nil {
 		logger.Error("Failed to register wsaddr validator", zap.Error(err))
 	}
-	
+
 	// Validate public key is 64-character hex string
 	if err := validate.RegisterValidation("pubkey", func(fl validator.FieldLevel) bool {
 		key := fl.Field().String()
@@ -134,7 +135,7 @@ func registerCustomValidators() {
 	}); err != nil {
 		logger.Error("Failed to register pubkey validator", zap.Error(err))
 	}
-	
+
 	// Validate duration is reasonable (not too short or too long)
 	if err := validate.RegisterValidation("reasonable_duration", func(fl validator.FieldLevel) bool {
 		duration := fl.Field().Interface().(time.Duration)
@@ -143,7 +144,7 @@ func registerCustomValidators() {
 	}); err != nil {
 		logger.Error("Failed to register reasonable_duration validator", zap.Error(err))
 	}
-	
+
 	// Validate timeout duration (shorter range)
 	if err := validate.RegisterValidation("timeout_duration", func(fl validator.FieldLevel) bool {
 		duration := fl.Field().Interface().(time.Duration)
@@ -152,7 +153,7 @@ func registerCustomValidators() {
 	}); err != nil {
 		logger.Error("Failed to register timeout_duration validator", zap.Error(err))
 	}
-	
+
 	// Validate log level
 	if err := validate.RegisterValidation("log_level", func(fl validator.FieldLevel) bool {
 		level := fl.Field().String()
@@ -166,7 +167,7 @@ func registerCustomValidators() {
 	}); err != nil {
 		logger.Error("Failed to register log_level validator", zap.Error(err))
 	}
-	
+
 	// Validate log format
 	if err := validate.RegisterValidation("log_format", func(fl validator.FieldLevel) bool {
 		format := fl.Field().String()
@@ -174,7 +175,7 @@ func registerCustomValidators() {
 	}); err != nil {
 		logger.Error("Failed to register log_format validator", zap.Error(err))
 	}
-	
+
 	// Validate buffer size is power of 2 and reasonable
 	if err := validate.RegisterValidation("buffer_size", func(fl validator.FieldLevel) bool {
 		size := int(fl.Field().Int())
@@ -186,19 +187,19 @@ func registerCustomValidators() {
 	}); err != nil {
 		logger.Error("Failed to register buffer_size validator", zap.Error(err))
 	}
-	
+
 	// Validate hostname or IP
 	if err := validate.RegisterValidation("host", func(fl validator.FieldLevel) bool {
 		host := fl.Field().String()
 		if host == "" {
 			return false
 		}
-		
+
 		// Check if it's an IP address
 		if ip := net.ParseIP(host); ip != nil {
 			return true
 		}
-		
+
 		// Check if it's a valid hostname
 		matched, _ := regexp.MatchString(`^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$`, host)
 		return matched
@@ -215,12 +216,12 @@ func performCrossFieldValidation(sl validator.StructLevel, cfg Config) {
 			sl.ReportError(cfg.Relay.ThrottlingConfig.BanThreshold, "BanThreshold", "BanThreshold", "ban_threshold_too_high", "")
 		}
 	}
-	
+
 	// Validate that event cache size is reasonable for max connections
 	if cfg.Relay.EventCacheSize < cfg.Relay.ThrottlingConfig.MaxConnections/10 {
 		sl.ReportError(cfg.Relay.EventCacheSize, "EventCacheSize", "EventCacheSize", "cache_size_too_small", "")
 	}
-	
+
 	// Validate that database port is not the same as metrics port (only when not using URL)
 	if cfg.Database.URL == "" && cfg.Database.Port == cfg.Metrics.Port {
 		sl.ReportError(cfg.Database.Port, "Port", "Port", "port_conflict", "")
@@ -230,7 +231,7 @@ func performCrossFieldValidation(sl validator.StructLevel, cfg Config) {
 	if cfg.Database.URL == "" && cfg.Database.Server == "" {
 		sl.ReportError(cfg.Database.Server, "Server", "Server", "db_connection_required", "")
 	}
-	
+
 	// Validate that public URL scheme matches WebSocket address
 	if cfg.Relay.PublicURL != "" {
 		if parsedURL, err := url.Parse(cfg.Relay.PublicURL); err == nil {
@@ -250,11 +251,86 @@ func SetVersion(v string) {
 	Version = v
 }
 
+// legacyConfigEnvAliases maps the flat environment names used by existing
+// installers to their current nested configuration keys. The NOSTR_* name is
+// canonical; SHUGUR_* remains a compatibility alias during migration.
+var legacyConfigEnvAliases = map[string]string{
+	"WS_ADDR":                  "relay.ws_addr",
+	"METRICS_ENABLED":          "metrics.enabled",
+	"METRICS_PORT":             "metrics.port",
+	"LOG_LEVEL":                "logging.level",
+	"LOG_FILE":                 "logging.file",
+	"LOG_FORMAT":               "logging.format",
+	"LOG_MAX_SIZE":             "logging.max_size",
+	"LOG_MAX_BACKUPS":          "logging.max_backups",
+	"LOG_MAX_AGE":              "logging.max_age",
+	"RELAY_NAME":               "relay.name",
+	"RELAY_DESCRIPTION":        "relay.description",
+	"RELAY_CONTACT":            "relay.contact",
+	"RELAY_PUBLIC_KEY":         "relay.public_key",
+	"RELAY_PRIVATE_KEY":        "relay.private_key",
+	"RELAY_ADMIN_PUBKEYS":      "relay.admin_pubkeys",
+	"RELAY_ICON":               "relay.icon",
+	"RELAY_BANNER":             "relay.banner",
+	"RELAY_PUBLIC_URL":         "relay.public_url",
+	"PUBLIC_URL":               "relay.public_url",
+	"RELAY_POSTING_POLICY":     "relay.posting_policy",
+	"RELAY_COUNTRIES":          "relay.relay_countries",
+	"RELAY_EVENT_CACHE_SIZE":   "relay.event_cache_size",
+	"RELAY_MIN_POW_DIFFICULTY": "relay.min_pow_difficulty",
+	"MAX_CONNECTIONS":          "relay.throttling.max_connections",
+	"MAX_CONTENT_LENGTH":       "relay.throttling.max_content_length",
+	"BAN_THRESHOLD":            "relay.throttling.ban_threshold",
+	"BAN_DURATION":             "relay.throttling.ban_duration",
+	"RATE_LIMIT_ENABLED":       "relay.throttling.rate_limit.enabled",
+	"MAX_EVENTS_PER_SECOND":    "relay.throttling.rate_limit.max_events_per_second",
+	"MAX_REQUESTS_PER_SECOND":  "relay.throttling.rate_limit.max_requests_per_second",
+	"BURST_SIZE":               "relay.throttling.rate_limit.burst_size",
+	"PROGRESSIVE_BAN":          "relay.throttling.rate_limit.progressive_ban",
+	"MAX_BAN_DURATION":         "relay.throttling.rate_limit.max_ban_duration",
+	"DB_URL":                   "database.url",
+	"DB_HOST":                  "database.server",
+	"DB_PORT":                  "database.port",
+	"CAPSULES_ENABLED":         "capsules.enabled",
+	"CAPSULES_MAX_WITNESSES":   "capsules.max_witnesses",
+}
+
+// bindEnvironmentNames registers canonical full-path names first, followed by
+// the corresponding legacy full-path and flat names. Viper checks bound names
+// in order, so NOSTR_* wins when both generations are present.
+func bindEnvironmentNames(v *viper.Viper) {
+	for _, key := range v.AllKeys() {
+		suffix := strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
+		_ = v.BindEnv(key, "NOSTR_"+suffix, "SHUGUR_"+suffix)
+	}
+	for suffix, key := range legacyConfigEnvAliases {
+		_ = v.BindEnv(key, "NOSTR_"+suffix, "SHUGUR_"+suffix)
+	}
+}
+
+// warnOnLegacyEnvironment reports only variable names, never their values.
+func warnOnLegacyEnvironment(log *zap.Logger) {
+	if log == nil {
+		return
+	}
+	for _, entry := range os.Environ() {
+		name, _, ok := strings.Cut(entry, "=")
+		if ok && strings.HasPrefix(name, "SHUGUR_") {
+			canonical := "NOSTR_" + strings.TrimPrefix(name, "SHUGUR_")
+			if _, present := os.LookupEnv(canonical); !present {
+				log.Warn("legacy configuration environment variable in use; migrate to canonical name",
+					zap.String("variable", name),
+					zap.String("replacement", canonical),
+				)
+			}
+		}
+	}
+}
+
 // Load merges defaults → file (optional) → env vars, validates, and returns cfg.
 func Load(path string, log *zap.Logger) (*Config, error) {
 	v := viper.New()
 	v.SetConfigType("yaml")
-	v.SetEnvPrefix("SHUGUR") // SHUGUR_GENERAL_LISTENING_PORT
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
@@ -286,7 +362,10 @@ func Load(path string, log *zap.Logger) (*Config, error) {
 		}
 	}
 
-	// 3. env already merged by AutomaticEnv()
+	// 3. Bind canonical and compatibility environment names after defaults and
+	// config files are known, then warn without exposing any secret values.
+	bindEnvironmentNames(v)
+	warnOnLegacyEnvironment(log)
 
 	var cfg Config
 	if err := v.UnmarshalExact(&cfg); err != nil { // ← use Exact
@@ -341,15 +420,15 @@ func initializeLogger(loggingConfig LoggingConfig) error {
 func formatValidationError(err error) error {
 	if validationErrors, ok := err.(validator.ValidationErrors); ok {
 		var messages []string
-		
+
 		for _, fieldError := range validationErrors {
 			message := getFieldErrorMessage(fieldError)
 			messages = append(messages, message)
 		}
-		
+
 		return fmt.Errorf("configuration validation failed:\n  - %s", strings.Join(messages, "\n  - "))
 	}
-	
+
 	return fmt.Errorf("configuration validation failed: %w", err)
 }
 
@@ -359,7 +438,7 @@ func getFieldErrorMessage(fe validator.FieldError) string {
 	value := fe.Value()
 	tag := fe.Tag()
 	param := fe.Param()
-	
+
 	switch tag {
 	case "required":
 		return fmt.Sprintf("%s is required but not provided", field)
