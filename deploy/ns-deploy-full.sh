@@ -331,6 +331,7 @@ if ! command -v pnpm >/dev/null 2>&1; then
     echo "ERROR: pnpm is required on the AWS host to install Blossom production dependencies"
     exit 1
 fi
+sudo chown -R www-data:www-data "$BLOSSOM_NEW"
 sudo -u www-data env HOME=/tmp pnpm --dir "$BLOSSOM_NEW" install --prod --frozen-lockfile
 sudo chown -R root:root "$BLOSSOM_NEW"
 sudo find "$BLOSSOM_NEW" -type d -exec chmod 0755 {} +
