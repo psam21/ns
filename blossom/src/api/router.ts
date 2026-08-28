@@ -28,10 +28,12 @@ function parseAuthEvent(auth: NostrEvent) {
   if (!type) throw new HttpErrors.BadRequest("Auth missing type");
   const expiration = auth.tags.find((t) => t[0] === "expiration")?.[1];
   if (!expiration) throw new HttpErrors.BadRequest("Auth missing expiration");
-  if (parseInt(expiration) < now) throw new HttpErrors.BadRequest("Auth expired");
+  const expirationTimestamp = Number(expiration);
+  if (!Number.isSafeInteger(expirationTimestamp)) throw new HttpErrors.BadRequest("Auth expiration is invalid");
+  if (expirationTimestamp < now) throw new HttpErrors.BadRequest("Auth expired");
   if (!verifyEvent(auth)) throw new HttpErrors.BadRequest("Invalid Auth event");
 
-  return { auth, type, expiration: parseInt(expiration) };
+  return { auth, type, expiration: expirationTimestamp };
 }
 
 // NIP-98: HTTP Auth
@@ -78,20 +80,29 @@ router.use(async (ctx, next) => {
   const authStr = ctx.headers["authorization"] as string | undefined;
 
   if (authStr?.startsWith("Nostr ")) {
-    const auth = authStr ? (JSON.parse(atob(authStr.replace(/^Nostr\s/i, ""))) as NostrEvent) : undefined;
-    if (auth) {
-      // Try NIP-98 (kind 27235) first, fall back to NIP-42 (kind 24242)
-      if (auth.kind === 27235) {
-        const { type, expiration } = parseNIP98AuthEvent(auth, ctx.request);
-        ctx.state.auth = auth;
-        ctx.state.authType = type;
-        ctx.state.authExpiration = expiration;
-      } else {
-        const { type, expiration } = parseAuthEvent(auth);
-        ctx.state.auth = auth;
-        ctx.state.authType = type;
-        ctx.state.authExpiration = expiration;
+    let auth: NostrEvent;
+    try {
+      const decoded = atob(authStr.replace(/^Nostr\s/i, ""));
+      const parsed: unknown = JSON.parse(decoded);
+      if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { tags?: unknown }).tags)) {
+        throw new Error("authorization event must be an object with tags");
       }
+      auth = parsed as NostrEvent;
+    } catch {
+      throw new HttpErrors.BadRequest("Invalid Nostr authorization header");
+    }
+
+    // Try NIP-98 (kind 27235) first, fall back to NIP-42 (kind 24242)
+    if (auth.kind === 27235) {
+      const { type, expiration } = parseNIP98AuthEvent(auth, ctx.request);
+      ctx.state.auth = auth;
+      ctx.state.authType = type;
+      ctx.state.authExpiration = expiration;
+    } else {
+      const { type, expiration } = parseAuthEvent(auth);
+      ctx.state.auth = auth;
+      ctx.state.authType = type;
+      ctx.state.authExpiration = expiration;
     }
   }
 

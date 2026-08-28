@@ -10,7 +10,7 @@
     "prepublish": "pnpm build",
     "start": "node build/index.js",
     "build": "tsc",
-    "postbuild": "cd admin && pnpm install && pnpm build",
+    "postbuild": "cd admin && pnpm install --frozen-lockfile && pnpm build",
     "dev": "nodemon -i '**/data/**' -i '**/database.json' -i '**/database.old.json' --exec 'node' --loader @swc-node/register/esm src/index.ts",
     "format": "prettier -w ."
   },

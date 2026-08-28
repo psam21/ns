@@ -20,6 +20,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = new Koa();
 
+// Apply baseline browser security headers to API, dashboard, and static responses.
+app.use(async (ctx, next) => {
+  ctx.set("X-Content-Type-Options", "nosniff");
+  ctx.set("X-Frame-Options", "DENY");
+  ctx.set("Referrer-Policy", "no-referrer");
+  ctx.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  await next();
+});
+
 // trust reverse proxy headers
 app.proxy = true;
 
