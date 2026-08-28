@@ -453,12 +453,22 @@ log_info "=== Step 9: Verifying deployment ==="
 log_info "Checking relay NIP-11 endpoint..."
 
 # Fetch the COMPLETE NIP-11 response (the 77-entry registry exceeds 500
-# bytes, so we must not truncate before piping to jq).
-NIP11_RESPONSE=$(ssh -i "$AWS_KEY" "$AWS_HOST" \
-    "curl -s --max-time 10 -H 'Accept: application/nostr+json' http://localhost:8080/ 2>&1 || echo 'NO_RESPONSE'")
+# bytes, so we must not truncate before piping to jq). Relay startup can take
+# several seconds after systemd reports the unit active, so use bounded retry.
+NIP11_RESPONSE=""
+for attempt in {1..12}; do
+    NIP11_RESPONSE=$(ssh -i "$AWS_KEY" "$AWS_HOST" \
+        "curl --silent --max-time 10 -H 'Accept: application/nostr+json' http://localhost:8080/" 2>/dev/null || true)
+    if printf '%s' "$NIP11_RESPONSE" | jq -e '.supported_nips | length == 77' >/dev/null 2>&1; then
+        log_info "Relay NIP-11 endpoint responding (attempt $attempt)"
+        break
+    fi
+    log_info "Relay NIP-11 not ready; waiting (attempt $attempt/12)..."
+    sleep 5
+done
 
-if [ "$NIP11_RESPONSE" = "NO_RESPONSE" ]; then
-    log_warn "Relay not responding on port 8080 (may still be starting up)"
+if ! printf '%s' "$NIP11_RESPONSE" | jq -e '.supported_nips | length == 77' >/dev/null 2>&1; then
+    log_error "Relay NIP-11 endpoint did not become ready after 60 seconds"
 else
     # Verify key fields in NIP-11 response
     if echo "$NIP11_RESPONSE" | grep -q "nostr.ltd"; then
@@ -483,19 +493,26 @@ fi
 
 # Check Blossom HTTP service
 log_info "Checking Blossom HTTP service..."
-BLOSSOM_HTTP=$(ssh -i "$AWS_KEY" "$AWS_HOST" \
-    "curl --silent --output /dev/null --write-out '%{http_code}' --max-time 10 http://localhost:3000/")
-if [[ "$BLOSSOM_HTTP" =~ ^2|^3 ]]; then
-    log_info "Blossom service responding on port 3000 with HTTP $BLOSSOM_HTTP"
-else
-    log_error "Blossom service verification failed with HTTP $BLOSSOM_HTTP"
+BLOSSOM_HTTP=""
+for attempt in {1..12}; do
+    BLOSSOM_HTTP=$(ssh -i "$AWS_KEY" "$AWS_HOST" \
+        "curl --silent --output /dev/null --write-out '%{http_code}' --max-time 10 http://localhost:3000/" 2>/dev/null || true)
+    if [[ "$BLOSSOM_HTTP" =~ ^2|^3 ]]; then
+        log_info "Blossom service responding on port 3000 with HTTP $BLOSSOM_HTTP (attempt $attempt)"
+        break
+    fi
+    log_info "Blossom HTTP not ready; waiting (attempt $attempt/12)..."
+    sleep 5
+done
+if [[ ! "$BLOSSOM_HTTP" =~ ^2|^3 ]]; then
+    log_error "Blossom service verification failed after 60 seconds with HTTP ${BLOSSOM_HTTP:-unknown}"
 fi
 
 # Check /api/stats endpoint
 log_info "Checking relay /api/stats endpoint..."
-STATS_RESPONSE=$(ssh -i "$AWS_KEY" "$AWS_HOST" "curl -s --max-time 5 -H 'Accept: application/nostr+json' http://localhost:8080/api/stats 2>&1 || echo 'NO_RESPONSE'")
+STATS_RESPONSE=$(ssh -i "$AWS_KEY" "$AWS_HOST" "curl -s --max-time 5 -H 'Accept: application/nostr+json' http://localhost:8080/api/stats 2>&1 || true" 2>/dev/null || true)
 
-if [ "$STATS_RESPONSE" != "NO_RESPONSE" ]; then
+if printf '%s' "$STATS_RESPONSE" | jq -e . >/dev/null 2>&1; then
     log_info "/api/stats endpoint responding"
 else
     log_warn "/api/stats endpoint not responding (may be normal during initial startup)"
@@ -508,10 +525,10 @@ EVENTS_HTTP=""
 EVENTS_STATUS="unknown"
 for attempt in {1..12}; do
     EVENTS_JSON=$(ssh -i "$AWS_KEY" "$AWS_HOST" \
-        "curl --silent --show-error --max-time 10 http://localhost:8080/api/events")
-    EVENTS_STATUS=$(printf '%s' "$EVENTS_JSON" | jq -r '.status // "unknown"')
+        "curl --silent --show-error --max-time 10 http://localhost:8080/api/events || true" 2>/dev/null || true)
+    EVENTS_STATUS=$(printf '%s' "$EVENTS_JSON" | jq -r '.status // "unknown"' 2>/dev/null || echo "unknown")
     EVENTS_HTTP=$(ssh -i "$AWS_KEY" "$AWS_HOST" \
-        "curl --silent --output /dev/null --write-out '%{http_code}' --max-time 10 http://localhost:8080/api/events")
+        "curl --silent --output /dev/null --write-out '%{http_code}' --max-time 10 http://localhost:8080/api/events || true" 2>/dev/null || true)
 
     if [[ "$EVENTS_HTTP" == "200" && "$EVENTS_STATUS" == "ready" ]]; then
         echo "Event cache is ready (attempt $attempt)."
