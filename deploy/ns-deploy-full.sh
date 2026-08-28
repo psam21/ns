@@ -113,6 +113,9 @@ pnpm build 2>&1
 log_info "Blossom build completed"
 echo ""
 
+# Return to the relay module before running Go commands.
+cd "$RELAY_DIR" || log_error "Cannot cd to $RELAY_DIR"
+
 # ============================================
 # Step 4: Build the ARM64 relay binary
 # ============================================
