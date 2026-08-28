@@ -1,5 +1,5 @@
 #!/bin/bash
-# Shugur Relay - Standalone Installation Script (polished)
+# nostr.ltd Relay - Standalone Installation Script
 # Complete one-command installer: Docker (if needed) + PostgreSQL + Relay + Caddy
 # DB and schema are auto-managed by the relay on first start.
 
@@ -219,12 +219,12 @@ check_required_ports() {
 show_banner() {
   cat <<'BANNER'
 
-🚀 Shugur Relay - Standalone Installation
+nostr.ltd Relay - Standalone Installation
 ==========================================
 This will set up:
  • Docker (if missing)
  • PostgreSQL (single-node)
- • Shugur Relay (prebuilt image)
+ • Nostr relay (prebuilt image)
  • Caddy (reverse proxy + HTTPS)
 
 ⚠️  Requirements:
@@ -468,7 +468,7 @@ create_config_file() {
   local config_file="./config.yaml"
   log_info "Creating relay config: $config_file"
   cat > "$config_file" <<'EOF'
-# Shugur Relay Configuration (standalone)
+# nostr.ltd Relay Configuration (standalone)
 
 GENERAL: {}
 
@@ -485,11 +485,11 @@ METRICS:
   PORT: 8181
 
 RELAY:
-  NAME: "shugur-relay"
+  NAME: "nostr.ltd"
   DESCRIPTION: "High-performance, reliable, scalable Nostr relay for decentralized communication."
-  CONTACT: "admin@shugur.com"
-  ICON: "https://github.com/Shugur-Network/relay/raw/main/logo.png"
-  BANNER: "https://github.com/Shugur-Network/relay/raw/main/banner.png"
+  CONTACT: ""
+  ICON: ""
+  BANNER: ""
   WS_ADDR: ":8080"
   PUBLIC_URL: ""
   EVENT_CACHE_SIZE: 10000
@@ -539,14 +539,14 @@ update_config_with_server_url() {
   fi
   log_info "Setting PUBLIC_URL=$public_url and NAME=$server_url"
   sed -i "s|PUBLIC_URL: \"\"|PUBLIC_URL: \"$public_url\"|g" "$config_file"
-  sed -i "s|NAME: \"shugur-relay\"|NAME: \"$server_url\"|g" "$config_file"
+  sed -i "s|NAME: \"nostr.ltd\"|NAME: \"$server_url\"|g" "$config_file"
 }
 
 create_complete_compose_file() {
   local compose_file="docker-compose.standalone.yml"
   log_info "Writing compose file: $compose_file"
   cat > "$compose_file" <<'EOF'
-# Shugur Relay - Complete Standalone (PostgreSQL + Relay + Caddy)
+# nostr.ltd Relay - Complete Standalone (PostgreSQL + Relay + Caddy)
 
 services:
   postgres:
@@ -746,7 +746,7 @@ show_completion_message() {
     log_info "  • No DNS configuration needed for current setup"
   fi
   echo
-  log_info "Repo: https://github.com/Shugur-Network/Relay"
+  log_info "Repo: https://github.com/psam21/ns"
   echo
   log_info "💡 Installation complete! Configuration files have been preserved in the current directory:"
   log_info "  • docker-compose.standalone.yml (Docker Compose configuration)"

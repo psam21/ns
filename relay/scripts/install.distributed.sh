@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Shugur Relay - SECURE Distributed Cluster Installation Script
+# nostr.ltd Relay - SECURE Distributed Cluster Installation Script
 # Multi-node Relay + Caddy connecting to managed Aurora PostgreSQL
 # - Each node runs Relay + Caddy containers
 # - All nodes connect to a shared Aurora PostgreSQL endpoint
@@ -306,9 +306,9 @@ METRICS:
 RELAY:
   NAME: "$node_url"
   DESCRIPTION: "High-performance, reliable, scalable Nostr relay"
-  CONTACT: "support@shugur.com"
-  ICON: "https://github.com/Shugur-Network/relay/raw/main/logo.png"
-  BANNER: "https://github.com/Shugur-Network/relay/raw/main/banner.png"
+  CONTACT: ""
+  ICON: ""
+  BANNER: ""
   WS_ADDR: ":8080"
   PUBLIC_URL: "wss://$node_url"
   EVENT_CACHE_SIZE: 50000
@@ -659,7 +659,7 @@ main() {
 if [[ $# -gt 0 ]]; then
   case $1 in
     --help|-h)
-      echo "Shugur Relay Distributed Cluster Installer"
+      echo "nostr.ltd Relay Distributed Cluster Installer"
       echo
       echo "Usage: sudo $0 [options]"
       echo

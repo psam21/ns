@@ -1,4 +1,4 @@
-# Default Configuration for Shugur Relay
+# Default Configuration for nostr.ltd Relay
 # Comprehensive default configuration with all available options
 
 GENERAL:
@@ -17,18 +17,18 @@ METRICS:
   PORT: 2112                     # Port for Prometheus metrics
 
 RELAY:
-  NAME: "shugur-relay"           # Relay name (max 30 chars, shown in NIP-11)
+  NAME: "nostr.ltd"           # Relay name (max 30 chars, shown in NIP-11)
   DESCRIPTION: "High-performance, reliable, scalable Nostr relay for decentralized communication." # Relay description (max 200 chars, shown in NIP-11)
-  CONTACT: "support@shugur.com"  # Relay contact email (shown in NIP-11)
+  CONTACT: ""  # Relay contact email (shown in NIP-11)
   PUBLIC_KEY: ""                 # Relay public key (64-char hex string, leave empty to auto-generate)
   PRIVATE_KEY: ""                # Relay private key (64-char hex, auto-generated if empty, used for NIP-29 group signing)
   ADMIN_PUBKEYS: []              # Admin pubkeys for NIP-86 management API (hex strings)
-  ICON: "https://github.com/Shugur-Network/relay/raw/main/logo.png" # Relay icon URL (shown in NIP-11)
-  BANNER: "https://github.com/Shugur-Network/relay/raw/main/banner.png" # Relay banner URL (optional, shown in NIP-11)
+  ICON: "" # Relay icon URL (shown in NIP-11)
+  BANNER: "" # Relay banner URL (optional, shown in NIP-11)
   POSTING_POLICY: ""             # URL to relay's posting policy (optional, shown in NIP-11)
   RELAY_COUNTRIES: []            # ISO 3166-1 country codes where relay is hosted (optional, shown in NIP-11)
   WS_ADDR: ":8080"              # WebSocket listening address
-  PUBLIC_URL: "wss://relay.shugur.net" # Public URL (optional)
+  PUBLIC_URL: "" # Public URL (optional)
   EVENT_CACHE_SIZE: 10000        # Event cache size
   MIN_POW_DIFFICULTY: 0          # Minimum PoW difficulty (NIP-13, 0 = no requirement)
   SEND_BUFFER_SIZE: 8192         # WebSocket send buffer size

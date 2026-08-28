@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build script for Shugur Relay
+# Build script for the nostr.ltd Relay
 # - Builds current platform by default (keeps exact original behavior)
 # - Adds: arm64 targets, static builds, build tags, checksums, archives, nicer UX
 #

@@ -1,4 +1,4 @@
-# Test Configuration for Shugur Relay
+# Test Configuration for nostr.ltd Relay
 # Testing-specific settings with isolated ports and minimal resources
 
 GENERAL:
@@ -17,11 +17,11 @@ METRICS:
   PORT: 8183                     # Port for Prometheus metrics (different from dev/prod)
 
 RELAY:
-  NAME: "shugur-relay-test"      # Relay name (max 30 chars, shown in NIP-11)
+  NAME: "nostr.ltd-test"      # Relay name (max 30 chars, shown in NIP-11)
   DESCRIPTION: "High-performance, reliable, scalable Nostr relay for decentralized communication - Testing" # Relay description (max 200 chars, shown in NIP-11)
-  CONTACT: "test@shugur.com"     # Relay contact email (shown in NIP-11)
-  ICON: "https://github.com/Shugur-Network/relay/raw/main/logo.png" # Relay icon URL (shown in NIP-11)
-  BANNER: "https://github.com/Shugur-Network/relay/raw/main/banner.png" # Relay banner URL (optional, shown in NIP-11)
+  CONTACT: ""     # Relay contact email (shown in NIP-11)
+  ICON: "" # Relay icon URL (shown in NIP-11)
+  BANNER: "" # Relay banner URL (optional, shown in NIP-11)
   WS_ADDR: ":8082"              # WebSocket listening address (different from dev/prod)
   PUBLIC_URL: "ws://localhost:8082" # Public URL (optional)
   EVENT_CACHE_SIZE: 1000         # Event cache size (smaller for testing)
