@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"sort"
 	"strconv"
@@ -525,6 +526,14 @@ func (s *Server) mgmtBlockIP(params []string) (interface{}, string) {
 	ip := params[0]
 	if ip == "" {
 		return nil, "IP address cannot be empty"
+	}
+
+	// Validate that the input parses as an IP (not a CIDR, not junk).
+	// Previously any string could be stored and looked up, which let a
+	// malicious admin corrupt the ban map (issue #52).
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return nil, "invalid IP address"
 	}
 
 	// Track in management state

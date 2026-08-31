@@ -24,6 +24,10 @@ type RelayConfig struct {
 	ThrottlingConfig ThrottlingConfig `mapstructure:"THROTTLING"        json:"throttling"        validate:"required"`
 	Roles            map[string]string `mapstructure:"ROLES"            json:"roles"`
 	UserRoles        map[string][]string `mapstructure:"USER_ROLES"     json:"user_roles"`
+	// TrustedProxies is the list of CIDRs that may supply X-Real-IP /
+	// X-Forwarded-For. Requests whose RemoteAddr is not in this list are
+	// treated as direct peers and their forwarded headers are ignored.
+	TrustedProxies []string `mapstructure:"TRUSTED_PROXIES"  json:"trusted_proxies"`
 }
 
 // ThrottlingConfig holds rate limiting settings.

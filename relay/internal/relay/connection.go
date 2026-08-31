@@ -32,43 +32,65 @@ var (
 	clientExceededCount = make(map[string]int)
 )
 
-// extractRealClientIP extracts the real client IP from request headers when behind a proxy
-func extractRealClientIP(r *http.Request) string {
-	var extractedIP string
-	var source string
-
-	// Try X-Real-IP first (set by Caddy)
-	if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
-		extractedIP = strings.TrimSpace(realIP)
-		return extractedIP
+// extractRealClientIP extracts the real client IP. Forwarded headers
+// (X-Real-IP, X-Forwarded-For) are only honored when the request originates
+// from a CIDR listed in trustedProxies. Otherwise the value is taken from
+// the socket peer so a client cannot spoof its source IP by sending its own
+// headers.
+//
+// trustedProxies is a slice of CIDR strings (e.g. "127.0.0.0/8", "::1/128").
+// An empty slice disables forwarded-header trust entirely.
+func extractRealClientIP(r *http.Request, trustedProxies []*net.IPNet) string {
+	remoteIP := normalizeIP(r.RemoteAddr)
+	if remoteIP == "" {
+		// Could not parse RemoteAddr; fall back to whatever the header says.
+		return strings.TrimSpace(r.Header.Get("X-Real-IP"))
 	}
 
-	// Try X-Forwarded-For (contains comma-separated list of IPs)
+	// Only consult forwarded headers if the direct peer is trusted.
+	if !ipMatchesAnyCIDR(remoteIP, trustedProxies) {
+		logger.Debug("Client peer not in TrustedProxies; ignoring forwarded headers",
+			zap.String("client_ip", remoteIP),
+			zap.String("x_real_ip", r.Header.Get("X-Real-IP")),
+			zap.String("x_forwarded_for", r.Header.Get("X-Forwarded-For")))
+		return remoteIP
+	}
+
+	if realIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); realIP != "" {
+		return realIP
+	}
+
 	if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
-		// Take the first IP in the chain (the original client)
 		parts := strings.Split(forwardedFor, ",")
 		if len(parts) > 0 {
-			extractedIP = strings.TrimSpace(parts[0])
-			source = "X-Forwarded-For"
-			logger.Debug("Client IP extracted from X-Forwarded-For header",
+			extractedIP := strings.TrimSpace(parts[0])
+			logger.Debug("Client IP extracted from X-Forwarded-For",
 				zap.String("forwarded_ip", extractedIP),
-				zap.String("source", source),
 				zap.String("full_header", forwardedFor),
 				zap.String("raw_remote_addr", r.RemoteAddr))
 			return extractedIP
 		}
 	}
 
-	// Fallback to RemoteAddr (direct connection)
-	extractedIP = normalizeIP(r.RemoteAddr)
-	source = "RemoteAddr"
-	logger.Debug("No proxy headers found, using RemoteAddr",
-		zap.String("client_ip", extractedIP),
-		zap.String("source", source),
-		zap.String("x_real_ip", r.Header.Get("X-Real-IP")),
-		zap.String("x_forwarded_for", r.Header.Get("X-Forwarded-For")))
+	return remoteIP
+}
 
-	return extractedIP
+// ipMatchesAnyCIDR returns true if ip parses and falls within any of the
+// provided CIDR networks. An empty/nil trustedProxies slice yields false.
+func ipMatchesAnyCIDR(ip string, cidrs []*net.IPNet) bool {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	for _, cidr := range cidrs {
+		if cidr == nil {
+			continue
+		}
+		if cidr.Contains(parsed) {
+			return true
+		}
+	}
+	return false
 }
 
 // normalizeIP converts a network address to a normalized IP string
@@ -90,6 +112,27 @@ func normalizeIP(addr string) string {
 	}
 
 	return host
+}
+
+// parseTrustedProxies parses a slice of strings ("1.2.3.0/24", "::1/128")
+// into a slice of *net.IPNet. Invalid entries are silently dropped after a
+// warning so a bad config does not brick the relay at startup.
+func parseTrustedProxies(raw []string) []*net.IPNet {
+	out := make([]*net.IPNet, 0, len(raw))
+	for _, s := range raw {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		_, cidr, err := net.ParseCIDR(s)
+		if err != nil {
+			logger.Warn("Ignoring invalid TrustedProxies CIDR",
+				zap.String("entry", s), zap.Error(err))
+			continue
+		}
+		out = append(out, cidr)
+	}
+	return out
 }
 
 // generateClientID generates a unique client ID for event dispatcher.
@@ -143,7 +186,7 @@ func cleanExpiredBans() {
 
 // handleWebSocketConnection handles the upgrade of an HTTP connection to WebSocket
 func handleWebSocketConnection(ctx context.Context, w http.ResponseWriter, r *http.Request, upgrader websocket.Upgrader, node domain.NodeInterface, relayConfig config.RelayConfig) {
-	clientIP := extractRealClientIP(r)
+	clientIP := extractRealClientIP(r, parseTrustedProxies(relayConfig.TrustedProxies))
 
 	logger.Debug("New WebSocket connection attempt",
 		zap.String("client_ip", clientIP),

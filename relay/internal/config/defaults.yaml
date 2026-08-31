@@ -34,6 +34,9 @@ RELAY:
   SEND_BUFFER_SIZE: 8192         # WebSocket send buffer size
   WRITE_TIMEOUT: 60s             # WebSocket write timeout
   IDLE_TIMEOUT: 300s             # Connection idle timeout
+  TRUSTED_PROXIES:               # CIDRs that may set X-Real-IP / X-Forwarded-For
+    - "127.0.0.0/8"              # Loopback (Caddy on the same host)
+    - "::1/128"                  # Loopback (IPv6)
   THROTTLING:
     MAX_CONTENT_LENGTH: 2048     # Maximum content length in bytes
     MAX_CONNECTIONS: 1000        # Maximum concurrent connections
