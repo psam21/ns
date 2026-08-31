@@ -78,6 +78,54 @@ func (ns *negSessions) closeAll() {
 	}
 }
 
+// sweepIdle closes any session that has not been touched for longer than
+// negSessionTimeout. Returns the number of sessions reaped.
+func (ns *negSessions) sweepIdle() int {
+	ns.mu.Lock()
+	defer ns.mu.Unlock()
+	now := time.Now()
+	reaped := 0
+	for id, s := range ns.sessions {
+		if now.Sub(s.lastUsed) > negSessionTimeout {
+			delete(ns.sessions, id)
+			reaped++
+		}
+	}
+	return reaped
+}
+
+// startNegSweeper spawns a single goroutine per connection that periodically
+// prunes idle negentropy sessions. It exits when the supplied context is
+// canceled (i.e. when the WebSocket connection terminates).
+func (c *WsConnection) startNegSweeper(ctx context.Context) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Error("Recovered from panic in negentropy sweeper",
+					zap.Any("panic", r),
+					zap.String("client", c.RemoteAddr()))
+			}
+		}()
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if c.negSessions == nil {
+					return
+				}
+				if n := c.negSessions.sweepIdle(); n > 0 {
+					logger.Debug("Reaped idle negentropy sessions",
+						zap.Int("count", n),
+						zap.String("client", c.RemoteAddr()))
+				}
+			}
+		}
+	}()
+}
+
 // handleNegOpen processes a NEG-OPEN message
 func (c *WsConnection) handleNegOpen(ctx context.Context, arr []interface{}) {
 	// Parse: ["NEG-OPEN", <subID>, <filter>, <initialMessage>]

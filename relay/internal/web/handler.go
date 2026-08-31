@@ -1225,7 +1225,9 @@ func (h *Handler) formatUptime(duration time.Duration) string {
 	}
 }
 
-// loadFirstBootTime reads or creates the .first_boot timestamp file
+// loadFirstBootTime reads or creates the .first_boot timestamp file. The file
+// is created with mode 0600 so it is not world-readable on a multi-tenant
+// host (issue #73).
 func loadFirstBootTime() time.Time {
 	const path = ".first_boot"
 	data, err := os.ReadFile(path)
@@ -1235,7 +1237,7 @@ func loadFirstBootTime() time.Time {
 		}
 	}
 	now := time.Now().UTC()
-	_ = os.WriteFile(path, []byte(now.Format(time.RFC3339)), 0644)
+	_ = os.WriteFile(path, []byte(now.Format(time.RFC3339)), 0600)
 	return now
 }
 

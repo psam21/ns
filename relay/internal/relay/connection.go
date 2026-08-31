@@ -404,6 +404,9 @@ func NewWsConnection(
 	// Start monitoring
 	go conn.monitorConnection(ctx)
 
+	// Start negentropy idle-session sweeper
+	conn.startNegSweeper(ctx)
+
 	return conn, nil
 }
 
@@ -716,6 +719,13 @@ func (c *WsConnection) HandleMessages(ctx context.Context, cfg config.RelayConfi
 
 // processDispatcherEvents handles real-time events from the event dispatcher
 func (c *WsConnection) processDispatcherEvents() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("Recovered from panic in processDispatcherEvents",
+				zap.Any("panic", r),
+				zap.String("client", c.RemoteAddr()))
+		}
+	}()
 	if c.eventChan == nil {
 		return
 	}
@@ -912,6 +922,15 @@ func (c *WsConnection) Close() {
 
 // monitorConnection handles connection timeouts and cleanup
 func (c *WsConnection) monitorConnection(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("Recovered from panic in monitorConnection",
+				zap.Any("panic", r),
+				zap.String("client", c.RemoteAddr()))
+			c.closeReason = "monitor panic recovered"
+			c.Close()
+		}
+	}()
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 

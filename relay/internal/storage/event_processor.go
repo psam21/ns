@@ -91,6 +91,7 @@ func (ep *EventProcessor) QueueEvent(evt nostr.Event) bool {
 		return true
 	default:
 		// Queue full - this is backpressure
+		metrics.EventsDropped.WithLabelValues("queue_full").Inc()
 		logger.Warn("Event processing queue full, dropping event",
 			zap.String("event_id", evt.ID),
 			zap.String("pubkey", evt.PubKey),

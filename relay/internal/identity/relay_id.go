@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 const (
@@ -102,12 +103,26 @@ func loadRelayIdentity(path string) (*RelayIdentity, error) {
 	if strings.Contains(cleanedPath, "..") {
 		return nil, fmt.Errorf("invalid path: directory traversal detected")
 	}
-	
+
 	// Ensure the path has a reasonable length
 	if len(cleanedPath) > 256 {
 		return nil, fmt.Errorf("invalid path: path too long")
 	}
-	
+
+	// Refuse to load a key file that is not owned by the current user or
+	// is world-readable: a privilege escalation that placed the file there
+	// would silently swap the relay's identity (issue #67).
+	if info, err := os.Stat(cleanedPath); err == nil {
+		if mode := info.Mode().Perm(); mode&0o077 != 0 {
+			return nil, fmt.Errorf("relay identity file %s has overly permissive mode %#o; expected 0600", cleanedPath, mode)
+		}
+		if uid := os.Getuid(); uid >= 0 && info.Sys() != nil {
+			if st, ok := info.Sys().(*syscall.Stat_t); ok && int(st.Uid) != uid {
+				return nil, fmt.Errorf("relay identity file %s owned by uid %d, expected %d", cleanedPath, int(st.Uid), uid)
+			}
+		}
+	}
+
 	content, err := os.ReadFile(cleanedPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read relay ID file: %w", err)

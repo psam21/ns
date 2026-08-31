@@ -136,6 +136,14 @@ func (c *WsConnection) handleRequest(ctx context.Context, arr []interface{}) {
 
 // processSubscription handles the database query and sending events to the client
 func (c *WsConnection) processSubscription(ctx context.Context, subID string, f nostr.Filter) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("Recovered from panic in processSubscription",
+				zap.Any("panic", r),
+				zap.String("client", c.RemoteAddr()),
+				zap.String("sub_id", subID))
+		}
+	}()
 	// Create a context with timeout for the query
 	_, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
