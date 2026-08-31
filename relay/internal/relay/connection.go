@@ -92,9 +92,11 @@ func normalizeIP(addr string) string {
 	return host
 }
 
-// generateClientID generates a unique client ID for event dispatcher
+// generateClientID generates a unique client ID for event dispatcher.
+// Uses 16 random bytes (128 bits) to keep the birthday-collision probability
+// negligibly small at any realistic connection count.
 func generateClientID() string {
-	bytes := make([]byte, 8)
+	bytes := make([]byte, 16)
 	if _, err := rand.Read(bytes); err != nil {
 		// Fallback to timestamp-based ID if random generation fails
 		return fmt.Sprintf("%x", time.Now().UnixNano())
@@ -203,7 +205,15 @@ func handleWebSocketConnection(ctx context.Context, w http.ResponseWriter, r *ht
 	connectionSuccess = true
 
 	// Create new connection and register it
-	conn := NewWsConnection(ctx, wsConn, node, relayConfig, clientIP)
+	conn, err := NewWsConnection(ctx, wsConn, node, relayConfig, clientIP)
+	if err != nil {
+		// Challenge generation failure is fatal: an unauthenticated-capable
+		// connection is unsafe (see issue #51). Tear down the upgrade.
+		initErr := errors.WebSocketError("auth challenge init", err).
+			WithSeverity(errors.SeverityHigh)
+		errors.HandleWebSocketError(wsConn, "init", initErr)
+		return
+	}
 	node.RegisterConn(conn)
 
 	logger.Debug("WebSocket connection established successfully",
@@ -247,7 +257,9 @@ type WsConnection struct {
 
 	// NIP-42 AUTH
 	authChallenge  string
-	authedPubkeys  map[string]bool
+	// authedPubkeys maps authenticated pubkey -> expiry timestamp.
+	// AUTHs expire after AuthTTL to limit the lifetime of a stolen session.
+	authedPubkeys  map[string]time.Time
 	authMu         sync.RWMutex
 	relayURL       string
 
@@ -255,17 +267,24 @@ type WsConnection struct {
 	negSessions *negSessions
 }
 
+// AuthTTL is how long a successful NIP-42 AUTH remains valid on a connection.
+// Default: 10 minutes. The connection itself is capped at maxLifetime (24h).
+const AuthTTL = 10 * time.Minute
+
 // Ensure WsConnection implements domain.WebSocketConnection
 var _ domain.WebSocketConnection = (*WsConnection)(nil)
 
-// NewWsConnection initializes a new WebSocket connection
+// NewWsConnection initializes a new WebSocket connection.
+// Returns an error if the NIP-42 AUTH challenge cannot be generated; callers
+// must reject the upgrade in that case to prevent unprotected operations
+// on the connection.
 func NewWsConnection(
 	ctx context.Context,
 	ws *websocket.Conn,
 	node domain.NodeInterface,
 	cfg config.RelayConfig,
 	realClientIP string,
-) *WsConnection {
+) (*WsConnection, error) {
 	// Basic rate limiter
 	limiter := rate.NewLimiter(
 		rate.Limit(cfg.ThrottlingConfig.RateLimit.MaxEventsPerSecond),
@@ -292,18 +311,18 @@ func NewWsConnection(
 		eventCtx:    eventCtx,
 		eventCancel: eventCancel,
 		// NIP-42 AUTH
-		authedPubkeys: make(map[string]bool),
+		authedPubkeys: make(map[string]time.Time),
 		negSessions:   newNegSessions(),
 		relayURL:      cfg.PublicURL,
 	}
 
-	// Generate NIP-42 auth challenge
+	// Generate NIP-42 auth challenge. If this fails, fail closed: do not
+	// hand back a connection that can perform protected operations.
 	challenge, err := nips.GenerateAuthChallenge()
 	if err != nil {
-		logger.Error("Failed to generate auth challenge", zap.Error(err))
-	} else {
-		conn.authChallenge = challenge
+		return nil, fmt.Errorf("failed to generate NIP-42 auth challenge: %w", err)
 	}
+	conn.authChallenge = challenge
 
 	// Register with event dispatcher for real-time notifications
 	if eventDispatcher := node.GetEventDispatcher(); eventDispatcher != nil {
@@ -342,7 +361,7 @@ func NewWsConnection(
 	// Start monitoring
 	go conn.monitorConnection(ctx)
 
-	return conn
+	return conn, nil
 }
 
 // RemoteAddr returns the client's real remote address (extracted from proxy headers)
@@ -1078,9 +1097,11 @@ func (c *WsConnection) handleAuth(arr []interface{}) {
 		return
 	}
 
-	// Mark this pubkey as authenticated on this connection
+	// Mark this pubkey as authenticated on this connection with a TTL.
+	// After AuthTTL the AUTH record is considered expired and the client
+	// must re-authenticate.
 	c.authMu.Lock()
-	c.authedPubkeys[pubkey] = true
+	c.authedPubkeys[pubkey] = time.Now().Add(AuthTTL)
 	c.authMu.Unlock()
 
 	logger.Info("NIP-42: Client authenticated successfully",
@@ -1090,26 +1111,50 @@ func (c *WsConnection) handleAuth(arr []interface{}) {
 	c.sendOK(evt.ID, true, "")
 }
 
-// isAuthenticated checks if a pubkey has been authenticated on this connection via NIP-42
+// isAuthenticated checks if a pubkey has been authenticated on this connection
+// via NIP-42, AND that the AUTH record has not yet expired.
 func (c *WsConnection) isAuthenticated(pubkey string) bool {
 	c.authMu.RLock()
-	defer c.authMu.RUnlock()
-	return c.authedPubkeys[pubkey]
+	expiry, ok := c.authedPubkeys[pubkey]
+	c.authMu.RUnlock()
+	if !ok {
+		return false
+	}
+	if time.Now().After(expiry) {
+		// Expired: clean up so the map does not grow without bound.
+		c.authMu.Lock()
+		delete(c.authedPubkeys, pubkey)
+		c.authMu.Unlock()
+		return false
+	}
+	return true
 }
 
 // hasAuthentication checks if any pubkey has been authenticated on this connection
+// (and not yet expired).
 func (c *WsConnection) hasAuthentication() bool {
 	c.authMu.RLock()
 	defer c.authMu.RUnlock()
-	return len(c.authedPubkeys) > 0
+	now := time.Now()
+	for _, expiry := range c.authedPubkeys {
+		if now.Before(expiry) {
+			return true
+		}
+	}
+	return false
 }
 
 // getAuthenticatedPubkey returns the first authenticated pubkey on this connection, or empty string
+// getAuthenticatedPubkey returns the first authenticated pubkey on this connection
+// (whose AUTH record has not expired), or empty string.
 func (c *WsConnection) getAuthenticatedPubkey() string {
 	c.authMu.RLock()
 	defer c.authMu.RUnlock()
-	for pk := range c.authedPubkeys {
-		return pk
+	now := time.Now()
+	for pk, expiry := range c.authedPubkeys {
+		if now.Before(expiry) {
+			return pk
+		}
 	}
 	return ""
 }
