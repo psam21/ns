@@ -41,8 +41,7 @@ type PluginValidator struct {
 	mu        sync.RWMutex // protects blacklist and limits.AllowedKinds
 	limits    ValidationLimits
 
-	verifiedPubkeys map[string]time.Time
-	db              *storage.DB
+	db *storage.DB
 }
 
 // Ensure PluginValidator implements domain.EventValidator
@@ -296,11 +295,10 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 	}
 
 	return &PluginValidator{
-		config:          cfg,
-		blacklist:       make(map[string]bool),
-		limits:          defaultLimits,
-		verifiedPubkeys: make(map[string]time.Time),
-		db:              database,
+		config:    cfg,
+		blacklist: make(map[string]bool),
+		limits:    defaultLimits,
+		db:        database,
 	}
 }
 
@@ -353,6 +351,16 @@ func (pv *PluginValidator) ValidateEvent(ctx context.Context, event nostr.Event)
 	pv.mu.RUnlock()
 	if banned {
 		return false, "pubkey is blacklisted"
+	}
+
+	// 3a. Check event-ID ban list populated by NIP-86 banevent (issue #57).
+	// Previously mgmtState.bannedEvents was written but never consulted.
+	mgmtState.mu.RLock()
+	eventBanned := mgmtState.bannedEvents[strings.ToLower(event.ID)]
+	mgmtState.mu.RUnlock()
+	if eventBanned {
+		metrics.EventsBanned.Inc()
+		return false, "event id is banned"
 	}
 
 	// 4. Verify event ID matches content

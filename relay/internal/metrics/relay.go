@@ -332,6 +332,16 @@ var (
 		Help: "The total number of duplicate events received",
 	})
 
+	EventsBanned = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "nostr_relay_events_banned_total",
+		Help: "The total number of events rejected because their ID was on the NIP-86 ban list",
+	})
+
+	EventsDropped = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "nostr_relay_events_dropped_total",
+		Help: "The total number of events dropped due to admission-control pressure",
+	}, []string{"reason"})
+
 	// HTTP metrics
 	HTTPRequests = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "nostr_relay_http_requests_total",

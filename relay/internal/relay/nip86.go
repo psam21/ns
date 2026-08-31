@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,17 +36,47 @@ type managementResponse struct {
 	Error  string      `json:"error,omitempty"`
 }
 
+// mgmtCap is the maximum number of entries the in-memory ban maps will
+// hold. Past the cap, the oldest entries are evicted on insert. This stops
+// a single compromised admin from OOM-ing the relay by calling banevent /
+// banpubkey / blockip repeatedly (issue #63).
+const mgmtCap = 100_000
+
 // managementState holds in-memory state for NIP-86 management operations
 // that don't map to existing relay infrastructure.
 type managementState struct {
 	mu           sync.RWMutex
 	bannedEvents map[string]bool // event ID -> banned
 	blockedIPs   map[string]bool // IP -> blocked (permanent via management)
+	// insertionOrder tracks insertion time per key so we can evict the
+	// oldest entry when the map exceeds mgmtCap. Only used for evict().
+	insertOrder []string
 }
 
 var mgmtState = &managementState{
 	bannedEvents: make(map[string]bool),
 	blockedIPs:   make(map[string]bool),
+}
+
+// evictOldestLocked removes the oldest entry from the combined ban map.
+// Caller must hold mgmtState.mu (write lock).
+func (s *managementState) evictOldestLocked() {
+	if len(s.insertOrder) == 0 {
+		return
+	}
+	key := s.insertOrder[0]
+	s.insertOrder = s.insertOrder[1:]
+	delete(s.bannedEvents, key)
+	delete(s.blockedIPs, key)
+}
+
+// recordInsert tracks a new key for later eviction. Caller must hold
+// mgmtState.mu (write lock).
+func (s *managementState) recordInsert(key string) {
+	s.insertOrder = append(s.insertOrder, key)
+	if (len(s.bannedEvents) + len(s.blockedIPs)) > mgmtCap {
+		s.evictOldestLocked()
+	}
 }
 
 // nip86SupportedMethods lists all implemented NIP-86 methods.
@@ -136,9 +167,23 @@ func (s *Server) handleManagementAPI(w http.ResponseWriter, r *http.Request) {
 	// Dispatch method
 	result, methodErr := s.dispatchManagementMethod(req.Method, req.Params)
 	if methodErr != "" {
+		// Audit every accepted method call, including failures, for forensic
+		// visibility (issue #59).
+		log.Warn("NIP-86 management method rejected",
+			zap.String("method", req.Method),
+			zap.String("admin", pubkey),
+			zap.Strings("params", req.Params),
+			zap.String("client_ip", r.RemoteAddr),
+			zap.String("error", methodErr))
 		writeManagementResponse(w, managementResponse{Error: methodErr})
 		return
 	}
+
+	log.Info("NIP-86 management method accepted",
+		zap.String("method", req.Method),
+		zap.String("admin", pubkey),
+		zap.Strings("params", req.Params),
+		zap.String("client_ip", r.RemoteAddr))
 
 	writeManagementResponse(w, managementResponse{Result: result})
 }
@@ -374,6 +419,7 @@ func (s *Server) mgmtBanEvent(params []string) (interface{}, string) {
 
 	mgmtState.mu.Lock()
 	mgmtState.bannedEvents[eventID] = true
+	mgmtState.recordInsert(eventID)
 	mgmtState.mu.Unlock()
 
 	logger.New("nip86").Info("Event banned via management API",
@@ -451,6 +497,15 @@ func (s *Server) mgmtChangeRelayIcon(params []string) (interface{}, string) {
 		return nil, "missing icon URL parameter"
 	}
 	icon := params[0]
+	// Cap length and restrict scheme to http(s) to prevent XSS sinks in
+	// NIP-11 consumers (issue #60).
+	if len(icon) > 2048 {
+		return nil, "icon URL too long (max 2048 characters)"
+	}
+	parsed, err := url.Parse(icon)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return nil, "icon URL must be a valid http(s) URL"
+	}
 	s.fullCfg.Relay.Icon = icon
 	s.cfg.Icon = icon
 
@@ -539,6 +594,7 @@ func (s *Server) mgmtBlockIP(params []string) (interface{}, string) {
 	// Track in management state
 	mgmtState.mu.Lock()
 	mgmtState.blockedIPs[ip] = true
+	mgmtState.recordInsert(ip)
 	mgmtState.mu.Unlock()
 
 	// Also add to the relay's client ban list with permanent expiry
