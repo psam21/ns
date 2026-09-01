@@ -9,6 +9,21 @@
 # By default it uses the domain the incoming HTTP request was made on
 publicDomain: ""
 
+# Browser CORS allow-list for the upload endpoints (/upload, /media,
+# /mirror, etc.). Comma-separated list of additional browser origins
+# (scheme + host + port) that may call Blossom from JavaScript. The
+# canonical publicDomain is always allowed automatically; this list
+# is only for *additional* browser origins (e.g. a custom web client
+# at https://chattr.buzz). Most Nostr clients are native and do not
+# need this. Native / server-to-server clients are not affected by
+# CORS at all.
+#
+# Example:
+#   extraCorsOrigins:
+#     - https://chattr.buzz
+#     - https://app.example.com
+extraCorsOrigins: []
+
 databasePath: data/sqlite.db
 
 dashboard:

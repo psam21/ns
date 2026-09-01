@@ -42,12 +42,33 @@ app.proxy = true;
 // breaking uploads from dev pages, the admin SPA on a different
 // port, and any client that doesn't happen to be served from
 // config.publicDomain (issue discovered on 2026-09-01).
+//
+// Configure with:
+//   config.publicDomain  -> the canonical browser origin (always allowed)
+//   BLOSSOM_EXTRA_CORS_ORIGINS  -> comma-separated additional browser
+//                                 origins (e.g. "https://chattr.buzz,
+//                                 https://app.example.com")
 const corsAllowOrigins = (config.publicDomain ? [new URL(config.publicDomain).origin] : []).concat(
+  (Array.isArray(config.extraCorsOrigins) ? config.extraCorsOrigins : []).map((s) => s.trim()).filter(Boolean),
   (process.env.BLOSSOM_EXTRA_CORS_ORIGINS || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),
 );
+if (corsAllowOrigins.length === 0) {
+  // Fail closed: if no browser origin is configured, every preflight
+  // will be rejected. This is safer than the previous default of
+  // "echo the first allowed origin for everyone" (issue #54). Log
+  // loudly so the operator can fix it.
+  console.error(
+    "[blossom] WARNING: CORS allow-list is empty (no publicDomain and " +
+      "BLOSSOM_EXTRA_CORS_ORIGINS unset). All browser uploads will be " +
+      "rejected with a CORS error. Set BLOSSOM_EXTRA_CORS_ORIGINS or " +
+      "publicDomain in config.yml.",
+  );
+} else {
+  console.info(`[blossom] CORS allow-list: ${corsAllowOrigins.join(", ")}`);
+}
 app.use(
   cors({
     origin: (ctx) => {

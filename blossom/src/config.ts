@@ -13,6 +13,7 @@ const log = logger.extend("config");
 export type Rule = { id: string; type: string; pubkeys?: string[]; expiration: string };
 export type Config = {
   publicDomain: string;
+  extraCorsOrigins: string[];
   databasePath: string;
   storage: {
     backend: "local" | "s3";
@@ -102,6 +103,7 @@ function loadJson(filepath: string, content: string) {
 
 const defaultConfig: Config = {
   publicDomain: "",
+  extraCorsOrigins: [],
   databasePath: "data/sqlite.db",
   dashboard: { enabled: false, username: "admin" },
   discovery: {
