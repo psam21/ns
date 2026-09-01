@@ -277,7 +277,19 @@ set -Eeuo pipefail
 RELEASES="/opt/relay/releases"
 NEW_RELEASE="${RELEASES}/$(date +%Y%m%d_%H%M%S)"
 
+# Retention policy: keep zero on-disk backups. The full source is
+# tracked in git, and every artifact we ship (the Go binary, the
+# Blossom bundle) is reproducible from a clean build. Operators
+# who want on-disk rollback can set RELAY_BACKUP_RETAIN=1 (or any
+# positive number) in the environment. With the default 0, the
+# backup directory created below is removed at the end of the
+# current deploy, freeing ~30MB of relay and ~270MB of Blossom
+# space each run.
+RELAY_BACKUP_RETAIN="${RELAY_BACKUP_RETAIN:-0}"
+
 # 1. Create a timestamped backup directory (each run gets its own).
+#    This is the rollback anchor for THIS deploy; it is removed at
+#    the end of the deploy if RELAY_BACKUP_RETAIN=0 (the default).
 BACKUP="/opt/relay/backup_$(date +%Y%m%d_%H%M%S)"
 sudo mkdir -p "$BACKUP"
 
@@ -317,8 +329,13 @@ sudo mv -f /opt/relay/web/templates/index.html.tmp /opt/relay/web/templates/inde
 sudo mv -f /opt/relay/web/static/style.css.tmp     /opt/relay/web/static/style.css
 sudo mv -f /opt/relay/web/static/script.js.tmp     /opt/relay/web/static/script.js
 
+# The per-deploy staging tree at /opt/relay/releases/<ts>/ is dead
+# weight now: we never read from it again. Drop it to free ~30MB.
+sudo rm -rf "$NEW_RELEASE"
+
 # 4. Deploy and restart Blossom. The existing /opt/blossom/.env and
 #    /opt/blossom/data are deliberately preserved.
+BLOSSOM_BACKUP_RETAIN="${BLOSSOM_BACKUP_RETAIN:-0}"
 BLOSSOM_BACKUP="/opt/blossom-backup_$(date +%Y%m%d_%H%M%S)"
 BLOSSOM_NEW="${BLOSSOM_REMOTE_DIR}/.release_$(date +%Y%m%d_%H%M%S)"
 sudo mkdir -p "$BLOSSOM_BACKUP" "$BLOSSOM_NEW"
@@ -383,6 +400,11 @@ if ! sudo mv "$BLOSSOM_REMOTE_DIR/build" "$BLOSSOM_BACKUP/build.live" ||
     echo "ERROR: Blossom artifact swap failed"
     exit 1
 fi
+# The staging dir is now empty of artifacts. Drop it -- it still
+# holds a fresh ~270MB node_modules from the pnpm install above,
+# which we don't need once the swap is complete (the live tree has
+# its own node_modules at /opt/blossom/node_modules).
+sudo rm -rf "$BLOSSOM_NEW"
 sudo install -o root -g root -m 0644 "$REMOTE_STAGE/blossom.service" /etc/systemd/system/blossom.service
 sudo systemctl daemon-reload
 
@@ -447,13 +469,24 @@ echo ""
 # Retention: prune old backups NOW (after a successful swap, not after
 # the backup is created — otherwise the retention step would delete the
 # just-created backup if it leaves only N-1 older ones, leaving the
-# rollback path with nothing to restore from). Each var defaults to 1
-# (keep only the immediately previous release). Older history is
-# reconstructable from git.
-RELAY_BACKUP_RETAIN="${RELAY_BACKUP_RETAIN:-1}"
+# rollback path with nothing to restore from).
+#
+# Each var defaults to 0: with the full source tracked in git, every
+# shipped artifact is reproducible from `git log` + a clean build, and
+# keeping on-disk copies of every previous release rapidly exhausts
+# the production host's 19GB root volume (each Blossom release is
+# ~270MB, each relay binary is ~30MB). Operators who want a
+# one-step on-host rollback can set RELAY_BACKUP_RETAIN=1 /
+# BLOSSOM_BACKUP_RETAIN=1 in the environment.
 sudo bash -c "ls -dt /opt/relay/backup_* 2>/dev/null | tail -n +\$((RELAY_BACKUP_RETAIN + 1)) | xargs -r rm -rf"
-BLOSSOM_BACKUP_RETAIN="${BLOSSOM_BACKUP_RETAIN:-1}"
 sudo bash -c "ls -dt /opt/blossom-backup_* 2>/dev/null | tail -n +\$((BLOSSOM_BACKUP_RETAIN + 1)) | xargs -r rm -rf"
+# Also drop the staging directories that the deploy creates but
+# never reads back from: /opt/relay/releases/* holds the per-deploy
+# relay-binary copy (30MB each) and /opt/blossom/.release_* holds
+# per-deploy pnpm installs (270MB each). The live tree at
+# /opt/relay/relay-arm64 and /opt/blossom/{build,public,admin/dist}
+# is what runs; the staging trees are dead weight.
+sudo bash -c "rm -rf /opt/relay/releases /opt/blossom/.release_* 2>/dev/null"
 
 # ============================================
 # Step 9: Verify deployment
