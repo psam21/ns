@@ -35,6 +35,13 @@ app.proxy = true;
 // CORS: restrict to a configured allow-list (defaults to publicDomain).
 // Wildcard origin + exposed Authorization header is a cross-origin
 // reconnaissance / CSRF surface (issue #54).
+//
+// For a non-allow-listed Origin the response MUST omit
+// Access-Control-Allow-Origin entirely so the browser refuses the
+// preflight. Falling back to a different allowed origin was
+// breaking uploads from dev pages, the admin SPA on a different
+// port, and any client that doesn't happen to be served from
+// config.publicDomain (issue discovered on 2026-09-01).
 const corsAllowOrigins = (config.publicDomain ? [new URL(config.publicDomain).origin] : []).concat(
   (process.env.BLOSSOM_EXTRA_CORS_ORIGINS || "")
     .split(",")
@@ -46,7 +53,13 @@ app.use(
     origin: (ctx) => {
       const origin = ctx.request.header.origin;
       if (!origin) return "";
-      return corsAllowOrigins.includes(origin) ? origin : corsAllowOrigins[0] || "";
+      // Echo the origin back only when it is in the allow-list;
+      // otherwise return "" so @koa/cors omits ACAO and the browser
+      // refuses the response. Previously the fallback was
+      // `corsAllowOrigins[0]`, which produced the wrong ACAO for
+      // every non-allow-listed origin and silently broke uploads
+      // from clients on other ports / subdomains.
+      return corsAllowOrigins.includes(origin) ? origin : "";
     },
     allowMethods: "GET,HEAD,PUT,POST,DELETE,OPTIONS",
     allowHeaders: "Authorization,Content-Type,X-Sha-256,X-Content-Type,X-Content-Length",
