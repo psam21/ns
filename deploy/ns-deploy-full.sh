@@ -288,12 +288,6 @@ sudo cp -a /opt/relay/web/static/style.css    "$BACKUP/style.css.bak"
 sudo cp -a /opt/relay/web/static/script.js    "$BACKUP/script.js.bak"
 sudo cp -a /etc/systemd/system/relay.service  "$BACKUP/relay.service.bak"
 
-# Retention: keep only the immediately previous relay release for fast
-# rollback (~30 MB). Older history is reconstructable from git. The env
-# var RELAY_BACKUP_RETAIN can override.
-RELAY_BACKUP_RETAIN="${RELAY_BACKUP_RETAIN:-1}"
-sudo bash -c "ls -dt /opt/relay/backup_* 2>/dev/null | tail -n +\$((RELAY_BACKUP_RETAIN + 1)) | xargs -r rm -rf"
-
 # 2. Stage the new release in a fresh directory. If any install fails,
 #    the live paths are untouched and we abort before any swap.
 sudo mkdir -p "$NEW_RELEASE/web/templates" "$NEW_RELEASE/web/static"
@@ -332,12 +326,6 @@ sudo cp -a "$BLOSSOM_REMOTE_DIR/build" "$BLOSSOM_BACKUP/build.bak"
 sudo cp -a "$BLOSSOM_REMOTE_DIR/public" "$BLOSSOM_BACKUP/public.bak"
 sudo cp -a "$BLOSSOM_REMOTE_DIR/admin/dist" "$BLOSSOM_BACKUP/admin-dist.bak"
 sudo cp -a /etc/systemd/system/blossom.service "$BLOSSOM_BACKUP/blossom.service.bak"
-
-# Retention: keep only the immediately previous Blossom release for fast
-# rollback (~9 MB). Older history is reconstructable from git. The env
-# var BLOSSOM_BACKUP_RETAIN can override.
-BLOSSOM_BACKUP_RETAIN="${BLOSSOM_BACKUP_RETAIN:-1}"
-sudo bash -c "ls -dt /opt/blossom-backup_* 2>/dev/null | tail -n +\$((BLOSSOM_BACKUP_RETAIN + 1)) | xargs -r rm -rf"
 sudo tar -xzf "$REMOTE_STAGE/blossom-artifacts.tgz" -C "$BLOSSOM_NEW"
 if ! command -v pnpm >/dev/null 2>&1; then
     echo "ERROR: pnpm is required on the AWS host to install Blossom production dependencies"
@@ -455,6 +443,17 @@ REMOTE_EOF
 
 log_info "Remote service restart completed"
 echo ""
+
+# Retention: prune old backups NOW (after a successful swap, not after
+# the backup is created — otherwise the retention step would delete the
+# just-created backup if it leaves only N-1 older ones, leaving the
+# rollback path with nothing to restore from). Each var defaults to 1
+# (keep only the immediately previous release). Older history is
+# reconstructable from git.
+RELAY_BACKUP_RETAIN="${RELAY_BACKUP_RETAIN:-1}"
+sudo bash -c "ls -dt /opt/relay/backup_* 2>/dev/null | tail -n +\$((RELAY_BACKUP_RETAIN + 1)) | xargs -r rm -rf"
+BLOSSOM_BACKUP_RETAIN="${BLOSSOM_BACKUP_RETAIN:-1}"
+sudo bash -c "ls -dt /opt/blossom-backup_* 2>/dev/null | tail -n +\$((BLOSSOM_BACKUP_RETAIN + 1)) | xargs -r rm -rf"
 
 # ============================================
 # Step 9: Verify deployment
