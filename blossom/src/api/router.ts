@@ -71,7 +71,33 @@ function parseNIP98AuthEvent(auth: NostrEvent, req: Request) {
   // Verify event signature
   if (!verifyEvent(auth)) throw new HttpErrors.BadRequest("Invalid NIP-98 auth event");
 
-  return { auth, type: "nip98", expiration: createdAt + 60 };
+  // Map NIP-98 (kind 27235) to the same authType taxonomy as NIP-42
+  // (kind 24242), so the per-endpoint `checkUpload`/`checkList`/...
+  // gates see "upload" / "media" / "list" / "mirror" and not the
+  // opaque "nip98" value. Before this fix, every NIP-98 PUT to
+  // /upload returned 401 with "Auth event must be 'upload'", which
+  // is the bug discovered in production on 2026-09-01.
+  //
+  // The mapping uses the URL path (BUD-04's NIP-42 events carry an
+  // explicit `t` tag; NIP-98 derives the operation from the URL
+  // instead). Falls back to "nip98" for unrecognized paths so the
+  // mismatch surfaces as a 401 with a clear reason rather than a
+  // silent authorization bypass.
+  let type = "nip98";
+  if (uTag) {
+    try {
+      const path = new URL(uTag).pathname;
+      if (path === "/upload") type = "upload";
+      else if (path === "/media") type = "media";
+      else if (path === "/mirror") type = "mirror";
+      else if (path.startsWith("/list/")) type = "list";
+    } catch {
+      // Malformed u tag - keep "nip98" so the per-endpoint check
+      // rejects it loudly.
+    }
+  }
+
+  return { auth, type, expiration: createdAt + 60 };
 }
 
 // parse auth headers
