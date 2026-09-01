@@ -529,12 +529,21 @@ else
     log_warn "/api/stats endpoint not responding (may be normal during initial startup)"
 fi
 
-# Check /api/events endpoint
+# Check /api/events endpoint. The grouped archive telemetry warmup
+# can take a long time on a cold start with millions of stored events
+# (observed ~25 minutes for 1M+ events on 2026-09-01). Poll for
+# `status == "ready"` for up to 30 minutes; the cold-start case
+# uses 15s between checks (so we still progress), the warm case
+# resolves on the first or second check.
 log_info "Checking /api/events endpoint..."
 
 EVENTS_HTTP=""
 EVENTS_STATUS="unknown"
-for attempt in {1..12}; do
+EVENTS_MAX_ATTEMPTS="${EVENTS_MAX_ATTEMPTS:-120}"   # 120 * 15s = 30 min
+EVENTS_INTERVAL="${EVENTS_INTERVAL:-15}"
+EVENTS_ATTEMPT=0
+while [ "$EVENTS_ATTEMPT" -lt "$EVENTS_MAX_ATTEMPTS" ]; do
+    EVENTS_ATTEMPT=$((EVENTS_ATTEMPT + 1))
     EVENTS_JSON=$(ssh -i "$AWS_KEY" "$AWS_HOST" \
         "curl --silent --show-error --max-time 10 http://localhost:8080/api/events || true" 2>/dev/null || true)
     EVENTS_STATUS=$(printf '%s' "$EVENTS_JSON" | jq -r '.status // "unknown"' 2>/dev/null || echo "unknown")
@@ -542,16 +551,16 @@ for attempt in {1..12}; do
         "curl --silent --output /dev/null --write-out '%{http_code}' --max-time 10 http://localhost:8080/api/events || true" 2>/dev/null || true)
 
     if [[ "$EVENTS_HTTP" == "200" && "$EVENTS_STATUS" == "ready" ]]; then
-        echo "Event cache is ready (attempt $attempt)."
+        echo "Event cache is ready (attempt $EVENTS_ATTEMPT, after ~$((EVENTS_ATTEMPT * EVENTS_INTERVAL))s)."
         break
     fi
 
-    echo "Event cache state: HTTP $EVENTS_HTTP / $EVENTS_STATUS; waiting (attempt $attempt/12)..."
-    sleep 5
+    echo "Event cache state: HTTP $EVENTS_HTTP / $EVENTS_STATUS; waiting (attempt $EVENTS_ATTEMPT/$EVENTS_MAX_ATTEMPTS)..."
+    sleep "$EVENTS_INTERVAL"
 done
 
 if [[ "$EVENTS_HTTP" != "200" || "$EVENTS_STATUS" != "ready" ]]; then
-    echo "ERROR: event cache is not ready after 60 seconds"
+    echo "ERROR: event cache is not ready after $((EVENTS_MAX_ATTEMPTS * EVENTS_INTERVAL)) seconds"
     ssh -i "$AWS_KEY" "$AWS_HOST" \
         "sudo journalctl -u relay.service --since '10 minutes ago' --no-pager | grep -Ei 'cache|event|postgres|database|query|error|fatal|panic' || true"
     exit 1
