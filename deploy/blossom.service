@@ -27,7 +27,6 @@ SystemCallArchitectures=native
 LockPersonality=true
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
-MemoryDenyWriteExecute=true
 
 [Install]
 WantedBy=multi-user.target
