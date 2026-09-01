@@ -7,8 +7,13 @@ import { buildConditionsFromFilter, buildOrderByFromSort } from "../helpers/sql.
 import { Request } from "koa";
 
 function blobRowToBlob(row: any, req?: Request) {
+  // Explicit field copy (no `...row` spread) so a future column added to
+  // the SELECT cannot accidentally leak (issue #87).
   return {
-    ...row,
+    sha256: row.sha256,
+    type: row.type,
+    size: row.size,
+    uploaded: row.uploaded,
     owners: row.owners?.split(",") ?? [],
     id: row.sha256,
     url: getBlobURL(row, req ? req.protocol + "://" + req.host : undefined),

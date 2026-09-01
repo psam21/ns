@@ -12,6 +12,19 @@ import { forgetBlobAccessed, updateBlobAccess } from "../db/methods.js";
 import { readUpload, removeUpload, UploadDetails } from "./upload.js";
 import { mapParams } from "../admin-api/helpers.js";
 
+/**
+ * Convert a rule's `type` pattern (using `*` as wildcard) to a SQL LIKE
+ * pattern. Escapes `%`, `_`, and `\` so a rule like `image_/_jpeg` is
+ * treated literally (issue #86).
+ */
+function sqlLikePattern(rule: string): string {
+  return rule
+    .replace(/\\/g, "\\\\")
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_")
+    .replace(/\*/g, "%");
+}
+
 async function createStorage() {
   if (config.storage.backend === "local") {
     await mkdirp(config.storage.local!.dir);
@@ -101,7 +114,7 @@ export async function pruneStorage() {
             owners.pubkey IN (${Array.from(rule.pubkeys).fill("?").join(", ")})
         `,
         )
-        .all(rule.type.replace(/\*/g, "%"), ...rule.pubkeys) as (BlobMetadata & {
+        .all(sqlLikePattern(rule.type), ...rule.pubkeys) as (BlobMetadata & {
         pubkey: string;
         accessed: number | null;
       })[];
@@ -117,7 +130,7 @@ export async function pruneStorage() {
             blobs.type LIKE ?
         `,
         )
-        .all(rule.type.replace(/\*/g, "%")) as (BlobMetadata & {
+        .all(sqlLikePattern(rule.type)) as (BlobMetadata & {
         pubkey: string;
         accessed: number | null;
       })[];

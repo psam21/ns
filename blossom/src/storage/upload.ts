@@ -14,6 +14,12 @@ import { config } from "../config.js";
 
 const log = logger.extend("uploads");
 const tmpDir = await pfs.mkdtemp(path.join(tmpdir(), "uploads-"));
+// Defensive chmod in case mkdtemp's mode is altered by umask (issue #85).
+try {
+  fs.chmodSync(tmpDir, 0o700);
+} catch {
+  /* best-effort */
+}
 
 export type UploadDetails = {
   type?: string;

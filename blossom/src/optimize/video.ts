@@ -149,7 +149,12 @@ export async function optimizeVideo(inputPath: string, options?: Partial<VideoOp
           resolve(outputPath);
         })
         .on("error", (err) => {
-          console.error("Error:", err);
+          // Strip the input path from the fluent-ffmpeg error so we do not
+          // leak /tmp/uploads-* paths to journald (issue #84).
+          const sanitized = err instanceof Error
+            ? err.message.replace(/\/[^\s'"]+/g, "<tempfile>")
+            : String(err);
+          log(`Optimization error: ${sanitized}`);
           reject(err);
         })
         .save(outputPath);

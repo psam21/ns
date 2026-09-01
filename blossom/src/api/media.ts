@@ -36,6 +36,20 @@ router.put<UploadState>("/media", async (ctx) => {
       throw new HttpErrors.BadRequest("Incorrect blob sha256");
     }
 
+    // Sniff magic bytes instead of trusting the request Content-Type.
+    // Previously a binary uploaded as "image/jpeg" would be dispatched to
+    // sharp; sharp may crash, but the wrong-type code path was reached
+    // (issue #83).
+    const { fileTypeFromFile } = await import("file-type");
+    const sniff = await fileTypeFromFile(upload.tempFile);
+    const sniffedType = sniff?.mime ?? upload.type;
+    if (!sniffedType) {
+      throw new HttpErrors.UnsupportedMediaType("Could not determine file type from content");
+    }
+    if (!/^image\//.test(sniffedType) && !/^video\//.test(sniffedType)) {
+      throw new HttpErrors.UnsupportedMediaType(`Unsupported media type: ${sniffedType}`);
+    }
+
     // optimize the file
     const output = await optimizeMedia(upload.tempFile, { image: config.media.image, video: config.media.video });
 
