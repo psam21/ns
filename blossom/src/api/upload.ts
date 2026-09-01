@@ -2,7 +2,7 @@ import { ParameterizedContext, Next, DefaultState } from "koa";
 import HttpErrors from "http-errors";
 
 import { addFromUpload } from "../storage/index.js";
-import { CommonState, getBlobDescriptor, router } from "./router.js";
+import { CommonState, getBlobDescriptor, NIP98_AUTH_TYPE, router } from "./router.js";
 import { getFileRule } from "../rules/index.js";
 import { config, Rule } from "../config.js";
 import { removeUpload, saveFromUploadRequest } from "../storage/upload.js";
@@ -23,7 +23,18 @@ export function checkUpload(
       // check auth
       if (opts.requireAuth) {
         if (!ctx.state.auth) throw new HttpErrors.Unauthorized("Missing Auth event");
-        if (ctx.state.authType !== authType) throw new HttpErrors.Unauthorized(`Auth event must be '${authType}'`);
+        // NIP-98 (kind 27235) auth events bind themselves to a
+        // specific request via the `u` + `method` tags, so the
+        // literal per-endpoint `authType` check is redundant and
+        // would reject valid events from clients that don't
+        // categorize their request as "upload"/"media"/... Accept
+        // the wildcard sentinel set by the auth middleware. NIP-42
+        // (kind 24242) clients continue to be matched by the
+        // literal `t` tag.
+        const isNip98 = ctx.state.authType === NIP98_AUTH_TYPE;
+        if (!isNip98 && ctx.state.authType !== authType) {
+          throw new HttpErrors.Unauthorized(`Auth event must be '${authType}'`);
+        }
 
         // BUD-06, check if hash is in auth event
         const sha256 = ctx.header["x-sha-256"];

@@ -8,7 +8,7 @@ import * as https from "node:https";
 import mount from "koa-mount";
 
 import storage from "../storage/index.js";
-import { CommonState, getBlobDescriptor, log, router } from "./router.js";
+import { CommonState, getBlobDescriptor, log, NIP98_AUTH_TYPE, router } from "./router.js";
 import { getFileRule } from "../rules/index.js";
 import { config } from "../config.js";
 import { updateBlobAccess } from "../db/methods.js";
@@ -93,7 +93,11 @@ router.put<CommonState>("/mirror", async (ctx) => {
   // check auth
   if (config.upload.requireAuth) {
     if (!ctx.state.auth) throw new HttpErrors.Unauthorized("Missing Auth event");
-    if (ctx.state.authType !== "upload") throw new HttpErrors.Unauthorized("Auth event should be 'upload'");
+    // NIP-98 binds via `u` + `method` tags; per-endpoint `t` tag
+    // check is redundant for NIP-98 clients.
+    if (ctx.state.authType !== NIP98_AUTH_TYPE && ctx.state.authType !== "upload") {
+      throw new HttpErrors.Unauthorized("Auth event should be 'upload'");
+    }
   }
 
   if (!ctx.request.body || typeof ctx.request.body !== "object" || !("url" in ctx.request.body)) {

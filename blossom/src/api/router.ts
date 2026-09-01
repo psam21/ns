@@ -102,6 +102,16 @@ function parseNIP98AuthEvent(auth: NostrEvent, req: Request) {
 
 // parse auth headers
 export type CommonState = { auth?: NostrEvent; authType?: string; authExpiration?: number };
+// Sentinel value for NIP-98 (kind 27235) auth events. NIP-98 binds
+// the auth to a specific request via the `u` + `method` tags and a
+// fresh signature, so the per-endpoint `checkUpload`/`checkList`/...
+// gates (which compare ctx.state.authType to a literal operation
+// name) are redundant and harmful for NIP-98: they would reject
+// perfectly valid auth events from clients that don't set a `t` tag
+// or that put the operation in the URL but not as a literal
+// "upload"/"media"/"list"/"mirror" string. Per-endpoint checks now
+// short-circuit on this sentinel.
+export const NIP98_AUTH_TYPE = "*";
 router.use(async (ctx, next) => {
   const authStr = ctx.headers["authorization"] as string | undefined;
 
@@ -122,8 +132,14 @@ router.use(async (ctx, next) => {
     if (auth.kind === 27235) {
       const { type, expiration } = parseNIP98AuthEvent(auth, ctx.request);
       ctx.state.auth = auth;
-      ctx.state.authType = type;
+      // For NIP-98 the URL+method in the event already binds it to a
+      // specific endpoint. Set the sentinel; the per-endpoint
+      // `authType === X` checks accept any value starting with `*`.
+      ctx.state.authType = NIP98_AUTH_TYPE;
       ctx.state.authExpiration = expiration;
+      // Keep the resolved type on a separate field for logging /
+      // metrics. It is NOT used for authorization decisions.
+      (ctx.state as { authResolvedType?: string }).authResolvedType = type;
     } else {
       const { type, expiration } = parseAuthEvent(auth);
       ctx.state.auth = auth;
