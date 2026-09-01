@@ -474,8 +474,8 @@ sudo journalctl -u blossom.service -n 30 --no-pager
 # release is ~270MB, each relay binary is ~30MB). Operators who want
 # a one-step on-host rollback can set RELAY_BACKUP_RETAIN=1 /
 # BLOSSOM_BACKUP_RETAIN=1 in the environment.
-sudo bash -c "ls -dt /opt/relay/backup_* 2>/dev/null | tail -n +\$((RELAY_BACKUP_RETAIN + 1)) | xargs -r rm -rf"
-sudo bash -c "ls -dt /opt/blossom-backup_* 2>/dev/null | tail -n +\$((BLOSSOM_BACKUP_RETAIN + 1)) | xargs -r rm -rf"
+sudo bash -c "if [ \"\$RELAY_BACKUP_RETAIN\" -gt 0 ]; then ls -dt /opt/relay/backup_* 2>/dev/null | tail -n +\$((RELAY_BACKUP_RETAIN + 1)) | xargs -r rm -rf; else rm -rf /opt/relay/backup_* 2>/dev/null; fi"
+sudo bash -c "if [ \"\$BLOSSOM_BACKUP_RETAIN\" -gt 0 ]; then ls -dt /opt/blossom-backup_* 2>/dev/null | tail -n +\$((BLOSSOM_BACKUP_RETAIN + 1)) | xargs -r rm -rf; else rm -rf /opt/blossom-backup_* 2>/dev/null; fi"
 # Also drop the staging directories that the deploy creates but
 # never reads back from: /opt/relay/releases/* holds the per-deploy
 # relay-binary copy (30MB each) and /opt/blossom/.release_* holds
