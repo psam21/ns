@@ -375,12 +375,10 @@ func NewWsConnection(
 	}
 	conn.authChallenge = challenge
 
-	// Register with event dispatcher for real-time notifications
-	if eventDispatcher := node.GetEventDispatcher(); eventDispatcher != nil {
-		conn.eventChan = eventDispatcher.AddClient(conn.clientID)
-		// Start processing events from dispatcher
-		go conn.processDispatcherEvents()
-	}
+	// Note: dispatcher subscription is now lazy. The connection only
+	// registers with the event dispatcher once it has at least one
+	// subscription (issue #96). See subscribeDispatcher and
+	// unsubscribeDispatcher.
 
 	// WebSocket compression
 	ws.EnableWriteCompression(true)
@@ -1009,21 +1007,61 @@ func (c *WsConnection) HasSubscription(subID string) bool {
 	return ok
 }
 
-// AddSubscription adds a new subscription
+// subscribeDispatcher registers the connection with the event
+// dispatcher and starts the read loop, if not already subscribed.
+// Caller must hold c.subMu (write) OR have c.eventChan already
+// guaranteed non-nil. The first subscription added to a connection
+// triggers the subscribe; the last removed triggers the unsubscribe
+// (issue #96).
+func (c *WsConnection) subscribeDispatcher() {
+	if c.eventChan != nil {
+		return
+	}
+	ed := c.node.GetEventDispatcher()
+	if ed == nil {
+		return
+	}
+	c.eventChan = ed.AddClient(c.clientID)
+	go c.processDispatcherEvents()
+}
+
+// unsubscribeDispatcher removes the connection from the dispatcher if
+// it has no remaining subscriptions. Caller must hold c.subMu (write).
+func (c *WsConnection) unsubscribeDispatcher() {
+	if c.eventChan == nil {
+		return
+	}
+	if ed := c.node.GetEventDispatcher(); ed != nil {
+		ed.RemoveClient(c.clientID)
+	}
+	c.eventChan = nil
+}
+
+// AddSubscription adds a new subscription. The first subscription on
+// a connection registers it with the event dispatcher.
 func (c *WsConnection) AddSubscription(subID string, filters []nostr.Filter) {
 	c.subMu.Lock()
 	defer c.subMu.Unlock()
+	first := len(c.subscriptions) == 0
 	c.subscriptions[subID] = filters
+	if first {
+		c.subscribeDispatcher()
+	}
 	metrics.IncrementActiveSubscriptions()
 }
 
-// RemoveSubscription removes a subscription
+// RemoveSubscription removes a subscription. The last subscription
+// on a connection unregisters it from the event dispatcher.
 func (c *WsConnection) RemoveSubscription(subID string) {
 	c.subMu.Lock()
 	defer c.subMu.Unlock()
-	if _, exists := c.subscriptions[subID]; exists {
-		delete(c.subscriptions, subID)
-		metrics.DecrementActiveSubscriptions()
+	if _, exists := c.subscriptions[subID]; !exists {
+		return
+	}
+	delete(c.subscriptions, subID)
+	metrics.DecrementActiveSubscriptions()
+	if len(c.subscriptions) == 0 {
+		c.unsubscribeDispatcher()
 	}
 }
 

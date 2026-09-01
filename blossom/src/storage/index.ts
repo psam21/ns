@@ -96,6 +96,46 @@ export async function pruneStorage() {
   const now = dayjs().unix();
   const checked = new Set<string>();
 
+  // Bound the number of concurrent storage.removeBlob calls so a large
+  // prune pass does not saturate the S3 delete API rate or fork-bomb
+  // the process (issue #94). 10 is a conservative default that keeps
+  // per-call latency low while leaving headroom for upload traffic.
+  const MAX_CONCURRENT_REMOVES = 10;
+  let inFlight = 0;
+  const removalQueue: Promise<void>[] = [];
+  const waitForSlot = async () => {
+    while (inFlight >= MAX_CONCURRENT_REMOVES) {
+      if (removalQueue.length === 0) break;
+      await Promise.race(removalQueue);
+    }
+  };
+  const enqueueRemove = (sha256: string, type: string | undefined, ruleLabel: string) => {
+    inFlight++;
+    let p!: Promise<void>;
+    const work = (async () => {
+      try {
+        log("Removing", sha256, type, "because", ruleLabel);
+        await blobDB.removeBlob(sha256);
+        if (await storage.hasBlob(sha256)) await storage.removeBlob(sha256);
+        forgetBlobAccessed(sha256);
+      } finally {
+        inFlight--;
+        // Resolve self so waitForSlot can re-evaluate.
+        const idx = removalQueue.indexOf(p);
+        if (idx >= 0) removalQueue.splice(idx, 1);
+      }
+    })();
+    p = work;
+    removalQueue.push(p);
+    return p;
+  };
+  const drainRemovals = async () => {
+    while (inFlight > 0) {
+      if (removalQueue.length === 0) break;
+      await Promise.race(removalQueue);
+    }
+  };
+
   /** Remove all blobs that no longer fall under any rules */
   for (const rule of config.storage.rules) {
     const expiration = getExpirationTime(rule, now);
@@ -141,15 +181,16 @@ export async function pruneStorage() {
       if (checked.has(blob.sha256)) continue;
 
       if ((blob.accessed || blob.uploaded) < expiration) {
-        log("Removing", blob.sha256, blob.type, "because", rule);
-        await blobDB.removeBlob(blob.sha256);
-        if (await storage.hasBlob(blob.sha256)) await storage.removeBlob(blob.sha256);
-        forgetBlobAccessed(blob.sha256);
+        await waitForSlot();
+        enqueueRemove(blob.sha256, blob.type, String(config.storage.rules.indexOf(rule)));
       }
 
       n++;
       checked.add(blob.sha256);
     }
+    // Drain any in-flight removes for this rule before moving on so the
+    // cron does not leave dangling promises between ticks.
+    await drainRemovals();
     if (n > 0) log("Checked", n, "blobs for rule #" + config.storage.rules.indexOf(rule));
   }
 
