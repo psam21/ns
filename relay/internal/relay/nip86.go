@@ -269,7 +269,11 @@ func verifyNIP98Auth(r *http.Request, body []byte, relayURL string) (string, str
 }
 
 // isAdmin checks if the pubkey is authorized as a relay admin.
-// The relay owner pubkey (PUBLIC_KEY) is always an admin.
+// The relay owner pubkey (PUBLIC_KEY) is always an admin. Pubkeys in
+// Relay.AdminPubkeys are also admins. Pubkeys that have been assigned
+// the "admin" role via the NIP-86 role-management methods are also
+// treated as admins (issue #58). This wires the previously-orphaned
+// role assignments into the actual authorization decision.
 func (s *Server) isAdmin(pubkey string) bool {
 	pubkey = strings.ToLower(pubkey)
 
@@ -282,6 +286,18 @@ func (s *Server) isAdmin(pubkey string) bool {
 	for _, admin := range s.fullCfg.Relay.AdminPubkeys {
 		if strings.ToLower(admin) == pubkey {
 			return true
+		}
+	}
+
+	// Check role assignments: any pubkey holding the "admin" role is
+	// considered a relay admin. Other role names (e.g. "moderator",
+	// "readonly") are not yet honored; the audit ends with the role
+	// mechanism at least consulted for the admin role.
+	if s.fullCfg.Relay.UserRoles != nil {
+		for _, r := range s.fullCfg.Relay.UserRoles[pubkey] {
+			if strings.EqualFold(r, "admin") {
+				return true
+			}
 		}
 	}
 
