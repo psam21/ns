@@ -55,20 +55,33 @@ app.proxy = true;
 //     header is a Nostr event token, not a browser cookie), so
 //     wildcard ACAO without credentials is the spec-safe choice.
 //
+// `publicDomain` alone does NOT trigger restrictive mode -- it's
+// the canonical URL for blob descriptors, not a CORS gate. Only
+// `extraCorsOrigins` (or the env override) is opt-in for
+// restrictive CORS.
+//
 // Configure with:
-//   config.publicDomain            -> included in the allow-list
-//                                     when in restrictive mode
-//   config.extraCorsOrigins[]      -> additional browser origins
+//   config.publicDomain            -> used as the URL prefix in
+//                                     blob descriptors; ignored
+//                                     for CORS
+//   config.extraCorsOrigins[]      -> opt-in to restrictive CORS
+//                                     (allowed origins get ACAO;
+//                                     others get nothing)
 //   BLOSSOM_EXTRA_CORS_ORIGINS     -> same, env override
-const explicitAllowList = [
-  ...(config.publicDomain ? [new URL(config.publicDomain).origin] : []),
+const explicitExtraOrigins = [
   ...((Array.isArray(config.extraCorsOrigins) ? config.extraCorsOrigins : []).map((s) => s.trim()).filter(Boolean)),
   ...(process.env.BLOSSOM_EXTRA_CORS_ORIGINS || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),
 ];
-const restrictiveMode = explicitAllowList.length > 0;
+const restrictiveMode = explicitExtraOrigins.length > 0;
+const explicitAllowList = restrictiveMode
+  ? [
+      ...(config.publicDomain ? [new URL(config.publicDomain).origin] : []),
+      ...explicitExtraOrigins,
+    ]
+  : [];
 if (restrictiveMode) {
   console.info(
     `[blossom] CORS: restrictive allow-list mode. Allowed: ${explicitAllowList.join(", ")}. ` +
