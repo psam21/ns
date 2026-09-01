@@ -32,55 +32,72 @@ app.use(async (ctx, next) => {
 // trust reverse proxy headers
 app.proxy = true;
 
-// CORS: restrict to a configured allow-list (defaults to publicDomain).
-// Wildcard origin + exposed Authorization header is a cross-origin
-// reconnaissance / CSRF surface (issue #54).
+// CORS model.
 //
-// For a non-allow-listed Origin the response MUST omit
-// Access-Control-Allow-Origin entirely so the browser refuses the
-// preflight. Falling back to a different allowed origin was
-// breaking uploads from dev pages, the admin SPA on a different
-// port, and any client that doesn't happen to be served from
-// config.publicDomain (issue discovered on 2026-09-01).
+// Security on this server is provided by NIP-42 / NIP-98 auth
+// (token-based, with a fresh signature and a 60-second window), not
+// by CORS origin checking. CORS is a browser-side gate that
+// determines whether the JS code can *read* a response; the server
+// still processes the request either way. Restricting CORS to an
+// origin allow-list therefore adds no real security and breaks
+// every browser client (chattr.buzz, custom web UIs, dev pages on
+// localhost, ...) that isn't in the list. Real-world public Blossom
+// servers (nostr.build, primal, blossom.band) all serve with
+// wildcard CORS for the same reason.
+//
+// Defaults:
+//   - If the operator sets `extraCorsOrigins` in config.yml or
+//     BLOSSOM_EXTRA_CORS_ORIGINS in the environment, the server
+//     uses an allow-list (only those origins + publicDomain get
+//     ACAO). This is the explicit opt-in for restrictive mode.
+//   - Otherwise, the server uses a wildcard `*` for all methods.
+//     Credentials are never sent (the NIP-98/NIP-42 Authorization
+//     header is a Nostr event token, not a browser cookie), so
+//     wildcard ACAO without credentials is the spec-safe choice.
 //
 // Configure with:
-//   config.publicDomain  -> the canonical browser origin (always allowed)
-//   BLOSSOM_EXTRA_CORS_ORIGINS  -> comma-separated additional browser
-//                                 origins (e.g. "https://chattr.buzz,
-//                                 https://app.example.com")
-const corsAllowOrigins = (config.publicDomain ? [new URL(config.publicDomain).origin] : []).concat(
-  (Array.isArray(config.extraCorsOrigins) ? config.extraCorsOrigins : []).map((s) => s.trim()).filter(Boolean),
-  (process.env.BLOSSOM_EXTRA_CORS_ORIGINS || "")
+//   config.publicDomain            -> included in the allow-list
+//                                     when in restrictive mode
+//   config.extraCorsOrigins[]      -> additional browser origins
+//   BLOSSOM_EXTRA_CORS_ORIGINS     -> same, env override
+const explicitAllowList = [
+  ...(config.publicDomain ? [new URL(config.publicDomain).origin] : []),
+  ...((Array.isArray(config.extraCorsOrigins) ? config.extraCorsOrigins : []).map((s) => s.trim()).filter(Boolean)),
+  ...(process.env.BLOSSOM_EXTRA_CORS_ORIGINS || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),
-);
-if (corsAllowOrigins.length === 0) {
-  // Fail closed: if no browser origin is configured, every preflight
-  // will be rejected. This is safer than the previous default of
-  // "echo the first allowed origin for everyone" (issue #54). Log
-  // loudly so the operator can fix it.
-  console.error(
-    "[blossom] WARNING: CORS allow-list is empty (no publicDomain and " +
-      "BLOSSOM_EXTRA_CORS_ORIGINS unset). All browser uploads will be " +
-      "rejected with a CORS error. Set BLOSSOM_EXTRA_CORS_ORIGINS or " +
-      "publicDomain in config.yml.",
+];
+const restrictiveMode = explicitAllowList.length > 0;
+if (restrictiveMode) {
+  console.info(
+    `[blossom] CORS: restrictive allow-list mode. Allowed: ${explicitAllowList.join(", ")}. ` +
+      `Browser clients on other origins will be rejected with a CORS error. ` +
+      `To accept uploads from any browser, leave extraCorsOrigins and ` +
+      `BLOSSOM_EXTRA_CORS_ORIGINS empty.`,
   );
 } else {
-  console.info(`[blossom] CORS allow-list: ${corsAllowOrigins.join(", ")}`);
+  console.info(
+    "[blossom] CORS: wildcard mode (Access-Control-Allow-Origin: *). " +
+      "All browser clients can call any endpoint. This is the recommended " +
+      "default because security is provided by NIP-42 / NIP-98 auth, not " +
+      "by origin checking. Set config.extraCorsOrigins to switch to " +
+      "restrictive allow-list mode.",
+  );
 }
 app.use(
   cors({
     origin: (ctx) => {
       const origin = ctx.request.header.origin;
       if (!origin) return "";
-      // Echo the origin back only when it is in the allow-list;
-      // otherwise return "" so @koa/cors omits ACAO and the browser
-      // refuses the response. Previously the fallback was
-      // `corsAllowOrigins[0]`, which produced the wrong ACAO for
-      // every non-allow-listed origin and silently broke uploads
-      // from clients on other ports / subdomains.
-      return corsAllowOrigins.includes(origin) ? origin : "";
+      // Wildcard mode: any browser origin can call any endpoint. The
+      // NIP-42 / NIP-98 Authorization header is the actual auth; CORS
+      // origin is not used as a security control.
+      if (!restrictiveMode) return "*";
+      // Restrictive mode: echo the origin back only when it is in
+      // the allow-list; otherwise return "" so @koa/cors omits ACAO
+      // and the browser refuses the response.
+      return explicitAllowList.includes(origin) ? origin : "";
     },
     allowMethods: "GET,HEAD,PUT,POST,DELETE,OPTIONS",
     allowHeaders: "Authorization,Content-Type,X-Sha-256,X-Content-Type,X-Content-Length",
