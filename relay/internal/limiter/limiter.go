@@ -71,9 +71,12 @@ func (rl *RateLimiter) SetLimit(key string, limit RateLimit) {
 
 // Allow checks if an event should be allowed based on rate limits
 func (rl *RateLimiter) Allow(key string, limit RateLimit) bool {
-	// Skip rate limiting for empty keys (system events)
+	// An empty key historically bypassed the limiter entirely. That
+	// left a path for callers passing "" to skip admission control
+	// (issue #74). Map empty keys to a shared "default" bucket so
+	// they are still throttled.
 	if key == "" {
-		return true
+		key = "default"
 	}
 
 	rl.mutex.Lock()

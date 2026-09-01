@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -66,25 +68,43 @@ func NewGroupStore(cfg *config.Config) *GroupStore {
 		cfg:    cfg,
 	}
 
-	// Initialize relay keypair for signing group metadata events
+	// NIP-29 requires a secp256k1 (Nostr-format) keypair to sign group
+	// metadata events. The relay identity file in internal/identity is
+	// ed25519, so the keys are not interchangeable (issue #71).
+	//
+	// Resolution order:
+	//  1. If cfg.Relay.PrivateKey parses as a valid secp256k1 key, use it.
+	//  2. Otherwise look for a persistent Nostr key file next to the
+	//     identity file (NostrRelayKeyFile).
+	//  3. Otherwise generate a new secp256k1 key and persist it.
+	usedConfig := false
 	if cfg.Relay.PrivateKey != "" {
-		gs.relayPrivateKey = cfg.Relay.PrivateKey
-		// Derive public key from private key
-		pub, err := nostr.GetPublicKey(cfg.Relay.PrivateKey)
-		if err != nil {
-			logger.New("nip29").Error("Invalid relay private key, generating new one",
-				zap.Error(err))
-			gs.generateKeypair()
-		} else {
+		if pub, err := nostr.GetPublicKey(cfg.Relay.PrivateKey); err == nil {
+			gs.relayPrivateKey = cfg.Relay.PrivateKey
 			gs.relayPubkey = pub
+			usedConfig = true
+		} else {
+			logger.New("nip29").Warn("Configured RELAY.PRIVATE_KEY is not a valid Nostr secp256k1 key; ignoring for NIP-29",
+				zap.Error(err))
 		}
-	} else if cfg.Relay.PublicKey != "" {
+	}
+	if !usedConfig {
+		if sk, err := loadNostrRelayKey(); err == nil {
+			gs.relayPrivateKey = sk
+			if pub, err := nostr.GetPublicKey(sk); err == nil {
+				gs.relayPubkey = pub
+			}
+		} else {
+			gs.generateKeypair()
+			_ = saveNostrRelayKey(gs.relayPrivateKey)
+		}
+	}
+	if !usedConfig && cfg.Relay.PublicKey != "" {
 		// Public key set but no private key — cannot sign events
-		gs.relayPubkey = cfg.Relay.PublicKey
-		logger.New("nip29").Warn("Relay public key set but no private key — NIP-29 metadata signing disabled")
-	} else {
-		// Auto-generate keypair
-		gs.generateKeypair()
+		if gs.relayPubkey == "" {
+			gs.relayPubkey = cfg.Relay.PublicKey
+			logger.New("nip29").Warn("Relay public key set but no private key — NIP-29 metadata signing disabled")
+		}
 	}
 
 	// Update config with derived/generated public key
@@ -746,4 +766,34 @@ func IsGroupEvent(evt *nostr.Event) bool {
 	}
 	// Any event with h tag
 	return getHTag(evt) != ""
+}
+
+// NostrRelayKeyFile is the on-disk location of the secp256k1 (Nostr-format)
+// private key used to sign NIP-29 group metadata events. Stored separately
+// from the ed25519 identity file used for relay identity strings (issue #71).
+const NostrRelayKeyFile = "nostr_relay.key"
+
+// loadNostrRelayKey loads a previously-persisted Nostr private key, or
+// returns an error if the file is missing or unreadable.
+func loadNostrRelayKey() (string, error) {
+	data, err := os.ReadFile(NostrRelayKeyFile)
+	if err != nil {
+		return "", err
+	}
+	sk := strings.TrimSpace(string(data))
+	if _, err := nostr.GetPublicKey(sk); err != nil {
+		return "", fmt.Errorf("invalid key: %w", err)
+	}
+	return sk, nil
+}
+
+// saveNostrRelayKey persists a Nostr-format private key with 0600 mode.
+func saveNostrRelayKey(sk string) error {
+	dir := filepath.Dir(NostrRelayKeyFile)
+	if dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
+	}
+	return os.WriteFile(NostrRelayKeyFile, []byte(sk+"\n"), 0o600)
 }

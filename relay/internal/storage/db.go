@@ -253,6 +253,11 @@ func (db *DB) RebuildBloomFilter(ctx context.Context) error {
 	db.Bloom.ClearAll()
 
 	for rows.Next() {
+		// Allow context cancellation to interrupt the long scan (issue #79).
+		if err := ctx.Err(); err != nil {
+			rows.Close()
+			return fmt.Errorf("bloom rebuild canceled: %w", err)
+		}
 		var eventID string
 		if err := rows.Scan(&eventID); err != nil {
 			db.recordError(fmt.Errorf("failed to scan event ID: %w", err))
