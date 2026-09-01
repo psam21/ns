@@ -108,7 +108,16 @@ func InitDB(ctx context.Context, dbURI string, maxWSConnections int) (*DB, error
 			// Test the actual connection
 			if err = pool.Ping(ctx); err == nil {
 				db.Pool = pool
-				db.Bloom = bloom.NewWithEstimates(10_000_000, 0.01) // 10M entries with 1% false positive rate
+				// Size the bloom filter from the actual event count so the
+				// 1% false-positive rate is preserved as the database grows
+				// past 10M events (issue #80). Falls back to 10M if the
+				// count query fails.
+				count, countErr := db.estimateEventCount(ctx)
+				if countErr != nil {
+					logger.Warn("Failed to count events for bloom sizing; using default 10M", zap.Error(countErr))
+					count = 10_000_000
+				}
+				db.Bloom = bloom.NewWithEstimates(uint(count+1_000_000), 0.01)
 				db.state = DBStateConnected
 
 				// Log pool configuration for verification
@@ -116,6 +125,7 @@ func InitDB(ctx context.Context, dbURI string, maxWSConnections int) (*DB, error
 				logger.Info("✅ DB Connected Successfully",
 					zap.Int("attempts", attempts),
 					zap.Int("max_ws_connections", maxWSConnections),
+					zap.Int64("event_count_estimate", count),
 					zap.Int32("db_max_connections", stat.MaxConns()),
 					zap.Int32("db_total_connections", stat.TotalConns()))
 				metrics.DBConnections.WithLabelValues("success").Inc()
@@ -378,4 +388,26 @@ type DatabaseStats struct {
 	Idle              int
 	MaxOpenConnections int
 	MaxIdleConnections int
+}
+
+// estimateEventCount returns a fast row-count estimate for sizing the
+// Bloom filter. It is a count-only query with a short statement
+// timeout, intended for startup use only (issue #80).
+func (db *DB) estimateEventCount(ctx context.Context) (int64, error) {
+	if !db.isConnected() {
+		return 0, fmt.Errorf("database is not connected")
+	}
+	// Use a small statement timeout so a stuck table scan cannot
+	// delay startup indefinitely. On a healthy production database
+	// pg_class.reltuples is O(1) and instant.
+	var count int64
+	err := db.Pool.QueryRow(ctx, `SELECT reltuples::bigint FROM pg_class WHERE relname = 'events'`).Scan(&count)
+	if err != nil || count < 0 {
+		// Fallback to a precise count if the reltuples estimate is missing
+		// (e.g. table not yet analyzed).
+		countCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		err = db.Pool.QueryRow(countCtx, `SELECT COUNT(*) FROM events`).Scan(&count)
+	}
+	return count, err
 }

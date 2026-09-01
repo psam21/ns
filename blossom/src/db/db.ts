@@ -18,4 +18,9 @@ db.prepare(
 
 db.prepare("CREATE INDEX IF NOT EXISTS accessed_timestamp ON accessed (timestamp)").run();
 
+// Add an index on blobs.type so pruneStorage's WHERE blobs.type LIKE ?
+// does not full-scan the table (issue #95). The BlossomSQLite helper
+// creates the blobs table; we add the index immediately after.
+db.prepare("CREATE INDEX IF NOT EXISTS blobs_type ON blobs(type)").run();
+
 export default db;
