@@ -30,32 +30,37 @@ type SecurityHeaders struct {
 	XXSSProtection string
 }
 
-// DefaultSecurityHeaders returns a set of secure default headers
-// Note: Basic security headers (HSTS, X-Frame-Options, etc.) are handled by Caddy proxy
-// This focuses on application-specific headers like CSP
+// DefaultSecurityHeaders returns a set of secure default headers.
+// Application-layer headers are set in addition to (not instead of) what
+// the reverse proxy emits, so the dashboard stays protected if it is ever
+// fronted by something other than Caddy (issue #65).
 func DefaultSecurityHeaders() *SecurityHeaders {
 	return &SecurityHeaders{
-		// Content Security Policy - restrictive but functional for a relay dashboard
-		// This is application-specific and better handled at app level than proxy level
+		// Strict CSP: no inline scripts, no eval. Dashboard scripts are
+		// served from /static and have no need for inline execution.
+		// 'unsafe-inline' styles are required for the dashboard's
+		// dynamically-computed styles; revisit if the dashboard is
+		// refactored to a nonce-based model (issue #66).
 		CSP: "default-src 'self'; " +
-			"script-src 'self' 'unsafe-inline' 'unsafe-eval'; " + // Allow inline scripts for dashboard functionality
-			"style-src 'self' 'unsafe-inline'; " + // Allow inline styles for dashboard
-			"img-src 'self' data: https:; " + // Allow images from self, data URIs, and HTTPS
-			"connect-src 'self' wss: ws:; " + // Allow WebSocket connections for relay functionality
+			"script-src 'self'; " +
+			"style-src 'self' 'unsafe-inline'; " +
+			"img-src 'self' data: https:; " +
+			"connect-src 'self' wss: ws:; " +
 			"font-src 'self'; " +
-			"object-src 'none'; " + // Disable plugins
+			"object-src 'none'; " +
 			"base-uri 'self'; " +
-			"frame-ancestors 'none'; " + // Prevent framing
-			"upgrade-insecure-requests", // Upgrade HTTP to HTTPS
+			"frame-ancestors 'none'; " +
+			"upgrade-insecure-requests",
 
-		// Leave other headers empty - they're handled by Caddy proxy
-		// This prevents header duplication and conflicts
-		HSTS:                "",
-		XFrameOptions:       "",
-		XContentTypeOptions: "",
-		ReferrerPolicy:      "",
-		PermissionsPolicy:   "",
-		XXSSProtection:      "",
+		// App-layer defense in depth. Caddy may also set these, but if
+		// the relay is ever fronted by a different proxy the headers are
+		// still emitted.
+		HSTS:                "max-age=31536000; includeSubDomains",
+		XFrameOptions:       "DENY",
+		XContentTypeOptions: "nosniff",
+		ReferrerPolicy:      "no-referrer",
+		PermissionsPolicy:   "camera=(), microphone=(), geolocation=()",
+		XXSSProtection:      "0",
 	}
 }
 

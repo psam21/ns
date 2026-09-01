@@ -28,6 +28,11 @@ type RelayConfig struct {
 	// X-Forwarded-For. Requests whose RemoteAddr is not in this list are
 	// treated as direct peers and their forwarded headers are ignored.
 	TrustedProxies []string `mapstructure:"TRUSTED_PROXIES"  json:"trusted_proxies"`
+	// AllowedOrigins is the additional list of WebSocket Origin values
+	// accepted by upgrader.CheckOrigin, in addition to the host derived
+	// from PublicURL. Browser clients must send an Origin header; non-
+	// browser clients (no Origin) are still accepted.
+	AllowedOrigins []string `mapstructure:"ALLOWED_ORIGINS"  json:"allowed_origins"`
 }
 
 // ThrottlingConfig holds rate limiting settings.

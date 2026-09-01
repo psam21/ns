@@ -3,6 +3,7 @@ package relay
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -59,10 +60,40 @@ func NewServer(relayCfg config.RelayConfig, node domain.NodeInterface, fullCfg *
 
 // ListenAndServe starts your WebSocket relay server and serves NIP-11 on normal HTTP requests.
 func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
+	// Derive the WebSocket origin allow-list from Relay.AllowedOrigins if
+	// set, else fall back to the public URL host (issue #64).
+	allowedOrigins := map[string]struct{}{}
+	if s.fullCfg != nil {
+		for _, o := range s.fullCfg.Relay.AllowedOrigins {
+			allowedOrigins[strings.ToLower(o)] = struct{}{}
+		}
+		if s.fullCfg.Relay.PublicURL != "" {
+			if u, err := url.Parse(s.fullCfg.Relay.PublicURL); err == nil {
+				allowedOrigins[strings.ToLower(u.Host)] = struct{}{}
+				allowedOrigins["https://"+strings.ToLower(u.Host)] = struct{}{}
+				allowedOrigins["wss://"+strings.ToLower(u.Host)] = struct{}{}
+			}
+		}
+	}
 	upgrader := websocket.Upgrader{
-		ReadBufferSize:    1024 * 1024,
-		WriteBufferSize:   1024 * 1024,
-		CheckOrigin:       func(r *http.Request) bool { return true },
+		ReadBufferSize:  1024 * 1024,
+		WriteBufferSize: 1024 * 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				// Non-browser clients do not always send Origin; allow.
+				return true
+			}
+			u, err := url.Parse(origin)
+			if err != nil {
+				return false
+			}
+			if _, ok := allowedOrigins[strings.ToLower(u.Host)]; ok {
+				return true
+			}
+			// Also accept same-host Origin (e.g. dashboard upgrade).
+			return strings.EqualFold(u.Host, r.Host)
+		},
 		EnableCompression: true,
 		HandshakeTimeout:  10 * time.Second,
 	}
