@@ -474,15 +474,15 @@ sudo journalctl -u blossom.service -n 30 --no-pager
 # release is ~270MB, each relay binary is ~30MB). Operators who want
 # a one-step on-host rollback can set RELAY_BACKUP_RETAIN=1 /
 # BLOSSOM_BACKUP_RETAIN=1 in the environment.
-ls -dt /opt/relay/backup_* 2>/dev/null | tail -n +$((RELAY_BACKUP_RETAIN + 1)) | xargs -r rm -rf
-ls -dt /opt/blossom-backup_* 2>/dev/null | tail -n +$((BLOSSOM_BACKUP_RETAIN + 1)) | xargs -r rm -rf
+sudo bash -c "ls -dt /opt/relay/backup_* 2>/dev/null | tail -n +\$((RELAY_BACKUP_RETAIN + 1)) | xargs -r rm -rf"
+sudo bash -c "ls -dt /opt/blossom-backup_* 2>/dev/null | tail -n +\$((BLOSSOM_BACKUP_RETAIN + 1)) | xargs -r rm -rf"
 # Also drop the staging directories that the deploy creates but
 # never reads back from: /opt/relay/releases/* holds the per-deploy
 # relay-binary copy (30MB each) and /opt/blossom/.release_* holds
 # per-deploy pnpm installs (270MB each). The live tree at
 # /opt/relay/relay-arm64 and /opt/blossom/{build,public,admin/dist}
 # is what runs; the staging trees are dead weight.
-rm -rf /opt/relay/releases /opt/blossom/.release_* 2>/dev/null
+sudo rm -rf /opt/relay/releases /opt/blossom/.release_* 2>/dev/null
 
 echo "On-host cleanup: kept 0 backups, removed staging dirs"
 df -h / | tail -1
