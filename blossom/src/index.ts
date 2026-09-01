@@ -97,6 +97,22 @@ app.use(async (ctx, next) => {
   }
 });
 
+// Add a strict CSP for the static upload UI (issue #90). The API routes
+// already use APISecurityHeaders' CSP (default-src 'none').
+app.use(async (ctx, next) => {
+  await next();
+  // Only set on HTML responses to avoid breaking JSON API clients.
+  const ct = ctx.response.get("Content-Type") || "";
+  if (ct.startsWith("text/html")) {
+    if (!ctx.response.get("Content-Security-Policy")) {
+      ctx.set(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+      );
+    }
+  }
+});
+
 app.use(router.routes()).use(router.allowedMethods());
 
 if (config.dashboard.enabled) {
