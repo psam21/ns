@@ -221,10 +221,16 @@ func handleWebSocketConnection(ctx context.Context, w http.ResponseWriter, r *ht
 		errors.HandleHTTPError(w, r, limitErr)
 		return
 	}
-	// Ensure we decrement on error
-	connectionSuccess := false
+	// Track whether we successfully registered the connection in metrics.
+	// The defer decrements only if the increment happened, so failed
+	// WebSocket upgrades (e.g. bad Upgrade header, ALPN mismatch, client
+	// disconnect mid-handshake) do not move the counter. Previously this
+	// defer was registered BEFORE the increment and decremented an
+	// already-zero counter on upgrade failure, drifting it negative
+	// (issue #99).
+	connectionAccepted := false
 	defer func() {
-		if !connectionSuccess {
+		if connectionAccepted {
 			metrics.DecrementActiveConnections()
 		}
 	}()
@@ -245,13 +251,15 @@ func handleWebSocketConnection(ctx context.Context, w http.ResponseWriter, r *ht
 
 	// Update metrics
 	metrics.IncrementActiveConnections()
-	connectionSuccess = true
+	connectionAccepted = true
 
 	// Create new connection and register it
 	conn, err := NewWsConnection(ctx, wsConn, node, relayConfig, clientIP)
 	if err != nil {
 		// Challenge generation failure is fatal: an unauthenticated-capable
-		// connection is unsafe (see issue #51). Tear down the upgrade.
+		// connection is unsafe (see issue #51). The connectionAccepted
+		// flag is true, so the defer will decrement the metric we just
+		// incremented (issue #99).
 		initErr := errors.WebSocketError("auth challenge init", err).
 			WithSeverity(errors.SeverityHigh)
 		errors.HandleWebSocketError(wsConn, "init", initErr)

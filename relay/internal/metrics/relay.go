@@ -172,10 +172,28 @@ func IncrementActiveConnections() {
 	connectionWindow.Add(now)
 }
 
-// DecrementActiveConnections decrements both the prometheus gauge and our local counter
+// DecrementActiveConnections decrements both the prometheus gauge and our local
+// counter. The local counter is floored at 0 via a CAS loop so a future
+// caller that decrements without a matching increment cannot drive the
+// value negative (issue #99). The Prometheus gauge is left at the raw
+// value because Prometheus collectors can represent a negative gauge
+// meaningfully and the dashboard reads the local counter.
 func DecrementActiveConnections() {
-	ActiveConnections.Dec()
-	atomic.AddInt64(&activeConnectionsCount, -1)
+	for {
+		cur := atomic.LoadInt64(&activeConnectionsCount)
+		if cur <= 0 {
+			// Floor reached. Still mirror the no-op to the gauge so a
+			// negative gauge value is not retained after the relay
+			// restarts; the prom gauge is process-local so it is reset
+			// to its zero default on every restart anyway.
+			ActiveConnections.Set(0)
+			return
+		}
+		if atomic.CompareAndSwapInt64(&activeConnectionsCount, cur, cur-1) {
+			ActiveConnections.Dec()
+			return
+		}
+	}
 }
 
 // GetTotalConnectionsCount returns the cumulative number of connections since start
