@@ -80,6 +80,27 @@ function publicReason(err: unknown, status: number): string {
   return "error";
 }
 
+// Dedicated 5xx stack-trace sink. Writing full stacks to stdout leaks
+// file paths and internal details into the systemd journal (issue #89).
+// Stacks go to a dedicated file under the data directory; stdout is
+// reserved for clean operational lines.
+const errorsLogPath = path.join(path.dirname(config.databasePath), "errors.log");
+let errorsLogStream: fs.WriteStream | null = null;
+function getErrorsLogStream(): fs.WriteStream {
+  if (errorsLogStream) return errorsLogStream;
+  try {
+    fs.mkdirSync(path.dirname(errorsLogPath), { recursive: true });
+    errorsLogStream = fs.createWriteStream(errorsLogPath, { flags: "a", mode: 0o600 });
+    errorsLogStream.on("error", () => {
+      // Don't crash the process if the error log is unwritable.
+      errorsLogStream = null;
+    });
+  } catch {
+    errorsLogStream = null;
+  }
+  return errorsLogStream as unknown as fs.WriteStream;
+}
+
 // handle errors
 app.use(async (ctx, next) => {
   try {
@@ -87,10 +108,18 @@ app.use(async (ctx, next) => {
   } catch (err) {
     if (isHttpError(err)) {
       const status = (ctx.status = err.status || 500);
-      if (status >= 500) console.error(err.stack);
+      if (status >= 500) {
+        const stream = getErrorsLogStream();
+        const line = `[${new Date().toISOString()}] ${ctx.method} ${ctx.path}\n${err.stack || String(err)}\n`;
+        if (stream) stream.write(line);
+        else console.error(line);
+      }
       ctx.set("X-Reason", publicReason(err, status));
     } else {
-      console.log(err);
+      const stream = getErrorsLogStream();
+      const line = `[${new Date().toISOString()}] ${ctx.method} ${ctx.path}\n${err instanceof Error ? err.stack : String(err)}\n`;
+      if (stream) stream.write(line);
+      else console.log(line);
       ctx.status = 500;
       ctx.set("X-Reason", publicReason(err, 500));
     }

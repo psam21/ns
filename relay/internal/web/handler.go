@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -258,7 +259,11 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 			if desc, ok := descriptions[nip]; ok {
 				return desc
 			}
-			return ""
+			// Issue #90: previously returned "" silently, hiding unknown
+			// NIPs from the dashboard. Log once and return a visible
+			// placeholder so operators can spot missing entries.
+			h.logger.Warn("Unknown NIP id in dashboard; add a description", zap.String("nip", nip))
+			return "Unknown"
 		},
 	}
 	tmpl, err := template.New("index.html").Funcs(funcMap).ParseFiles(tmplPath)
@@ -443,7 +448,7 @@ func (h *Handler) HandleMetricsAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 // getDashboardData prepares data for the dashboard template
-func (h *Handler) getDashboardData(host string) *DashboardData {
+func (h *Handler) getDashboardData(requestHost string) *DashboardData {
 	metadata := constants.DefaultRelayMetadata(h.config)
 
 	// Get relay identity for the relay ID
@@ -454,8 +459,37 @@ func (h *Handler) getDashboardData(host string) *DashboardData {
 	}
 
 	// Clean host (remove port if present)
+	host := requestHost
 	if strings.Contains(host, ":") {
 		host = strings.Split(host, ":")[0]
+	}
+
+	// Validate requestHost against DashboardAllowedHosts (issue #70).
+	// If the operator has configured an allow-list and the request's
+	// Host isn't on it, substitute the canonical host from PublicURL
+	// so the rendered dashboard still works for legitimate operators.
+	if len(h.config.Relay.DashboardAllowedHosts) > 0 {
+		allowed := false
+		for _, candidate := range h.config.Relay.DashboardAllowedHosts {
+			if strings.EqualFold(candidate, host) {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			h.logger.Warn("Dashboard request Host not in allow-list; substituting canonical",
+				zap.String("request_host", requestHost),
+				zap.Strings("allowed", h.config.Relay.DashboardAllowedHosts))
+			canonical := h.config.Relay.PublicURL
+			if u, err := url.Parse(canonical); err == nil && u.Host != "" {
+				host = u.Host
+				if strings.Contains(host, ":") {
+					host = strings.Split(host, ":")[0]
+				}
+			} else {
+				host = ""
+			}
+		}
 	}
 
 	// Get cluster information

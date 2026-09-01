@@ -33,6 +33,12 @@ type RelayConfig struct {
 	// from PublicURL. Browser clients must send an Origin header; non-
 	// browser clients (no Origin) are still accepted.
 	AllowedOrigins []string `mapstructure:"ALLOWED_ORIGINS"  json:"allowed_origins"`
+	// DashboardAllowedHosts is the list of Host values accepted for
+	// rendering the operations dashboard. A request with a Host not
+	// in this list (and not the public URL's host) is served with the
+	// canonical host from PublicURL substituted. Empty means "any host
+	// is allowed" (legacy behavior). Issue #70.
+	DashboardAllowedHosts []string `mapstructure:"DASHBOARD_ALLOWED_HOSTS" json:"dashboard_allowed_hosts"`
 }
 
 // ThrottlingConfig holds rate limiting settings.

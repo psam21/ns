@@ -78,8 +78,10 @@ router.get("/:hash", range, async (ctx, next) => {
         const pass = new PassThrough();
         ctx.body = pass;
 
-        // set the Content-Length since koa cannot set it from a stream
-        ctx.length = pointer.size;
+        // Don't set ctx.length from pointer.size: that field is a claim
+        // from a kind-1063 discovery event and is attacker-controlled
+        // (issue #93). Koa will compute Content-Length from the actual
+        // stream as bytes pass through.
 
         // Fork response to client stream + background save stream (finding #6)
         const savePass = new PassThrough();
