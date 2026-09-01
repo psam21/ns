@@ -461,32 +461,35 @@ echo "Recent relay journal entries (last 30 lines):"
 sudo journalctl -u relay.service -n 30 --no-pager
 echo "Recent Blossom journal entries (last 30 lines):"
 sudo journalctl -u blossom.service -n 30 --no-pager
-REMOTE_EOF
 
-log_info "Remote service restart completed"
-echo ""
-
-# Retention: prune old backups NOW (after a successful swap, not after
-# the backup is created — otherwise the retention step would delete the
-# just-created backup if it leaves only N-1 older ones, leaving the
-# rollback path with nothing to restore from).
+# Retention: prune old backups NOW (after a successful swap, not
+# after the backup is created — otherwise the retention step would
+# delete the just-created backup if it leaves only N-1 older ones,
+# leaving the rollback path with nothing to restore from).
 #
 # Each var defaults to 0: with the full source tracked in git, every
-# shipped artifact is reproducible from `git log` + a clean build, and
-# keeping on-disk copies of every previous release rapidly exhausts
-# the production host's 19GB root volume (each Blossom release is
-# ~270MB, each relay binary is ~30MB). Operators who want a
-# one-step on-host rollback can set RELAY_BACKUP_RETAIN=1 /
+# shipped artifact is reproducible from `git log` + a clean build,
+# and keeping on-disk copies of every previous release rapidly
+# exhausts the production host's 19GB root volume (each Blossom
+# release is ~270MB, each relay binary is ~30MB). Operators who want
+# a one-step on-host rollback can set RELAY_BACKUP_RETAIN=1 /
 # BLOSSOM_BACKUP_RETAIN=1 in the environment.
-sudo bash -c "ls -dt /opt/relay/backup_* 2>/dev/null | tail -n +\$((RELAY_BACKUP_RETAIN + 1)) | xargs -r rm -rf"
-sudo bash -c "ls -dt /opt/blossom-backup_* 2>/dev/null | tail -n +\$((BLOSSOM_BACKUP_RETAIN + 1)) | xargs -r rm -rf"
+ls -dt /opt/relay/backup_* 2>/dev/null | tail -n +$((RELAY_BACKUP_RETAIN + 1)) | xargs -r rm -rf
+ls -dt /opt/blossom-backup_* 2>/dev/null | tail -n +$((BLOSSOM_BACKUP_RETAIN + 1)) | xargs -r rm -rf
 # Also drop the staging directories that the deploy creates but
 # never reads back from: /opt/relay/releases/* holds the per-deploy
 # relay-binary copy (30MB each) and /opt/blossom/.release_* holds
 # per-deploy pnpm installs (270MB each). The live tree at
 # /opt/relay/relay-arm64 and /opt/blossom/{build,public,admin/dist}
 # is what runs; the staging trees are dead weight.
-sudo bash -c "rm -rf /opt/relay/releases /opt/blossom/.release_* 2>/dev/null"
+rm -rf /opt/relay/releases /opt/blossom/.release_* 2>/dev/null
+
+echo "On-host cleanup: kept 0 backups, removed staging dirs"
+df -h / | tail -1
+REMOTE_EOF
+
+log_info "Remote service restart completed"
+echo ""
 
 # ============================================
 # Step 9: Verify deployment
