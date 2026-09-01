@@ -5,8 +5,6 @@ import { koaBody } from "koa-body";
 import { IncomingMessage } from "node:http";
 import * as http from "node:http";
 import * as https from "node:https";
-import { lookup as dnsLookup } from "node:dns/promises";
-import net from "node:net";
 import mount from "koa-mount";
 
 import storage from "../storage/index.js";
@@ -16,65 +14,10 @@ import { config } from "../config.js";
 import { updateBlobAccess } from "../db/methods.js";
 import { UploadDetails, readUpload, removeUpload, saveFromResponse } from "../storage/upload.js";
 import { blobDB } from "../db/db.js";
+import { resolvePublicAddresses } from "../helpers/ssrf.js";
 
 const MAX_REDIRECTS = 3;
 const MIRROR_TIMEOUT_MS = 15_000;
-
-function isBlockedAddress(address: string): boolean {
-  const normalized = address.toLowerCase();
-  const mappedIPv4 = normalized.match(/^::ffff:(\d+(?:\.\d+){3})$/)?.[1];
-  if (mappedIPv4) return isBlockedAddress(mappedIPv4);
-
-  if (net.isIPv4(normalized)) {
-    const octets = normalized.split(".").map(Number);
-    const [first, second] = octets;
-    return (
-      first === 0 ||
-      first === 10 ||
-      first === 127 ||
-      (first === 100 && second >= 64 && second <= 127) ||
-      (first === 169 && second === 254) ||
-      (first === 172 && second >= 16 && second <= 31) ||
-      (first === 192 && second === 0) ||
-      (first === 192 && second === 168) ||
-      (first === 198 && (second === 18 || second === 19)) ||
-      first >= 224
-    );
-  }
-
-  if (net.isIPv6(normalized)) {
-    return (
-      normalized === "::" ||
-      normalized === "::1" ||
-      normalized.startsWith("fc") ||
-      normalized.startsWith("fd") ||
-      normalized.startsWith("fe8") ||
-      normalized.startsWith("fe9") ||
-      normalized.startsWith("fea") ||
-      normalized.startsWith("feb")
-    );
-  }
-
-  return true;
-}
-
-async function resolvePublicAddresses(hostname: string) {
-  const lowerHostname = hostname.toLowerCase().replace(/\.$/, "");
-  if (
-    lowerHostname === "localhost" ||
-    lowerHostname.endsWith(".localhost") ||
-    lowerHostname.endsWith(".local") ||
-    lowerHostname.endsWith(".internal")
-  ) {
-    throw new HttpErrors.BadRequest("SSRF blocked: restricted hostname");
-  }
-
-  const addresses = await dnsLookup(hostname, { all: true, verbatim: true });
-  if (!addresses.length || addresses.some(({ address }) => isBlockedAddress(address))) {
-    throw new HttpErrors.BadRequest("SSRF blocked: private or restricted address");
-  }
-  return addresses;
-}
 
 async function makeRequestWithAbort(
   url: URL,
@@ -89,6 +32,8 @@ async function makeRequestWithAbort(
     throw new HttpErrors.BadRequest("Mirror URL port is not allowed");
   }
 
+  // Validate EVERY resolved address (issue #81) and pin a single one
+  // for this connection. Cross-host redirects re-run this check.
   const addresses = await resolvePublicAddresses(url.hostname);
   const address = addresses[0];
   const client = url.protocol === "https:" ? https : http;
@@ -111,7 +56,23 @@ async function makeRequestWithAbort(
             return;
           }
           response.resume();
-          makeRequestWithAbort(new URL(location, url), redirectCount + 1, cancelController)
+          // Re-resolve and re-validate the redirect target's hostname;
+          // do not re-use the original pinned IP (issue #82).
+          let nextUrl: URL;
+          try {
+            nextUrl = new URL(location, url);
+          } catch {
+            reject(new HttpErrors.BadRequest("Invalid mirror redirect target"));
+            return;
+          }
+          if (nextUrl.hostname !== url.hostname) {
+            // Different host: force a fresh SSRF re-check.
+            resolvePublicAddresses(nextUrl.hostname).catch((err) => {
+              response.destroy();
+              reject(err instanceof Error ? new HttpErrors.BadRequest(err.message) : err);
+            });
+          }
+          makeRequestWithAbort(nextUrl, redirectCount + 1, cancelController)
             .then(resolve)
             .catch(reject);
           return;

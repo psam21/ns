@@ -4,6 +4,7 @@ const { http, https } = follow;
 import { BlobSearch, HTTPPointer } from "../types.js";
 import { config } from "../config.js";
 import logger from "../logger.js";
+import { isBlockedAddress, resolvePublicAddresses } from "../helpers/ssrf.js";
 
 const log = logger.extend("upstream-discovery");
 
@@ -17,13 +18,36 @@ export async function search(search: BlobSearch) {
         log("Found", search.hash, "at", cdn);
         return pointer;
       }
-    } catch (e) {}
+    } catch (e) {
+      log("CDN check failed", cdn, e instanceof Error ? e.message : String(e));
+    }
   }
 }
 
 function checkCDN(cdn: string, search: BlobSearch): Promise<HTTPPointer> {
   return new Promise<HTTPPointer>((resolve, reject) => {
-    const url = new URL("/" + search.hash, cdn);
+    let url: URL;
+    try {
+      url = new URL("/" + search.hash, cdn);
+    } catch {
+      return reject(new Error(`Invalid CDN URL: ${cdn}`));
+    }
+
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return reject(new Error(`CDN URL must be http(s): ${cdn}`));
+    }
+    if (url.username || url.password) {
+      return reject(new Error(`CDN URL must not contain credentials: ${cdn}`));
+    }
+    if (url.port && url.port !== "80" && url.port !== "443") {
+      return reject(new Error(`CDN URL must use default port: ${cdn}`));
+    }
+
+    // Defense in depth: even though CDNs are operator-configured, validate
+    // the resolved IP to avoid accidental internal exposure if a future
+    // config mistake points at a private hostname (issue #53).
+    resolvePublicAddresses(url.hostname).catch((err) => reject(err));
+
     const backend = url.protocol === "https:" ? https : http;
 
     const request = backend.request(url.toString(), { method: "HEAD", timeout: 5 * 1000 }, () => {});
