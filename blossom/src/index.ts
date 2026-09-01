@@ -32,16 +32,53 @@ app.use(async (ctx, next) => {
 // trust reverse proxy headers
 app.proxy = true;
 
-// set CORS headers
+// CORS: restrict to a configured allow-list (defaults to publicDomain).
+// Wildcard origin + exposed Authorization header is a cross-origin
+// reconnaissance / CSRF surface (issue #54).
+const corsAllowOrigins = (config.publicDomain ? [new URL(config.publicDomain).origin] : []).concat(
+  (process.env.BLOSSOM_EXTRA_CORS_ORIGINS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+);
 app.use(
   cors({
-    origin: "*",
-    allowMethods: "*",
-    allowHeaders: "Authorization,*",
-    exposeHeaders: "*",
+    origin: (ctx) => {
+      const origin = ctx.request.header.origin;
+      if (!origin) return "";
+      return corsAllowOrigins.includes(origin) ? origin : corsAllowOrigins[0] || "";
+    },
+    allowMethods: "GET,HEAD,PUT,POST,DELETE,OPTIONS",
+    allowHeaders: "Authorization,Content-Type,X-Sha-256,X-Content-Type,X-Content-Length",
+    exposeHeaders: "X-Reason,Content-Range,Content-Length",
+    credentials: false,
     maxAge: 86400,
   }),
 );
+
+// Map known HttpError codes to short, stable reasons. The detail of an
+// underlying error is rarely useful to a legitimate client and routinely
+// leaks SSRF / auth / parser internals (issue #55).
+function publicReason(err: unknown, status: number): string {
+  if (status >= 500) return "internal_error";
+  // Prefer the error's exposed "status" code to the message; the message
+  // is sanitized in release mode.
+  if (process.env.BLOSSOM_DEBUG_REASONS === "true" && err instanceof Error) {
+    return err.message;
+  }
+  if (status === 400) return "bad_request";
+  if (status === 401) return "unauthorized";
+  if (status === 403) return "forbidden";
+  if (status === 404) return "not_found";
+  if (status === 405) return "method_not_allowed";
+  if (status === 409) return "conflict";
+  if (status === 413) return "payload_too_large";
+  if (status === 416) return "range_not_satisfiable";
+  if (status === 422) return "unprocessable_entity";
+  if (status === 429) return "too_many_requests";
+  if (status >= 400 && status < 500) return "client_error";
+  return "error";
+}
 
 // handle errors
 app.use(async (ctx, next) => {
@@ -51,11 +88,11 @@ app.use(async (ctx, next) => {
     if (isHttpError(err)) {
       const status = (ctx.status = err.status || 500);
       if (status >= 500) console.error(err.stack);
-      ctx.set("X-Reason", status > 500 ? "Something went wrong" : err.message);
+      ctx.set("X-Reason", publicReason(err, status));
     } else {
       console.log(err);
       ctx.status = 500;
-      ctx.set("X-Reason", "Something went wrong");
+      ctx.set("X-Reason", publicReason(err, 500));
     }
   }
 });
@@ -67,14 +104,40 @@ if (config.dashboard.enabled) {
   const { default: basicAuth } = await import("koa-basic-auth");
   const { default: adminApi } = await import("./admin-api/index.js");
 
-  const password = config.dashboard.password || generate();
+  let password = config.dashboard.password;
+  if (!password) {
+    // Generating a random password survives restarts only if persisted.
+    // Refuse to start unless BLOSSOM_ALLOW_GENERATED_PASSWORD=1; in that
+    // case write the password to a 0600 file next to the database and
+    // print only the file path (issue #56).
+    if (process.env.BLOSSOM_ALLOW_GENERATED_PASSWORD !== "1") {
+      console.error(
+        "FATAL: config.dashboard.password is empty and BLOSSOM_ALLOW_GENERATED_PASSWORD is not set.\n" +
+          "Set dashboard.password in config.yml or export BLOSSOM_ADMIN_PASSWORD.",
+      );
+      process.exit(1);
+    }
+    password = generate();
+    try {
+      const fsSync = await import("node:fs");
+      const pathMod = await import("node:path");
+      const passwordFile = pathMod.join(pathMod.dirname(config.databasePath), ".blossom_admin_password");
+      fsSync.writeFileSync(passwordFile, password, { mode: 0o600 });
+      console.error(`Generated admin password written to ${passwordFile} (mode 0600). Do not commit.`);
+    } catch (err) {
+      console.error("FATAL: could not persist generated admin password:", err);
+      process.exit(1);
+    }
+  }
   app.use(mount("/api", basicAuth({ name: config.dashboard.username, pass: password })));
-  app.use(mount("/api", koaBody()));
+  // Cap the body parser to keep unauthenticated memory pressure low
+  // (issue #88). Basic-auth runs first; this limits the worst case.
+  app.use(mount("/api", koaBody({ jsonLimit: "1mb", textLimit: "1mb", formLimit: "1mb" })));
   app.use(mount("/api", adminApi.routes())).use(mount("/api", adminApi.allowedMethods()));
   app.use(mount("/admin", serve(path.resolve(__dirname, "../admin/dist"))));
 
-  // only log the password if it was generated
-  logger(`Dashboard started with ${config.dashboard.username} ${config.dashboard.password ? "" : "(generated password)"}`);
+  // never log the password itself
+  logger(`Dashboard started with username=${config.dashboard.username} (password length: ${password.length})`);
 }
 
 try {
