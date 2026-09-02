@@ -5,7 +5,7 @@
     <meta name="description" content="nostr.ltd public Nostr relay operations dashboard." />
     <title>{{.Name}} — Relay Operations</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
-    <link href="/static/style.css?v=20260902-3" rel="stylesheet" />
+    <link href="/static/style.css?v=20260902-4" rel="stylesheet" />
     <link rel="icon" href="/static/favicon.ico" type="image/x-icon" />
   </head>
   <body class="dashboard-page cockpit-page">
@@ -26,6 +26,7 @@
           <div class="essential-cell"><span class="essential-label">EVENTS STORED</span><strong class="essential-value{{if not .Stats.EventsStoredReady}} stat-loading{{end}}" id="events-stored">{{if .Stats.EventsStoredReady}}{{.Stats.EventsStored}}{{else}}—{{end}}</strong><span class="essential-sub" id="events-stored-meta">{{if .Stats.EventsStoredReady}}since launch · live total{{else}}{{.Stats.EventsStoredMessage}}{{end}}</span></div>
           <div class="essential-cell"><span class="essential-label">UPTIME / SINCE</span><strong class="essential-value essential-value--small" id="live-since">{{.LiveSince}}</strong><span class="essential-sub">launch date</span></div>
           <div class="essential-cell"><span class="essential-label">PROTOCOL SURFACE</span><strong class="essential-value">{{len .SupportedNIPs}} NIPs</strong><span class="essential-sub">Nostr + Blossom</span></div>
+          <div class="essential-cell"><span class="essential-label">LAST COMMIT</span><strong class="essential-value"><code class="commit-hash">{{.LastCommit}}</code></strong><span class="essential-sub"><a class="repo-link-inline" href="{{.RepoLink}}" target="_blank" rel="noopener noreferrer"><i class="fab fa-github" aria-hidden="true"></i> github.com/psam21/ns</a></span></div>
         </section>
 
         <section class="console-panel nips-panel nips-panel--primary" aria-labelledby="supported-nips-title">
@@ -52,15 +53,10 @@
             <div class="relay-facts"><div><span>software</span><strong>{{.Software}}</strong></div><div><span>live since</span><strong>{{.LiveSince}}</strong></div><div><span>access</span><strong class="value-accent">public read / write</strong></div><div><span>metadata</span><strong>NIP-11 · public</strong></div></div>
           </article>
         </section>
-
-        <section class="build-strip" aria-label="Build provenance">
-          <div class="build-cell"><span class="build-label">LAST COMMIT</span><strong class="build-value"><code class="commit-hash">{{.LastCommit}}</code></strong></div>
-          <div class="build-cell"><span class="build-label">SOURCE</span><strong class="build-value"><a class="repo-link-inline" href="{{.RepoLink}}" target="_blank" rel="noopener noreferrer"><i class="fab fa-github" aria-hidden="true"></i> github.com/psam21/ns</a></strong></div>
-        </section>
       </main>
 
       <footer class="foot foot--cockpit"><span><strong>nostr.ltd</strong> / public relay operations console</span><span><a class="footer-repo-link" href="https://github.com/psam21/ns" target="_blank" rel="noopener noreferrer"><i class="fab fa-github" aria-hidden="true"></i> View source on GitHub</a> · {{.Version}}</span></footer>
     </div>
-    <script src="/static/script.js?v=20260902-3"></script>
+    <script src="/static/script.js?v=20260902-4"></script>
   </body>
 </html>

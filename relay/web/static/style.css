@@ -1200,7 +1200,7 @@ body.cockpit-page { background: var(--bg); color: var(--text); font-family: var(
 .repo-link, .footer-repo-link { color: var(--text-dim); font-family: var(--mono); font-size: .56rem; letter-spacing: .03em; }
 .repo-link:hover, .footer-repo-link:hover { color: var(--accent); text-decoration: none; }
 
-.essential-strip--with-endpoint { grid-template-columns: 1.4fr 1fr 1fr 1fr; }
+.essential-strip--with-endpoint { grid-template-columns: 1.3fr .9fr .9fr .8fr .9fr; }
 .essential-cell--endpoint { padding: .7rem .85rem; }
 .essential-cell--endpoint .endpoint-copy-row { display: flex; align-items: center; gap: .6rem; margin-top: .3rem; }
 .essential-cell--endpoint .endpoint-copy-row code { flex: 1; min-width: 0; overflow: hidden; color: var(--accent); font-family: var(--mono); font-size: clamp(.95rem, 1.4vw, 1.18rem); text-overflow: ellipsis; white-space: nowrap; }
@@ -1239,15 +1239,10 @@ body.cockpit-page { background: var(--bg); color: var(--text); font-family: var(
 .relay-facts span { color: var(--text-mute); text-transform: uppercase; letter-spacing: .05em; }
 .relay-facts strong { color: var(--text); font-weight: 500; }
 .commit-hash { font-family: var(--mono); font-size: .68rem; color: var(--accent); background: var(--accent-dim); padding: .1rem .35rem; border-radius: .2rem; letter-spacing: .02em; }
-.repo-link-inline { display: inline-flex; align-items: center; gap: .3rem; color: var(--text); text-decoration: none; }
+.repo-link-inline { display: inline-flex; align-items: center; gap: .3rem; color: var(--text); text-decoration: none; font-size: .58rem; }
 .repo-link-inline:hover { color: var(--accent); }
 .repo-link-inline i { font-size: .68rem; color: var(--text-mute); }
 .repo-link-inline:hover i { color: var(--accent); }
-.build-strip { display: grid; grid-template-columns: 1fr 2fr; gap: 0; overflow: hidden; margin-top: .85rem; border: 1px solid var(--border); border-radius: .35rem; background: var(--bg-card); }
-.build-cell { display: flex; flex-direction: column; gap: .3rem; min-height: 3.6rem; padding: .55rem .85rem; border-right: 1px solid var(--border); }
-.build-cell:last-child { border-right: 0; }
-.build-label { font-family: var(--mono); font-size: .55rem; color: var(--text-mute); text-transform: uppercase; letter-spacing: .08em; font-weight: 500; }
-.build-value { display: flex; align-items: center; gap: .35rem; color: var(--text); font-family: var(--mono); font-size: .78rem; font-weight: 500; letter-spacing: -.01em; }
 
 @media (min-width: 901px) {
   .cockpit-page .dashboard-container { padding-top: 8px; }
