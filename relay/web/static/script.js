@@ -168,7 +168,7 @@ class RelayDashboard {
   }
 
   async updateEventKinds() {
-    const container = document.getElementById('top-kinds');
+    const container = document.getElementById('kind-registry');
     if (!container) return;
     try {
       const response = await fetch('/api/events', { headers: { Accept: 'application/json' }, cache: 'no-store' });
@@ -199,17 +199,13 @@ class RelayDashboard {
       const total = allItems.reduce((sum, item) => sum + item.count, 0);
       if (!total) {
         container.replaceChildren();
-        const registry = document.getElementById('kind-registry');
-        if (registry) registry.replaceChildren();
         this.setEventTelemetryState(payload.status || 'warming', payload.message || payload.error || 'No event-kind rows are available yet.');
         return;
       }
 
-      this.renderKindRows(container, allItems.slice(0, 6), total);
-      this.renderKindRows(document.getElementById('kind-registry'), allItems, total);
+      this.renderKindRows(container, allItems, total);
       document.getElementById('top-kinds-empty')?.classList.add('is-hidden');
       this.setEventTelemetryState(payload.status || 'ready', payload.message || 'Archive telemetry is current.');
-      document.getElementById('top-kinds-empty')?.classList.add('is-hidden');
     } catch (error) {
       console.warn('Failed to update event kinds:', error);
       this.setEventTelemetryState('unavailable', 'The archive service is not responding; live relay metrics remain active.');

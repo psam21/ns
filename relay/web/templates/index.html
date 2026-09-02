@@ -5,7 +5,7 @@
     <meta name="description" content="nostr.ltd public Nostr relay operations dashboard." />
     <title>{{.Name}} — Relay Operations</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
-    <link href="/static/style.css?v=20260901-1" rel="stylesheet" />
+    <link href="/static/style.css?v=20260902-1" rel="stylesheet" />
     <link rel="icon" href="/static/favicon.ico" type="image/x-icon" />
   </head>
   <body class="dashboard-page cockpit-page">
@@ -21,26 +21,20 @@
       </header>
 
       <main id="dashboard">
-        <section class="endpoint-hero" aria-labelledby="relay-title">
-          <div class="endpoint-hero-copy">
-            <div class="eyebrow"><span class="status-dot online"></span><span class="status-indicator"><span class="status-text">SYSTEM ONLINE</span></span><span class="eyebrow-separator">/</span><span>PUBLIC NOSTR RELAY</span></div>
-            <h1 id="relay-title">{{.Host}}</h1>
-            <p>Open infrastructure for publishing and reading Nostr events. Connect any Nostr client to the relay endpoint below.</p>
-          </div>
-          <div class="endpoint-hero-action">
-            <span class="endpoint-label">CANONICAL WEBSOCKET ENDPOINT</span>
+        <section class="endpoint-hero endpoint-hero--compact" aria-labelledby="relay-title">
+          <div class="endpoint-hero-action endpoint-hero-action--solo">
+            <span class="endpoint-label">WEBSOCKET ENDPOINT</span>
             <div class="endpoint-copy-row">
               <code id="websocket-url">wss://{{.Host}}</code>
               <button class="copy-btn copy-btn--hero" onclick="copyToClipboard('websocket-url')" title="Copy WebSocket endpoint" aria-label="Copy WebSocket endpoint"><i class="fas fa-copy" aria-hidden="true"></i><span>Copy</span></button>
             </div>
-            <span class="endpoint-hint"><i class="fas fa-terminal" aria-hidden="true"></i> paste into any Nostr client</span>
           </div>
         </section>
 
         <section class="essential-strip" aria-label="Essential relay status">
-          <div class="essential-cell"><span class="essential-label">HEALTH</span><strong class="essential-value value-accent"><span class="health-led"></span> online</strong><span class="essential-sub">database {{if .Cluster.IsHealthy}}healthy{{else}}degraded{{end}}</span></div>
-          <div class="essential-cell"><span class="essential-label">EVENTS STORED</span><strong class="essential-value{{if not .Stats.EventsStoredReady}} stat-loading{{end}}" id="events-stored">{{if .Stats.EventsStoredReady}}{{.Stats.EventsStored}}{{else}}—{{end}}</strong><span class="essential-sub" id="events-stored-meta">{{if .Stats.EventsStoredReady}}all stored · live total{{else}}{{.Stats.EventsStoredMessage}}{{end}}</span></div>
-          <div class="essential-cell"><span class="essential-label">UPTIME / SINCE</span><strong class="essential-value essential-value--small" id="live-since">{{.LiveSince}}</strong><span class="essential-sub">process start date</span></div>
+          <div class="essential-cell"><span class="essential-label">HEALTH</span><strong class="essential-value value-accent"><span class="health-led"></span> online</strong></div>
+          <div class="essential-cell"><span class="essential-label">EVENTS STORED</span><strong class="essential-value{{if not .Stats.EventsStoredReady}} stat-loading{{end}}" id="events-stored">{{if .Stats.EventsStoredReady}}{{.Stats.EventsStored}}{{else}}—{{end}}</strong><span class="essential-sub" id="events-stored-meta">{{if .Stats.EventsStoredReady}}since launch · live total{{else}}{{.Stats.EventsStoredMessage}}{{end}}</span></div>
+          <div class="essential-cell"><span class="essential-label">UPTIME / SINCE</span><strong class="essential-value essential-value--small" id="live-since">{{.LiveSince}}</strong><span class="essential-sub">launch date</span></div>
           <div class="essential-cell"><span class="essential-label">PROTOCOL SURFACE</span><strong class="essential-value">{{len .SupportedNIPs}} NIPs</strong><span class="essential-sub">Nostr + Blossom</span></div>
         </section>
 
@@ -56,23 +50,27 @@
 
         <section class="cockpit-grid cockpit-grid--lower">
           <article class="console-panel kinds-panel" aria-labelledby="event-kinds-title">
-            <div class="console-heading"><div><span class="panel-kicker">02 / EVENT DATA</span><h2 id="event-kinds-title">Top event kinds</h2></div><div class="panel-tools"><input id="kind-search" class="console-search" type="search" placeholder="filter kinds" aria-label="Filter event kinds" /><span class="panel-state" id="kind-state">{{.EventCacheStatus}}</span></div></div>
+            <div class="console-heading"><div><span class="panel-kicker">02 / EVENT DATA</span><h2 id="event-kinds-title">Observed event kinds <span class="muted-count">({{len .EventKinds}})</span></h2></div><div class="panel-tools"><input id="kind-search" class="console-search" type="search" placeholder="filter kinds" aria-label="Filter event kinds" /><span class="panel-state" id="kind-state">{{.EventCacheStatus}}</span></div></div>
             <div class="kind-table-head"><span>KIND / MEANING</span><span>EVENTS</span></div>
-            <div class="kind-list kind-list--expanded" id="top-kinds" aria-label="Top event kinds">{{range .TopKinds}}<div class="kind-row" data-kind-search="{{.Kind}} {{.KindName}}"><div class="kind-name"><strong>{{.Kind}}</strong><span>{{.KindName}}</span></div><div class="kind-count">{{.Count}}</div></div>{{end}}</div>
-            <div class="telemetry-empty{{if .TopKinds}} is-hidden{{end}}" id="top-kinds-empty" data-status="{{.EventCacheStatus}}"><span class="pulse-dot"></span><div><strong>{{.EventCacheStatus}}</strong><small>{{.EventCacheMessage}}</small></div></div>
-            <details class="kind-registry"><summary>All observed event kinds <span class="muted-count">({{len .EventKinds}})</span></summary><div class="kind-list kind-list--expanded kind-list--registry" id="kind-registry" aria-label="All observed event kinds">{{range .EventKinds}}<div class="kind-row" data-kind-search="{{.Kind}} {{.KindName}}"><div class="kind-name"><strong>{{.Kind}}</strong><span>{{.KindName}}</span></div><div class="kind-count">{{.Count}}</div></div>{{end}}</div></details>
+            <div class="kind-list kind-list--expanded kind-list--full" id="kind-registry" aria-label="All observed event kinds">{{range .EventKinds}}<div class="kind-row" data-kind-search="{{.Kind}} {{.KindName}}"><div class="kind-name"><strong>{{.Kind}}</strong><span>{{.KindName}}</span></div><div class="kind-count">{{.Count}}</div></div>{{end}}</div>
+            <div class="telemetry-empty{{if .EventKinds}} is-hidden{{end}}" id="top-kinds-empty" data-status="{{.EventCacheStatus}}"><span class="pulse-dot"></span><div><strong>{{.EventCacheStatus}}</strong><small>{{.EventCacheMessage}}</small></div></div>
           </article>
 
           <article class="console-panel limits-panel" aria-labelledby="runtime-title">
             <div class="console-heading"><div><span class="panel-kicker">03 / RUNTIME GUARDRAILS</span><h2 id="runtime-title">Relay limits</h2></div><span class="console-status">CONFIG</span></div>
             <div class="limits-grid limits-grid--large"><span>max message <b>{{.Limitation.MaxMessageLength}}</b></span><span>max connections <b>{{.Limitation.MaxConnections}}</b></span><span>max subscriptions <b>{{.Limitation.MaxSubscriptions}}</b></span><span>event tags <b>{{.Limitation.MaxEventTags}}</b></span></div>
-            <div class="relay-facts"><div><span>software</span><strong>{{.Software}}</strong></div><div><span>live since</span><strong>{{.LiveSince}}</strong></div><div><span>access</span><strong class="value-accent">public read / write</strong></div><div><span>metadata</span><strong>NIP-11 · public</strong></div><div><span>last commit</span><strong><code class="commit-hash">{{.LastCommit}}</code></strong></div><div><span>source</span><strong><a class="repo-link-inline" href="{{.RepoLink}}" target="_blank" rel="noopener noreferrer"><i class="fab fa-github" aria-hidden="true"></i> github.com/psam21/ns</a></strong></div></div>
+            <div class="relay-facts"><div><span>software</span><strong>{{.Software}}</strong></div><div><span>live since</span><strong>{{.LiveSince}}</strong></div><div><span>access</span><strong class="value-accent">public read / write</strong></div><div><span>metadata</span><strong>NIP-11 · public</strong></div></div>
           </article>
+        </section>
+
+        <section class="build-strip" aria-label="Build provenance">
+          <div class="build-cell"><span class="build-label">LAST COMMIT</span><strong class="build-value"><code class="commit-hash">{{.LastCommit}}</code></strong></div>
+          <div class="build-cell"><span class="build-label">SOURCE</span><strong class="build-value"><a class="repo-link-inline" href="{{.RepoLink}}" target="_blank" rel="noopener noreferrer"><i class="fab fa-github" aria-hidden="true"></i> github.com/psam21/ns</a></strong></div>
         </section>
       </main>
 
       <footer class="foot foot--cockpit"><span><strong>nostr.ltd</strong> / public relay operations console</span><span><a class="footer-repo-link" href="https://github.com/psam21/ns" target="_blank" rel="noopener noreferrer"><i class="fab fa-github" aria-hidden="true"></i> View source on GitHub</a> · {{.Version}}</span></footer>
     </div>
-    <script src="/static/script.js?v=20260901-1"></script>
+    <script src="/static/script.js?v=20260902-1"></script>
   </body>
 </html>
