@@ -35,7 +35,22 @@ storage:
     useSSL: true
     region: ap-south-1
 
-  rules: []
+  rules:
+    # Deliberate production rules. An empty rules list rejects every upload
+    # with HTTP 401 because getFileRule() returns null. Keep this list in
+    # sync with deploy/blossom-rules-defaults.sh.
+    - type: text/*
+      expiration: 1 month
+    - type: "image/*"
+      expiration: 1 month
+    - type: "video/*"
+      expiration: 1 month
+    - type: "audio/*"
+      expiration: 1 month
+    - type: "model/*"
+      expiration: 1 month
+    - type: "*"
+      expiration: 2 days
 
 upload:
   enabled: true

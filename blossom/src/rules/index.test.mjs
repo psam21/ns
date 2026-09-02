@@ -75,3 +75,60 @@ test("getFileRule accepts when pubkey is in the rule's pubkey list", () => {
     restricted,
   );
 });
+
+// Production rule set from blossom/config.yml.
+// Keep these in sync with the rules in config.yml and deploy/blossom-rules-defaults.sh.
+const PRODUCTION_RULES = [
+  { id: "text", type: "text/*", expiration: "1 month" },
+  { id: "image", type: "image/*", expiration: "1 month" },
+  { id: "video", type: "video/*", expiration: "1 month" },
+  { id: "audio", type: "audio/*", expiration: "1 month" },
+  { id: "model", type: "model/*", expiration: "1 month" },
+  { id: "catchall", type: "*", expiration: "2 days" },
+];
+
+test("production rules accept text/plain", () => {
+  assert.ok(getFileRule({ type: "text/plain" }, PRODUCTION_RULES, false));
+});
+
+test("production rules accept image/png", () => {
+  assert.ok(getFileRule({ type: "image/png" }, PRODUCTION_RULES, false));
+});
+
+test("production rules accept image/jpeg", () => {
+  assert.ok(getFileRule({ type: "image/jpeg" }, PRODUCTION_RULES, false));
+});
+
+test("production rules accept video/mp4", () => {
+  assert.ok(getFileRule({ type: "video/mp4" }, PRODUCTION_RULES, false));
+});
+
+test("production rules accept audio/mpeg", () => {
+  assert.ok(getFileRule({ type: "audio/mpeg" }, PRODUCTION_RULES, false));
+});
+
+test("production rules accept model/gltf-binary via prefix wildcard", () => {
+  assert.ok(getFileRule({ type: "model/gltf-binary" }, PRODUCTION_RULES, false));
+});
+
+test("production rules accept application/octet-stream via catchall '*'", () => {
+  const rule = getFileRule(
+    { type: "application/octet-stream" },
+    PRODUCTION_RULES,
+    false,
+  );
+  assert.ok(rule);
+  assert.strictEqual(rule.id, "catchall");
+});
+
+test("production rules accept text/markdown", () => {
+  const rule = getFileRule({ type: "text/markdown" }, PRODUCTION_RULES, false);
+  assert.ok(rule);
+  assert.strictEqual(rule.id, "text");
+});
+
+test("production rules accept font/woff2 via catchall", () => {
+  const rule = getFileRule({ type: "font/woff2" }, PRODUCTION_RULES, false);
+  assert.ok(rule);
+  assert.strictEqual(rule.id, "catchall");
+});
