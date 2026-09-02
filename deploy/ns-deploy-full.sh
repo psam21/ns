@@ -238,7 +238,8 @@ if [ ! -f "$STAGING/relay.service" ]; then
 fi
 log_info "Copying relay.service systemd unit..."
 scp -i "$AWS_KEY" "$STAGING/relay.service" "$AWS_HOST:$REMOTE_STAGE/relay.service"
-echo "$GIT_COMMIT_SHORT" | scp -i "$AWS_KEY" - "$AWS_HOST:$REMOTE_STAGE/last-commit"
+printf '%s\n' "$GIT_COMMIT_SHORT" > "$STAGING/last-commit"
+scp -i "$AWS_KEY" "$STAGING/last-commit" "$AWS_HOST:$REMOTE_STAGE/last-commit"
 
 if [ -f "$NS_DIR/deploy/blossom.service" ]; then
     cp "$NS_DIR/deploy/blossom.service" "$STAGING/blossom.service"
