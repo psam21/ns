@@ -5,15 +5,15 @@
     <meta name="description" content="nostr.ltd public Nostr relay operations dashboard." />
     <title>{{.Name}} — Relay Operations</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
-    <link href="/static/style.css?v=20260902-1" rel="stylesheet" />
+    <link href="/static/style.css?v=20260902-2" rel="stylesheet" />
     <link rel="icon" href="/static/favicon.ico" type="image/x-icon" />
   </head>
   <body class="dashboard-page cockpit-page">
     <div class="container dashboard-container">
       <header class="site-nav cockpit-nav">
-        <a href="/" class="brand" aria-label="nostr.ltd operations home"><span class="brand-mark">n</span><span>nostr<span class="brand-dot">.</span>ltd <em>OPS</em></span></a>
+        <a href="/" class="brand" aria-label="nostr.ltd home"><span class="brand-mark">n</span><span>nostr<span class="brand-dot">.</span>ltd</span></a>
         <div class="cockpit-nav-meta">
-          <a class="repo-link" href="https://github.com/psam21/ns" target="_blank" rel="noopener noreferrer"><i class="fab fa-github" aria-hidden="true"></i> SOURCE / GITHUB</a>
+          <a class="repo-link" href="https://github.com/psam21/ns" target="_blank" rel="noopener noreferrer"><i class="fab fa-github" aria-hidden="true"></i> GITHUB</a>
           <span class="nav-clock" id="nav-clock">--:--:-- UTC</span>
           <span class="nav-divider"></span>
           <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to light mode" aria-pressed="true"><i id="theme-icon" class="fas fa-sun" aria-hidden="true"></i><span id="theme-toggle-label">Light</span></button>
@@ -71,6 +71,6 @@
 
       <footer class="foot foot--cockpit"><span><strong>nostr.ltd</strong> / public relay operations console</span><span><a class="footer-repo-link" href="https://github.com/psam21/ns" target="_blank" rel="noopener noreferrer"><i class="fab fa-github" aria-hidden="true"></i> View source on GitHub</a> · {{.Version}}</span></footer>
     </div>
-    <script src="/static/script.js?v=20260902-1"></script>
+    <script src="/static/script.js?v=20260902-2"></script>
   </body>
 </html>

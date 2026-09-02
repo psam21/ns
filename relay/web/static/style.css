@@ -844,7 +844,7 @@ body.dashboard-page .page-glow--two { top: 12rem; right: -24rem; }
 .kind-list { border-top: 1px solid var(--border); }
 .kind-list--expanded { max-height: 22rem; overflow-y: auto; }
 .kind-list--expanded.kind-list--registry { max-height: 28rem; }
-.kind-list--full { max-height: 38rem; }
+.kind-list--full { max-height: 27rem; }
 .kind-row { min-height: 1.9rem; padding: .28rem .35rem; border-bottom: 1px solid var(--border); }
 .kind-row:last-child { border-bottom: 0; }
 .kind-name { display: flex; align-items: baseline; gap: .45rem; min-width: 0; }
@@ -1225,7 +1225,7 @@ body.cockpit-page { background: var(--bg); color: var(--text); font-family: var(
 
 .nips-panel--primary { margin-top: .6rem; padding: .75rem .85rem .65rem; }
 .registry-intro { margin: -.1rem 0 .55rem; color: var(--text-dim); font-size: .67rem; }
-.nips-grid--full { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .28rem; max-height: 11rem; overflow-y: auto; padding-right: .18rem; }
+.nips-grid--full { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .28rem; max-height: none; overflow: visible; padding-right: .18rem; }
 .nips-grid--full .nip-item { min-width: 0; padding: .34rem .4rem; border-radius: .24rem; }
 .nips-grid--full .nip-num { font-size: .58rem; }
 .nips-grid--full .nip-desc { overflow: hidden; font-size: .53rem; text-overflow: ellipsis; white-space: nowrap; }
@@ -1258,7 +1258,6 @@ body.cockpit-page { background: var(--bg); color: var(--text); font-family: var(
   .endpoint-hero-copy, .endpoint-hero-action { min-height: 7.7rem; }
   .essential-cell { min-height: 3.8rem; padding: .5rem .65rem; }
   .essential-value { font-size: 1rem; }
-  .nips-grid--full { max-height: 10.4rem; }
   .cockpit-grid--lower .console-panel { min-height: 8.7rem; }
 }
 
@@ -1287,7 +1286,7 @@ body.cockpit-page { background: var(--bg); color: var(--text); font-family: var(
   .essential-cell:nth-child(n+3) { border-top: 1px solid var(--border); }
   .essential-value { font-size: .9rem; }
   .nips-panel--primary { padding: .68rem; }
-  .nips-grid--full { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: 17rem; }
+  .nips-grid--full { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .registry-note { align-items: flex-start; flex-direction: column; gap: .2rem; }
   .cockpit-grid--lower { grid-template-columns: 1fr; }
   .cockpit-grid--lower .console-panel { min-height: auto; }
