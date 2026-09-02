@@ -12,6 +12,7 @@
     "build": "tsc",
     "postbuild": "cd admin && pnpm install --frozen-lockfile && pnpm build",
     "dev": "nodemon -i '**/data/**' -i '**/database.json' -i '**/database.old.json' --exec 'node' --loader @swc-node/register/esm src/index.ts",
+    "test": "tsc && node --test 'src/**/*.test.mjs'",
     "format": "prettier -w ."
   },
   "bin": "build/index.js",
