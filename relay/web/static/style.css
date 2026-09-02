@@ -1200,15 +1200,12 @@ body.cockpit-page { background: var(--bg); color: var(--text); font-family: var(
 .repo-link, .footer-repo-link { color: var(--text-dim); font-family: var(--mono); font-size: .56rem; letter-spacing: .03em; }
 .repo-link:hover, .footer-repo-link:hover { color: var(--accent); text-decoration: none; }
 
-.endpoint-hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; align-items: stretch; padding: .55rem 0 .4rem; }
-.endpoint-hero--compact { justify-content: center; }
-.endpoint-hero-action { display: flex; flex-direction: column; justify-content: center; min-height: 4.8rem; padding: .85rem 1rem; border: 1px solid var(--border-hi); border-radius: .45rem; background: linear-gradient(135deg, var(--bg-card), var(--bg-raised)); box-shadow: inset 0 1px 0 rgba(255,255,255,.025), 0 8px 28px rgba(0,0,0,.16); }
-.endpoint-hero-action--solo { max-width: 32rem; margin: 0 auto; width: 100%; }
-.endpoint-label { margin-bottom: .38rem; color: var(--text-mute); font-family: var(--mono); font-size: .53rem; letter-spacing: .12em; }
-.endpoint-copy-row { display: flex; align-items: center; gap: .75rem; }
-.endpoint-copy-row code { flex: 1; min-width: 0; overflow: hidden; color: var(--accent); font-family: var(--mono); font-size: clamp(.95rem, 1.4vw, 1.15rem); text-overflow: ellipsis; white-space: nowrap; }
-.copy-btn--hero { display: inline-flex; align-items: center; gap: .38rem; padding: .42rem .58rem; border: 1px solid var(--border-hi); border-radius: .28rem; background: var(--bg-raised); color: var(--text-dim); font-family: var(--mono); font-size: .58rem; }
-.copy-btn--hero:hover { border-color: var(--accent); background: var(--accent-dim); color: var(--accent); }
+.essential-strip--with-endpoint { grid-template-columns: 1.4fr 1fr 1fr 1fr; }
+.essential-cell--endpoint { padding: .7rem .85rem; }
+.essential-cell--endpoint .endpoint-copy-row { display: flex; align-items: center; gap: .6rem; margin-top: .3rem; }
+.essential-cell--endpoint .endpoint-copy-row code { flex: 1; min-width: 0; overflow: hidden; color: var(--accent); font-family: var(--mono); font-size: clamp(.95rem, 1.4vw, 1.18rem); text-overflow: ellipsis; white-space: nowrap; }
+.essential-cell--endpoint .copy-btn--hero { display: inline-flex; align-items: center; gap: .38rem; padding: .38rem .55rem; border: 1px solid var(--border-hi); border-radius: .28rem; background: var(--bg-raised); color: var(--text-dim); font-family: var(--mono); font-size: .58rem; }
+.essential-cell--endpoint .copy-btn--hero:hover { border-color: var(--accent); background: var(--accent-dim); color: var(--accent); }
 .endpoint-hint { margin-top: .5rem; color: var(--text-mute); font-family: var(--mono); font-size: .54rem; }
 .endpoint-hint i { margin-right: .25rem; color: var(--accent); }
 

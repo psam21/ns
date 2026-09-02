@@ -5,7 +5,7 @@
     <meta name="description" content="nostr.ltd public Nostr relay operations dashboard." />
     <title>{{.Name}} — Relay Operations</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
-    <link href="/static/style.css?v=20260902-2" rel="stylesheet" />
+    <link href="/static/style.css?v=20260902-3" rel="stylesheet" />
     <link rel="icon" href="/static/favicon.ico" type="image/x-icon" />
   </head>
   <body class="dashboard-page cockpit-page">
@@ -21,18 +21,8 @@
       </header>
 
       <main id="dashboard">
-        <section class="endpoint-hero endpoint-hero--compact" aria-labelledby="relay-title">
-          <div class="endpoint-hero-action endpoint-hero-action--solo">
-            <span class="endpoint-label">WEBSOCKET ENDPOINT</span>
-            <div class="endpoint-copy-row">
-              <code id="websocket-url">wss://{{.Host}}</code>
-              <button class="copy-btn copy-btn--hero" onclick="copyToClipboard('websocket-url')" title="Copy WebSocket endpoint" aria-label="Copy WebSocket endpoint"><i class="fas fa-copy" aria-hidden="true"></i><span>Copy</span></button>
-            </div>
-          </div>
-        </section>
-
-        <section class="essential-strip" aria-label="Essential relay status">
-          <div class="essential-cell"><span class="essential-label">HEALTH</span><strong class="essential-value value-accent"><span class="health-led"></span> online</strong></div>
+        <section class="essential-strip essential-strip--with-endpoint" aria-label="Essential relay status">
+          <div class="essential-cell essential-cell--endpoint"><span class="essential-label">WEBSOCKET ENDPOINT</span><div class="endpoint-copy-row"><code id="websocket-url">wss://{{.Host}}</code><button class="copy-btn copy-btn--hero" onclick="copyToClipboard('websocket-url')" title="Copy WebSocket endpoint" aria-label="Copy WebSocket endpoint"><i class="fas fa-copy" aria-hidden="true"></i><span>Copy</span></button></div></div>
           <div class="essential-cell"><span class="essential-label">EVENTS STORED</span><strong class="essential-value{{if not .Stats.EventsStoredReady}} stat-loading{{end}}" id="events-stored">{{if .Stats.EventsStoredReady}}{{.Stats.EventsStored}}{{else}}—{{end}}</strong><span class="essential-sub" id="events-stored-meta">{{if .Stats.EventsStoredReady}}since launch · live total{{else}}{{.Stats.EventsStoredMessage}}{{end}}</span></div>
           <div class="essential-cell"><span class="essential-label">UPTIME / SINCE</span><strong class="essential-value essential-value--small" id="live-since">{{.LiveSince}}</strong><span class="essential-sub">launch date</span></div>
           <div class="essential-cell"><span class="essential-label">PROTOCOL SURFACE</span><strong class="essential-value">{{len .SupportedNIPs}} NIPs</strong><span class="essential-sub">Nostr + Blossom</span></div>
@@ -71,6 +61,6 @@
 
       <footer class="foot foot--cockpit"><span><strong>nostr.ltd</strong> / public relay operations console</span><span><a class="footer-repo-link" href="https://github.com/psam21/ns" target="_blank" rel="noopener noreferrer"><i class="fab fa-github" aria-hidden="true"></i> View source on GitHub</a> · {{.Version}}</span></footer>
     </div>
-    <script src="/static/script.js?v=20260902-2"></script>
+    <script src="/static/script.js?v=20260902-3"></script>
   </body>
 </html>
