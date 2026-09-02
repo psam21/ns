@@ -891,3 +891,113 @@ func (db *DB) GetTotalEventCount(ctx context.Context) (int64, error) {
 
 	return count, nil
 }
+
+// EventKindStat represents one row from the event_kind_stats materialized view.
+// See https://github.com/psam21/ns/issues/100.
+type EventKindStat struct {
+	Kind       int   `json:"kind"`
+	EventCount int64 `json:"event_count"`
+	YTDCount   int64 `json:"ytd_count"`
+	LastSeenAt int64 `json:"last_seen_at"`
+}
+
+// EventKindStatsMVName is the materialized view that backs the dashboard's
+// event-kind aggregation. Exposed as a constant so the refresher, the handler,
+// and the tests all reference the same identifier.
+const EventKindStatsMVName = "event_kind_stats"
+
+// EnsureEventKindStatsMV creates the event_kind_stats materialized view and
+// its supporting indexes if they do not already exist. Safe to call on every
+// boot — uses IF NOT EXISTS for both the view and the indexes, and the
+// underlying statements are idempotent.
+//
+// This is split out from InitializeSchema because the production deployment
+// already has the events table and InitializeSchema's fast path skips DDL
+// entirely on existing databases.
+func (db *DB) EnsureEventKindStatsMV(ctx context.Context) error {
+	if !db.isConnected() {
+		return fmt.Errorf("database is not connected")
+	}
+
+	statements := []string{
+		`CREATE MATERIALIZED VIEW IF NOT EXISTS event_kind_stats AS
+			SELECT
+			  kind::int                                                    AS kind,
+			  COUNT(*)                                                     AS event_count,
+			  COUNT(*) FILTER (WHERE created_at >= EXTRACT(EPOCH FROM date_trunc('year', now()))) AS ytd_count,
+			  MAX(created_at)                                              AS last_seen_at
+			FROM events
+			GROUP BY kind`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_event_kind_stats_kind
+			ON event_kind_stats (kind)`,
+		`CREATE INDEX IF NOT EXISTS idx_event_kind_stats_count_desc
+			ON event_kind_stats (event_count DESC)`,
+	}
+
+	for _, stmt := range statements {
+		if _, err := db.Pool.Exec(ctx, stmt); err != nil {
+			return fmt.Errorf("failed to ensure %s: %w", EventKindStatsMVName, err)
+		}
+	}
+
+	logger.Info("✅ event_kind_stats materialized view is ready")
+	return nil
+}
+
+// RefreshEventKindStats runs REFRESH MATERIALIZED VIEW CONCURRENTLY on the
+// event_kind_stats view. The unique index on (kind) is what makes CONCURRENTLY
+// possible; without it, this would take an exclusive lock on the view and
+// block readers.
+//
+// Safe to call concurrently — Postgres serializes overlapping CONCURRENTLY
+// refreshes internally; the second call simply waits for the first to finish.
+//
+// Returns nil on success, or an error if the view does not exist or the
+// refresh fails.
+func (db *DB) RefreshEventKindStats(ctx context.Context) error {
+	if !db.isConnected() {
+		return fmt.Errorf("database is not connected")
+	}
+
+	_, err := db.Pool.Exec(ctx, `REFRESH MATERIALIZED VIEW CONCURRENTLY `+EventKindStatsMVName)
+	if err != nil {
+		return fmt.Errorf("failed to refresh %s: %w", EventKindStatsMVName, err)
+	}
+	return nil
+}
+
+// GetEventKindStats reads the cached event-kind breakdown from the
+// materialized view. Sorted by event_count DESC, then kind ASC for stable
+// ordering across calls.
+//
+// Returns an empty slice (not nil) when the view is empty so callers can
+// distinguish "no data yet" from "query failed".
+func (db *DB) GetEventKindStats(ctx context.Context) ([]EventKindStat, error) {
+	if !db.isConnected() {
+		return nil, fmt.Errorf("database is not connected")
+	}
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT kind, event_count, ytd_count, last_seen_at
+		FROM `+EventKindStatsMVName+`
+		ORDER BY event_count DESC, kind ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query %s: %w", EventKindStatsMVName, err)
+	}
+	defer rows.Close()
+
+	stats := make([]EventKindStat, 0)
+	for rows.Next() {
+		var s EventKindStat
+		if err := rows.Scan(&s.Kind, &s.EventCount, &s.YTDCount, &s.LastSeenAt); err != nil {
+			return nil, fmt.Errorf("failed to scan %s row: %w", EventKindStatsMVName, err)
+		}
+		stats = append(stats, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed while reading %s: %w", EventKindStatsMVName, err)
+	}
+
+	return stats, nil
+}

@@ -103,6 +103,8 @@ type Handler struct {
 		GetYearsWithEvents(ctx context.Context) ([]int, error)
 		GetEventCountsByKindMonth(ctx context.Context, year int) ([]storage.EventCountByKindMonth, error)
 		GetEventCountsByKindMonthFromYear(ctx context.Context, startYear int) ([]storage.EventCountByKindMonth, error)
+		GetEventKindStats(ctx context.Context) ([]storage.EventKindStat, error)
+		RefreshEventKindStats(ctx context.Context) error
 	} // Database interface
 	eventsCacheMu            sync.RWMutex
 	eventsCache              EventBreakdownData
@@ -118,6 +120,14 @@ type Handler struct {
 	storedCountRefreshing    bool
 	storedCountLastAttemptAt time.Time
 	storedCountLastErr       error
+	// eventKindStatsCache backs the dashboard's "top kinds" and "observed
+	// event kinds" panels. It is populated by a background goroutine that
+	// runs REFRESH MATERIALIZED VIEW CONCURRENTLY every 30s, so reads never
+	// hit the live events table. See https://github.com/psam21/ns/issues/100.
+	eventKindStatsMu        sync.RWMutex
+	eventKindStats          []storage.EventKindStat
+	eventKindStatsUpdatedAt time.Time
+	eventKindStatsRefreshing bool
 }
 
 const (
@@ -125,6 +135,7 @@ const (
 	eventRefreshRetryDelay     = 15 * time.Second
 	eventQueryTimeout          = 20 * time.Second
 	storedCountRefreshInterval = 5 * time.Minute
+	eventKindStatsRefreshEvery = 30 * time.Second
 )
 
 // NewHandler creates a new web handler
@@ -524,8 +535,8 @@ func (h *Handler) getDashboardData(requestHost string) *DashboardData {
 			PaymentRequired:  metadata.Limitation.PaymentRequired,
 		},
 		Stats:               h.getStatsData(),
-		TopKinds:            h.getTopEventKinds(6),
-		EventKinds:          h.getTopEventKinds(65536),
+		TopKinds:            h.getTopEventKindsFromMV(6),
+		EventKinds:          h.getTopEventKindsFromMV(65536),
 		EventCacheStatus:    eventStatus,
 		EventCacheUpdatedAt: formatEventCacheTime(eventSnapshot.updatedAt),
 		EventCacheMessage:   eventMessage,
@@ -1002,6 +1013,159 @@ func eventBreakdownGrandTotal(data EventBreakdownData) int64 {
 	return total
 }
 
+// StartEventKindStatsRefresher launches a background goroutine that keeps
+// the event_kind_stats materialized view fresh and the in-memory
+// eventKindStatsCache populated. It returns immediately; the goroutine
+// runs until ctx is canceled.
+//
+// The first refresh fires immediately so the dashboard is populated within
+// a few seconds of relay startup. Subsequent refreshes run every
+// eventKindStatsRefreshEvery (30s).
+//
+// If the materialized view does not exist (e.g. first boot before
+// EnsureEventKindStatsMV has run), the refresher logs a warning and
+// retries on the next tick. This makes the refresher safe to start before
+// the MV migration has been applied.
+//
+// See https://github.com/psam21/ns/issues/100.
+func (h *Handler) StartEventKindStatsRefresher(ctx context.Context) {
+	if h.db == nil {
+		return
+	}
+
+	// Fire one immediate refresh so the dashboard is not empty for the
+	// first 30s after boot.
+	go h.refreshEventKindStats(ctx)
+
+	go func() {
+		ticker := time.NewTicker(eventKindStatsRefreshEvery)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				h.refreshEventKindStats(ctx)
+			}
+		}
+	}()
+}
+
+// refreshEventKindStats performs one refresh of the materialized view and
+// updates the in-memory cache. Safe to call concurrently; the
+// eventKindStatsRefreshing flag prevents overlapping refreshes from
+// stampeding the database.
+func (h *Handler) refreshEventKindStats(ctx context.Context) {
+	h.eventKindStatsMu.Lock()
+	if h.eventKindStatsRefreshing {
+		h.eventKindStatsMu.Unlock()
+		return
+	}
+	h.eventKindStatsRefreshing = true
+	h.eventKindStatsMu.Unlock()
+
+	defer func() {
+		h.eventKindStatsMu.Lock()
+		h.eventKindStatsRefreshing = false
+		h.eventKindStatsMu.Unlock()
+	}()
+
+	refreshCtx, cancel := context.WithTimeout(ctx, eventQueryTimeout)
+	defer cancel()
+
+	if err := h.db.RefreshEventKindStats(refreshCtx); err != nil {
+		h.logger.Warn("Failed to refresh event_kind_stats", zap.Error(err))
+		return
+	}
+
+	stats, err := h.db.GetEventKindStats(refreshCtx)
+	if err != nil {
+		h.logger.Warn("Failed to read event_kind_stats after refresh", zap.Error(err))
+		return
+	}
+
+	h.eventKindStatsMu.Lock()
+	h.eventKindStats = stats
+	h.eventKindStatsUpdatedAt = time.Now()
+	h.eventKindStatsMu.Unlock()
+}
+
+// getEventKindStatsFromMV returns a snapshot of the MV-backed cache.
+// Returns nil if the cache has never been refreshed (e.g. immediately after
+// startup before the first refresh completes); callers should treat nil as
+// "warming" and fall back to the legacy eventsCache path.
+func (h *Handler) getEventKindStatsFromMV() []storage.EventKindStat {
+	h.eventKindStatsMu.RLock()
+	defer h.eventKindStatsMu.RUnlock()
+	if len(h.eventKindStats) == 0 {
+		return nil
+	}
+	out := make([]storage.EventKindStat, len(h.eventKindStats))
+	copy(out, h.eventKindStats)
+	return out
+}
+
+// eventKindStatsCacheState returns the current state of the MV-backed cache
+// for the dashboard "warming" indicator. Mirrors the pattern used by the
+// legacy eventsCache.
+func (h *Handler) eventKindStatsCacheState() (ready bool, refreshing bool, updatedAt time.Time) {
+	h.eventKindStatsMu.RLock()
+	defer h.eventKindStatsMu.RUnlock()
+	ready = !h.eventKindStatsUpdatedAt.IsZero()
+	refreshing = h.eventKindStatsRefreshing
+	updatedAt = h.eventKindStatsUpdatedAt
+	return
+}
+
+// eventKindStatsToSummaries converts the MV-backed stats into the
+// EventKindSummary shape the dashboard already consumes. Sorts by count
+// DESC and applies the same share calculation as the legacy path so the
+// dashboard does not need to know which backend served the data.
+func eventKindStatsToSummaries(stats []storage.EventKindStat) []EventKindSummary {
+	if len(stats) == 0 {
+		return nil
+	}
+	var total int64
+	for _, s := range stats {
+		total += s.EventCount
+	}
+	if total == 0 {
+		return nil
+	}
+	items := make([]EventKindSummary, 0, len(stats))
+	for _, s := range stats {
+		items = append(items, EventKindSummary{
+			Kind:     s.Kind,
+			KindName: constants.GetNIPName(s.Kind),
+			Count:    s.EventCount,
+			Share:    float64(s.EventCount) / float64(total) * 100,
+		})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Count == items[j].Count {
+			return items[i].Kind < items[j].Kind
+		}
+		return items[i].Count > items[j].Count
+	})
+	return items
+}
+
+// getTopEventKindsFromMV returns the top N kinds from the MV-backed cache,
+// falling back to the legacy eventsCache path when the MV cache is empty
+// (e.g. during the first refresh after startup, or if the MV migration has
+// not yet been applied).
+func (h *Handler) getTopEventKindsFromMV(limit int) []EventKindSummary {
+	stats := h.getEventKindStatsFromMV()
+	if stats == nil {
+		return h.getTopEventKinds(limit)
+	}
+	items := eventKindStatsToSummaries(stats)
+	if limit > 0 && len(items) > limit {
+		return items[:limit]
+	}
+	return items
+}
+
 func buildEventBreakdownData(counts []storage.EventCountByKindMonth) EventBreakdownData {
 	months := []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
 	byYear := make(map[int]map[int]*NIPRowData)
@@ -1232,8 +1396,8 @@ func (h *Handler) HandleEventsAPI(w http.ResponseWriter, r *http.Request) {
 		StoredEventsUpdated: formatEventCacheTime(storedUpdatedAt),
 		StoredEventsMessage: storedMessage,
 		Data:                snapshot.data,
-		TopKinds:            h.getTopEventKinds(6),
-		EventKinds:          h.getTopEventKinds(65536),
+		TopKinds:            h.getTopEventKindsFromMV(6),
+		EventKinds:          h.getTopEventKindsFromMV(65536),
 	}
 	if snapshot.lastErr != nil {
 		response.Error = "The grouped archive refresh has not completed."

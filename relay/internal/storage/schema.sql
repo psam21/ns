@@ -63,3 +63,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_addressable
 -- 2. GIN index for efficient JSONB tag queries
 -- 3. Partial unique indexes for Nostr replaceable/addressable event semantics
 -- 4. Aurora PostgreSQL handles replication, compression, and HA automatically
+-- =============================================================================
+-- Materialized view: event_kind_stats
+-- Pre-aggregated event-kind breakdown for the dashboard.
+-- Refreshed in the background via REFRESH MATERIALIZED VIEW CONCURRENTLY
+-- so reads never block writes to the events table.
+-- See https://github.com/psam21/ns/issues/100
+-- =============================================================================
+CREATE MATERIALIZED VIEW IF NOT EXISTS event_kind_stats AS
+SELECT
+  kind::int                                                    AS kind,
+  COUNT(*)                                                     AS event_count,
+  COUNT(*) FILTER (WHERE created_at >= EXTRACT(EPOCH FROM date_trunc('year', now()))) AS ytd_count,
+  MAX(created_at)                                              AS last_seen_at
+FROM events
+GROUP BY kind;
+
+-- Required for REFRESH MATERIALIZED VIEW CONCURRENTLY.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_event_kind_stats_kind
+  ON event_kind_stats (kind);
+
+-- Optional: index for the "top kinds" sort.
+CREATE INDEX IF NOT EXISTS idx_event_kind_stats_count_desc
+  ON event_kind_stats (event_count DESC);

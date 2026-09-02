@@ -60,6 +60,18 @@ func NewServer(relayCfg config.RelayConfig, node domain.NodeInterface, fullCfg *
 
 // ListenAndServe starts your WebSocket relay server and serves NIP-11 on normal HTTP requests.
 func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
+	// Ensure the event_kind_stats materialized view exists, then start the
+	// background goroutine that keeps it (and the in-memory cache) fresh.
+	// See https://github.com/psam21/ns/issues/100.
+	if db := s.node.DB(); db != nil {
+		ensureCtx, cancelEnsure := context.WithTimeout(ctx, 30*time.Second)
+		if err := db.EnsureEventKindStatsMV(ensureCtx); err != nil {
+			logger.Warn("Failed to ensure event_kind_stats materialized view; dashboard will fall back to legacy aggregation", zap.Error(err))
+		}
+		cancelEnsure()
+		s.webHandler.StartEventKindStatsRefresher(ctx)
+	}
+
 	// Derive the WebSocket origin allow-list from Relay.AllowedOrigins if
 	// set, else fall back to the public URL host (issue #64).
 	allowedOrigins := map[string]struct{}{}
