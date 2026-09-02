@@ -5,7 +5,30 @@
 **Primary services:** Go Nostr relay and TypeScript Blossom media server  
 **Document purpose:** Capture all remaining work after the completed initial Shugur-to-`nostr.ltd` migration stages and identify the service-reliability work that must be completed before the migration can be considered finished.
 
-> This document separates work that is already complete from work that is pending, suspected, or optional. It intentionally preserves backward compatibility until every existing deployment has migrated safely.
+> ## ⚠️ FULLY MIGRATED TO GIT — DO NOT EDIT
+>
+> This document has been fully decomposed into Git issues. Git is now the single source of truth for all work tracking.
+>
+> **Migration date:** 2026-09-02
+> **Parent tracking issue:** [#113](https://github.com/psam21/ns/issues/113)
+> **Status:** Ready for deletion.
+>
+> ### Issue map
+>
+> | Section | Issue(s) |
+> |---|---|
+> | §2 Blossom uploads | [#101](https://github.com/psam21/ns/issues/101), [#102](https://github.com/psam21/ns/issues/102), [#103](https://github.com/psam21/ns/issues/103), [#104](https://github.com/psam21/ns/issues/104) |
+> | §3 Dashboard readiness | [#105](https://github.com/psam21/ns/issues/105), [#106](https://github.com/psam21/ns/issues/106) |
+> | §4 OOM investigation | [#107](https://github.com/psam21/ns/issues/107) |
+> | §5 Go module path | [#109](https://github.com/psam21/ns/issues/109) |
+> | §6 Final audit | [#110](https://github.com/psam21/ns/issues/110) |
+> | §7 Alias removal | [#111](https://github.com/psam21/ns/issues/111) |
+> | §8 Validation matrix | [#112](https://github.com/psam21/ns/issues/112) |
+> | §9 Deploy safeguards | [#108](https://github.com/psam21/ns/issues/108) |
+> | §10 Execution order | [#113](https://github.com/psam21/ns/issues/113) (parent) |
+> | §11 Definition of done | [#113](https://github.com/psam21/ns/issues/113) |
+>
+> The original document body is preserved below for historical reference only. Any new work, status changes, or decisions must be tracked in the linked issues, not here.
 
 ## 1. Executive status
 

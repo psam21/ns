@@ -4,6 +4,31 @@
 
 This document defines a deliberate migration from inherited Shugur naming to the `nostr.ltd` identity across the `psam21/ns` repository. The migration is staged so that public branding can be cleaned immediately while existing deployments, configuration, database layouts, container consumers, and Go import users are not broken by a blind global replacement.
 
+> ## ⚠️ FULLY MIGRATED TO GIT — DO NOT EDIT
+>
+> This document has been fully decomposed into Git issues. Git is now the single source of truth for all work tracking.
+>
+> **Migration date:** 2026-09-02
+> **Parent tracking issue:** [#113](https://github.com/psam21/ns/issues/113)
+> **Status:** Ready for deletion.
+>
+> ### Issue map
+>
+> | Section | Issue(s) |
+> |---|---|
+> | Reference classes and treatment | [#120](https://github.com/psam21/ns/issues/120) |
+> | Phase 1 — Inventory and baseline | [#114](https://github.com/psam21/ns/issues/114) (done) |
+> | Phase 2 — Cosmetic and documentation cleanup | [#115](https://github.com/psam21/ns/issues/115) (done) |
+> | Phase 3 — Configuration compatibility migration | [#116](https://github.com/psam21/ns/issues/116) (done) |
+> | Phase 4 — Installer, image, and deployment migration | [#117](https://github.com/psam21/ns/issues/117) (done) |
+> | Phase 5 — Go module-path decision and migration | [#118](https://github.com/psam21/ns/issues/118), [#109](https://github.com/psam21/ns/issues/109) |
+> | Phase 6 — Deprecation and removal | [#119](https://github.com/psam21/ns/issues/119), [#110](https://github.com/psam21/ns/issues/110), [#111](https://github.com/psam21/ns/issues/111) |
+> | Validation contract | [#112](https://github.com/psam21/ns/issues/112) |
+> | Rollback policy | [#121](https://github.com/psam21/ns/issues/121) |
+> | Completion criteria | [#122](https://github.com/psam21/ns/issues/122) |
+>
+> The original document body is preserved below for historical reference only. Any new work, status changes, or decisions must be tracked in the linked issues, not here.
+
 ## Current state
 
 The active production-facing relay and Blossom paths already use `nostr.ltd` in their current service metadata and dashboard branding. Legacy references remain primarily in the inherited relay module, fallback configuration, source metadata, installer scripts, Docker Compose templates, database/environment compatibility names, comments, and repository guidance. Blossom does not carry the same breadth of legacy naming, although its deployment is part of the final consistency review.
