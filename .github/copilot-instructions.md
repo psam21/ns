@@ -104,7 +104,7 @@ curl https://nostr.ltd/api/events
 
 `DefaultSupportedNIPs` in `relay/internal/constants/relay_metadata.go` is the canonical advertised registry and must remain synchronized with NIP-11 and the dashboard. An advertised NIP identifies the relay’s protocol surface; it is not automatically proof that every part of a NIP is enforced by a dedicated validator.
 
-The NIP integration scripts live under `relay/tests/nips/`. They publish and sometimes delete events, so run them only against a disposable local relay or an explicitly authorized test relay. The suite currently contains 35 shell scripts plus project-specific tests.
+The NIP integration scripts live under `relay/tests/nips/`. They publish and sometimes delete events, so run them only against a disposable local relay or an explicitly authorized test relay. The suite currently contains 36 shell scripts (34 numbered NIP scripts plus 2 project extensions: `test_nip_nostr_web.sh` and `test_nip_time_capsules.sh`).
 
 The complete advertised registry is governed by `relay/tests/nips/coverage.tsv`, with one row for each of the 77 advertised identifiers. Each row records whether evidence is an integration test, registry-contract coverage, client/ecosystem review, or Blossom/service review. This avoids pretending that client-only or external media protocols can be tested as relay event validators.
 
@@ -122,7 +122,7 @@ RELAY_URL=ws://localhost:8080 HTTP_URL=http://localhost:8080 \
   ./tests/nips/run_coverage.sh --live
 ```
 
-Use `./tests/nips/test_nip01.sh` for a single test or `./tests/nips/run_all.sh` for the 35 mutating integration scripts. The runners share `RELAY_URL` and `HTTP_URL`, report totals, and exit non-zero on failure. Some scripts require additional tools such as `nak`, `jq`, Python, or `openssl`; see `relay/tests/nips/README.md` before running the complete suite.
+Use `./tests/nips/test_nip01.sh` for a single test or `./tests/nips/run_all.sh` for the 36 mutating integration scripts. The runners share `RELAY_URL` and `HTTP_URL`, report totals, and exit non-zero on failure. Some scripts require additional tools such as `nak`, `jq`, Python, or `openssl`; see `relay/tests/nips/README.md` before running the complete suite.
 
 ## Key source files
 

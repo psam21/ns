@@ -136,7 +136,7 @@ The web templates and static assets are loaded from disk at runtime. Changes und
 
 ## NIP integration tests
 
-The NIP scripts are network integration tests. Run them only against a disposable local relay or a specifically authorized test relay; they publish and delete events. The suite contains 35 shell scripts covering core protocol behavior, authentication, encryption, event kinds, metadata, specialized extensions, and project-specific protocols.
+The NIP scripts are network integration tests. Run them only against a disposable local relay or a specifically authorized test relay; they publish and delete events. The suite contains 36 shell scripts (34 numbered NIP scripts plus 2 project extensions: `test_nip_nostr_web.sh` and `test_nip_time_capsules.sh`) covering core protocol behavior, authentication, encryption, event kinds, metadata, specialized extensions, and project-specific protocols.
 
 From the `relay/` directory, after starting a test relay:
 

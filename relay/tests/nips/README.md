@@ -2,7 +2,7 @@
 
 This directory contains shell-based integration tests for the relay’s Nostr protocol surface and project-specific extensions. The scripts publish, query, and in some cases delete events, so they must run only against a disposable local relay or a relay for which testing has been explicitly authorized.
 
-The suite currently contains **35 shell scripts**. These scripts exercise relay behavior; they do not prove complete conformance to every section of a NIP, and a script marked present in this inventory is not the same as an advertised NIP in NIP-11.
+The suite currently contains **36 shell scripts** (34 numbered NIP scripts plus 2 project extensions: `test_nip_nostr_web.sh` and `test_nip_time_capsules.sh`). These scripts exercise relay behavior; they do not prove complete conformance to every section of a NIP, and a script marked present in this inventory is not the same as an advertised NIP in NIP-11.
 
 ## Prerequisites
 

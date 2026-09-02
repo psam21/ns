@@ -1,6 +1,6 @@
 # NIP support and upgrade tracking
 
-**Last reviewed:** 2026-08-27
+**Last reviewed:** 2026-09-02
 **Canonical source:** [`relay/internal/constants/relay_metadata.go`](../relay/internal/constants/relay_metadata.go)
 **Project:** nostr.ltd relay and companion Blossom media service
 
@@ -10,7 +10,7 @@ The relay advertises a protocol surface through NIP-11. The canonical `DefaultSu
 
 An advertised identifier is not a claim that every sentence of the corresponding specification is enforced by a dedicated validator. Relay support is distributed across connection handling, filters, event validation, persistence, the web/API layer, and the companion Blossom service. Conformance work should therefore be tracked against concrete behavior and tests, not only against the NIP-11 list.
 
-The integration suite under [`relay/tests/nips`](../relay/tests/nips) currently contains **35 shell scripts**. It intentionally covers a smaller, behavior-focused subset and should be run only against a disposable or explicitly authorized relay because the scripts publish and sometimes delete events.
+The integration suite under [`relay/tests/nips`](../relay/tests/nips) currently contains **36 shell scripts** (34 numbered NIP scripts plus 2 project extensions). It intentionally covers a smaller, behavior-focused subset and should be run only against a disposable or explicitly authorized relay because the scripts publish and sometimes delete events.
 
 ## Current advertised registry
 
@@ -82,11 +82,11 @@ The following areas have direct relay code or operational coverage and should re
 
 | Area | Primary implementation locations | Current verification |
 |---|---|---|
-| Basic relay protocol, subscriptions, filters, and event lifecycle | `relay/internal/relay/connection.go`, `subscription.go`, `filter.go`, `event_processor.go` | Go unit tests and NIP shell scripts |
+| Basic relay protocol, subscriptions, filters, and event lifecycle | `relay/internal/relay/connection.go`, `subscription.go`, `filter.go`; `relay/internal/storage/event_processor.go` | Go unit tests and NIP shell scripts |
 | Relay metadata and supported registry | `relay/internal/constants/relay_metadata.go`, `relay/internal/web/handler.go` | NIP-11 checks and exact 77-entry regression test |
 | Authentication and protected events | `relay/internal/relay/connection.go`, `nips/nip42.go` | Go tests and targeted integration tests |
 | Deletion and vanish flows | `relay/internal/storage/queries.go`, `event_processor.go` | Go storage tests and NIP-09 coverage |
-| COUNT, search, and negentropy | `relay/internal/relay/nip45.go`, `filter.go`, `nip77.go` | Go tests and targeted relay tests |
+| COUNT, search, and negentropy | `relay/internal/relay/nips/nip45.go`, `filter.go`, `nip77.go` | Go tests and targeted relay tests |
 | Relay groups and access metadata | `relay/internal/relay/nip29.go`, `nip43.go` | Go tests; expand integration coverage |
 | Nostr Wallet Connect and encrypted payloads | `relay/internal/relay/nips/nip47.go`, `nip44.go` | Targeted NIP scripts and validator tests |
 | Media-related event metadata | `relay/internal/relay/nips/nip92.go`, `nip94.go`; `blossom/` | Partial; add negative and round-trip cases |
