@@ -139,16 +139,13 @@ class RelayDashboard {
     if (!container) return;
     container.replaceChildren();
     items.forEach((item) => {
-      const share = item.count / total * 100;
       const row = document.createElement('div');
       row.className = 'kind-row';
       row.dataset.kindSearch = `${item.kind} ${item.kindName}`;
-      row.innerHTML = `<div class="kind-name"><strong></strong><span></span></div><div class="kind-count"></div><div class="kind-share"><span class="kind-bar"><i></i></span><small></small></div>`;
+      row.innerHTML = `<div class="kind-name"><strong></strong><span></span></div><div class="kind-count"></div>`;
       row.querySelector('.kind-name strong').textContent = item.kind;
       row.querySelector('.kind-name span').textContent = item.kindName;
       row.querySelector('.kind-count').textContent = item.count.toLocaleString();
-      row.querySelector('.kind-bar i').style.width = `${share.toFixed(2)}%`;
-      row.querySelector('.kind-share small').textContent = `${share.toFixed(1)}%`;
       container.appendChild(row);
     });
   }
@@ -246,10 +243,7 @@ class RelayDashboard {
       
       // Update all the stats with real data
       if (data.stats) {
-        this.updateStatElement('active-connections', data.stats.active_connections);
-        this.setText('load-percentage', `${Number(data.stats.load_percentage || 0).toFixed(1)}%`);
         const eventsReady = Boolean(data.stats.events_stored_ready);
-        const eventsStatus = data.stats.events_stored_status || (eventsReady ? 'ready' : 'warming');
         this.updateStatElement('events-stored', eventsReady ? data.stats.events_stored : '—');
         document.getElementById('events-stored')?.classList.toggle('stat-loading', !eventsReady);
         const eventsMeta = document.getElementById('events-stored-meta');

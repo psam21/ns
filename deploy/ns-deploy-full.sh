@@ -201,6 +201,13 @@ if [ ! -f "$AWS_KEY" ]; then
     log_error "SSH key not found at $AWS_KEY"
 fi
 
+# Capture the short git commit hash of the source we are about to
+# deploy. The dashboard reads this back via /opt/relay/.last-commit
+# and the RELAY_GIT_COMMIT env var so operators can see which commit
+# the running binary came from.
+GIT_COMMIT_SHORT="$(git -C "$NS_DIR" rev-parse --short=7 HEAD 2>/dev/null || echo unknown)"
+log_info "Deploying commit: $GIT_COMMIT_SHORT"
+
 # Use a unique remote staging directory to avoid collisions with concurrent
 # or interrupted runs that may have left files in /tmp.
 REMOTE_STAGE="/tmp/ns-deploy-$(date +%s)-$RANDOM"
@@ -231,6 +238,7 @@ if [ ! -f "$STAGING/relay.service" ]; then
 fi
 log_info "Copying relay.service systemd unit..."
 scp -i "$AWS_KEY" "$STAGING/relay.service" "$AWS_HOST:$REMOTE_STAGE/relay.service"
+echo "$GIT_COMMIT_SHORT" | scp -i "$AWS_KEY" - "$AWS_HOST:$REMOTE_STAGE/last-commit"
 
 if [ -f "$NS_DIR/deploy/blossom.service" ]; then
     cp "$NS_DIR/deploy/blossom.service" "$STAGING/blossom.service"
@@ -268,7 +276,7 @@ log_info "=== Step 8: Restarting relay and Blossom services on AWS ==="
 # the remote side; without it the remote command would just be the
 # variable assignment and the heredoc body would never execute.
 ssh -i "$AWS_KEY" "$AWS_HOST" \
-    "REMOTE_STAGE='$REMOTE_STAGE' BLOSSOM_REMOTE_DIR='$BLOSSOM_REMOTE_DIR' bash -s" << 'REMOTE_EOF'
+    "REMOTE_STAGE='$REMOTE_STAGE' BLOSSOM_REMOTE_DIR='$BLOSSOM_REMOTE_DIR' RELAY_GIT_COMMIT='$GIT_COMMIT_SHORT' bash -s" << 'REMOTE_EOF'
 set -Eeuo pipefail
 
 : "${REMOTE_STAGE:?REMOTE_STAGE must be set by caller}"
@@ -310,6 +318,16 @@ sudo install -o root  -g root  -m 0755 "$REMOTE_STAGE/relay-arm64" "$NEW_RELEASE
 sudo install -o relay  -g relay  -m 0644 "$REMOTE_STAGE/index.html" "$NEW_RELEASE/web/templates/index.html"
 sudo install -o relay  -g relay  -m 0644 "$REMOTE_STAGE/style.css"  "$NEW_RELEASE/web/static/style.css"
 sudo install -o relay  -g relay  -m 0644 "$REMOTE_STAGE/script.js"  "$NEW_RELEASE/web/static/script.js"
+
+# Write the commit hash so the running relay can read it back from
+# disk on startup. RELAY_GIT_COMMIT is also passed in the heredoc
+# env (above) so a process that hasn't read the file yet still has
+# it set.
+if [ -n "${RELAY_GIT_COMMIT:-}" ] && [ "${RELAY_GIT_COMMIT}" != "unknown" ]; then
+    echo "${RELAY_GIT_COMMIT}" | sudo tee /opt/relay/.last-commit >/dev/null
+    sudo chown relay:relay /opt/relay/.last-commit
+    sudo chmod 0644 /opt/relay/.last-commit
+fi
 
 # Install the systemd unit and reload before the swap so the unit is
 # valid by the time the service is restarted.

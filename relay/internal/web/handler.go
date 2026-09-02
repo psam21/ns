@@ -45,6 +45,8 @@ type DashboardData struct {
 	EventCacheUpdatedAt string                `json:"event_cache_updated_at,omitempty"`
 	EventCacheMessage   string                `json:"event_cache_message,omitempty"`
 	LiveSince           string                `json:"live_since"`
+	LastCommit         string                `json:"last_commit"`
+	RepoLink           string                `json:"repo_link"`
 	Cluster             *storage.DatabaseInfo `json:"cluster"`
 }
 
@@ -528,6 +530,8 @@ func (h *Handler) getDashboardData(requestHost string) *DashboardData {
 		EventCacheUpdatedAt: formatEventCacheTime(eventSnapshot.updatedAt),
 		EventCacheMessage:   eventMessage,
 		LiveSince:           h.liveSince.Format("Jan 2, 2006"),
+		LastCommit:         loadLastCommit(),
+		RepoLink:           "https://github.com/psam21/ns",
 		Cluster:             clusterInfo,
 	}
 }
@@ -1273,6 +1277,40 @@ func loadFirstBootTime() time.Time {
 	now := time.Now().UTC()
 	_ = os.WriteFile(path, []byte(now.Format(time.RFC3339)), 0600)
 	return now
+}
+
+// loadLastCommit returns the short git commit hash of the running build.
+// Resolution order:
+//  1. RELAY_GIT_COMMIT env var (set by ns-deploy-full.sh at build time)
+//  2. /opt/relay/.last-commit file (written by the deploy script)
+//  3. web/.git/HEAD (only present during local dev)
+//  4. fallback to "unknown" so the template always has a string
+func loadLastCommit() string {
+	// 1. env var
+	if v := strings.TrimSpace(os.Getenv("RELAY_GIT_COMMIT")); v != "" {
+		return v
+	}
+	// 2. on-disk file
+	for _, p := range []string{".last-commit", "/opt/relay/.last-commit", "web/.git/HEAD"} {
+		if data, err := os.ReadFile(p); err == nil {
+			s := strings.TrimSpace(string(data))
+			// HEAD may be "ref: refs/heads/main"; resolve to the SHA.
+			if strings.HasPrefix(s, "ref: ") {
+				refPath := "web/.git/" + strings.TrimPrefix(s, "ref: ")
+				if rdata, err := os.ReadFile(refPath); err == nil {
+					s = strings.TrimSpace(string(rdata))
+				}
+			}
+			if s != "" {
+				// take the first 7 chars of a hex SHA, or pass through short tags
+				if len(s) >= 7 && !strings.Contains(s, " ") {
+					return s[:7]
+				}
+				return s
+			}
+		}
+	}
+	return "unknown"
 }
 
 // getMemoryUsage returns current memory usage statistics
