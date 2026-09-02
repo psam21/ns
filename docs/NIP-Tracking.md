@@ -49,10 +49,10 @@ The current scripts are listed in [`relay/tests/nips/README.md`](../relay/tests/
 
 | Area | Scripts |
 |---|---|
-| Core and event lifecycle | NIP-01, 02, 03, 04, 09, 15, 16, 17, 20, 22, 23, 25, 28, 33, 40 |
+| Core and event lifecycle | NIP-01, 02, 03, 04, 09, 15, 16, 17, 20, 22, 23, 25, 28, 33, 40, 42 |
 | Encryption, privacy, and counting | NIP-44, 45, 50, 59, 60, 61, 65, 72, 78 |
 | Metadata, social, and application events | NIP-11, 47, 51, 52, 53, 54, 56, 57, 58 |
-| Project extensions | XX Time Capsules and YY Nostr Web Pages |
+| Project extensions | `test_nip_time_capsules.sh` and `test_nip_nostr_web.sh` |
 
 The suite is not a conformance certificate. For example, some scripts exercise event acceptance and round trips but do not cover every validator branch, storage invariant, authorization path, or negative case in the related specification.
 
