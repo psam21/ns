@@ -702,12 +702,15 @@ dd if=/dev/urandom of="$TMPDIR/blob.bin" bs=1024 count=1 status=none
 BLOB_SHA256=$(sha256sum "$TMPDIR/blob.bin" | awk '{print $1}')
 
 # Build and sign a NIP-42 auth event (kind 24242) for the upload.
+# Redirect stdin from /dev/null: nak event tries to read a partial
+# event from stdin when stdin is a TTY, which makes it hang
+# indefinitely under non-interactive SSH sessions.
 AUTH_EVENT=$(nak event --kind 24242 \
     --tag t=upload \
     --tag expiration=$(( $(date +%s) + 300 )) \
     --tag x="$BLOB_SHA256" \
     --content "" \
-    --sec "$TEST_NSEC" 2>/dev/null || true)
+    --sec "$TEST_NSEC" </dev/null 2>/dev/null || true)
 
 if [ -z "$AUTH_EVENT" ]; then
     echo "PROBE_STATUS=skipped"
