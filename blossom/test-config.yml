@@ -1,0 +1,56 @@
+# Test configuration for the upload test matrix.
+# Uses temp directories so tests don't touch production paths.
+publicDomain: "http://localhost:3000"
+
+databasePath: /tmp/blossom-test/data/sqlite.db
+
+dashboard:
+  enabled: false
+
+discovery:
+  nostr:
+    enabled: false
+    relays: []
+  upstream:
+    enabled: false
+    domains: []
+
+storage:
+  backend: local
+  removeWhenNoOwners: false
+
+  local:
+    dir: /tmp/blossom-test/data/blobs
+
+  rules:
+    - type: text/*
+      expiration: 1 month
+    - type: "image/*"
+      expiration: 1 month
+    - type: "video/*"
+      expiration: 1 month
+    - type: "audio/*"
+      expiration: 1 month
+    - type: "model/*"
+      expiration: 1 month
+    - type: "*"
+      expiration: 2 days
+
+upload:
+  enabled: true
+  requireAuth: true
+  requirePubkeyInRule: false
+  maxUploadSize: 10485760
+
+media:
+  enabled: true
+  requireAuth: true
+  requirePubkeyInRule: false
+
+list:
+  requireAuth: false
+  allowListOthers: true
+
+tor:
+  enabled: false
+  proxy: ""
