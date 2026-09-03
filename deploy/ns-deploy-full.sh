@@ -737,42 +737,88 @@ else
     log_warn "/api/stats endpoint not responding (may be normal during initial startup)"
 fi
 
-# Check /api/events endpoint. The grouped archive telemetry warmup
-# can take a long time on a cold start with millions of stored events
-# (observed ~25 minutes for 1M+ events on 2026-09-01). Poll for
-# `status == "ready"` for up to 30 minutes; the cold-start case
-# uses 15s between checks (so we still progress), the warm case
-# resolves on the first or second check.
-log_info "Checking /api/events endpoint..."
+# Check /api/events endpoint with partial-readiness recognition.
+# The response now exposes four independent readiness signals:
+#   - relay_health:        ok | unavailable  (process + database)
+#   - stored_events_ready: direct COUNT(*) succeeded
+#   - total_ready:         2026+ bounded count succeeded
+#   - status:              grouped breakdown cache state
+#
+# Classification:
+#   Healthy:        relay_health=ok AND stored_events_ready=true
+#   Partially ready: relay_health=ok AND stored_events_ready=true
+#                    but grouped status != "ready" (warming)
+#   Unhealthy:      relay_health != "ok" OR stored_events_ready=false
+#                    after the timeout, OR endpoint unreachable
+#
+# A warming grouped breakdown no longer aborts verification when
+# direct totals are ready. The grouped cold-start can take ~25
+# minutes on a 1M+ event database (observed 2026-09-01).
+log_info "Checking /api/events endpoint (partial-readiness aware)..."
 
 EVENTS_HTTP=""
-EVENTS_STATUS="unknown"
+EVENTS_JSON=""
+EVENTS_OUTCOME="unknown"
 EVENTS_MAX_ATTEMPTS="${EVENTS_MAX_ATTEMPTS:-120}"   # 120 * 15s = 30 min
 EVENTS_INTERVAL="${EVENTS_INTERVAL:-15}"
 EVENTS_ATTEMPT=0
 while [ "$EVENTS_ATTEMPT" -lt "$EVENTS_MAX_ATTEMPTS" ]; do
     EVENTS_ATTEMPT=$((EVENTS_ATTEMPT + 1))
+    # Defensive curl: || true prevents set -e from aborting on
+    # transient network failures before we can classify the state.
     EVENTS_JSON=$(ssh -i "$AWS_KEY" "$AWS_HOST" \
         "curl --silent --show-error --max-time 10 http://localhost:8080/api/events || true" 2>/dev/null || true)
-    EVENTS_STATUS=$(printf '%s' "$EVENTS_JSON" | jq -r '.status // "unknown"' 2>/dev/null || echo "unknown")
     EVENTS_HTTP=$(ssh -i "$AWS_KEY" "$AWS_HOST" \
         "curl --silent --output /dev/null --write-out '%{http_code}' --max-time 10 http://localhost:8080/api/events || true" 2>/dev/null || true)
 
-    if [[ "$EVENTS_HTTP" == "200" && "$EVENTS_STATUS" == "ready" ]]; then
-        echo "Event cache is ready (attempt $EVENTS_ATTEMPT, after ~$((EVENTS_ATTEMPT * EVENTS_INTERVAL))s)."
-        break
+    # Parse each readiness layer defensively. Missing fields default
+    # to false/unknown so a malformed response is classified as
+    # Unhealthy, not silently treated as Healthy.
+    if [[ "$EVENTS_HTTP" == "200" ]]; then
+        RELAY_HEALTH=$(printf '%s' "$EVENTS_JSON" | jq -r '.relay_health // "unknown"' 2>/dev/null || echo "unknown")
+        STORED_READY=$(printf '%s' "$EVENTS_JSON" | jq -r '.stored_events_ready // false' 2>/dev/null || echo "false")
+        TOTAL_READY=$(printf '%s' "$EVENTS_JSON" | jq -r '.total_ready // false' 2>/dev/null || echo "false")
+        GROUPED_STATUS=$(printf '%s' "$EVENTS_JSON" | jq -r '.status // "unknown"' 2>/dev/null || echo "unknown")
+
+        if [[ "$RELAY_HEALTH" == "ok" && "$STORED_READY" == "true" && "$GROUPED_STATUS" == "ready" ]]; then
+            EVENTS_OUTCOME="healthy"
+            echo "Event telemetry is HEALTHY (attempt $EVENTS_ATTEMPT, after ~$((EVENTS_ATTEMPT * EVENTS_INTERVAL))s)."
+            break
+        elif [[ "$RELAY_HEALTH" == "ok" && "$STORED_READY" == "true" ]]; then
+            EVENTS_OUTCOME="partially_ready"
+            echo "Event telemetry is PARTIALLY READY: direct totals available, grouped status=$GROUPED_STATUS (attempt $EVENTS_ATTEMPT/$EVENTS_MAX_ATTEMPTS)."
+            # Continue polling for the grouped breakdown to finish,
+            # but cap at the timeout. If it doesn't finish, we
+            # accept Partially ready as a non-fatal outcome below.
+        elif [[ "$RELAY_HEALTH" != "ok" ]]; then
+            EVENTS_OUTCOME="unhealthy"
+            echo "Event telemetry is UNHEALTHY: relay_health=$RELAY_HEALTH (attempt $EVENTS_ATTEMPT/$EVENTS_MAX_ATTEMPTS)."
+            break
+        fi
+    else
+        echo "Event endpoint unreachable: HTTP $EVENTS_HTTP (attempt $EVENTS_ATTEMPT/$EVENTS_MAX_ATTEMPTS)."
     fi
 
-    echo "Event cache state: HTTP $EVENTS_HTTP / $EVENTS_STATUS; waiting (attempt $EVENTS_ATTEMPT/$EVENTS_MAX_ATTEMPTS)..."
     sleep "$EVENTS_INTERVAL"
 done
 
-if [[ "$EVENTS_HTTP" != "200" || "$EVENTS_STATUS" != "ready" ]]; then
-    echo "ERROR: event cache is not ready after $((EVENTS_MAX_ATTEMPTS * EVENTS_INTERVAL)) seconds"
-    ssh -i "$AWS_KEY" "$AWS_HOST" \
-        "sudo journalctl -u relay.service --since '10 minutes ago' --no-pager | grep -Ei 'cache|event|postgres|database|query|error|fatal|panic' || true"
-    exit 1
-fi
+# Final classification. Partially ready is a non-fatal warning when
+# direct totals are available; only Unhealthy or unreachable is fatal.
+case "$EVENTS_OUTCOME" in
+    healthy)
+        log_info "Relay dashboard: HEALTHY (all layers ready)"
+        ;;
+    partially_ready)
+        log_warn "Relay dashboard: PARTIALLY READY (direct totals available, grouped breakdown still warming after $((EVENTS_MAX_ATTEMPTS * EVENTS_INTERVAL))s)"
+        log_warn "Deployment continues; grouped breakdown will complete in the background"
+        ;;
+    unhealthy|unknown)
+        log_error "Relay dashboard: UNHEALTHY (relay_health=$RELAY_HEALTH, stored_events_ready=$STORED_READY, grouped=$GROUPED_STATUS)"
+        ssh -i "$AWS_KEY" "$AWS_HOST" \
+            "sudo journalctl -u relay.service --since '10 minutes ago' --no-pager | grep -Ei 'cache|event|postgres|database|query|error|fatal|panic' || true"
+        exit 1
+        ;;
+esac
 
 log_info "Deployment verification complete"
 echo ""
