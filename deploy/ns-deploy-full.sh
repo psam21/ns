@@ -173,7 +173,16 @@ if [ ! -d "$BLOSSOM_DIR/build" ] || [ ! -d "$BLOSSOM_DIR/admin/dist" ] || [ ! -d
     log_error "Blossom build artifacts are incomplete under $BLOSSOM_DIR"
 fi
 mkdir -p "$STAGING/blossom"
-tar -C "$BLOSSOM_DIR" -czf "$STAGING/blossom-artifacts.tgz" build public admin/dist package.json pnpm-lock.yaml
+tar -C "$BLOSSOM_DIR" -czf "$STAGING/blossom-artifacts.tgz" build public admin/dist package.json pnpm-lock.yaml config.yml
+
+# Ship the rules-defaults script so operators can patch a drifted
+# production config without a full redeploy. The script is idempotent.
+if [ -f "$NS_DIR/deploy/blossom-rules-defaults.sh" ]; then
+    cp "$NS_DIR/deploy/blossom-rules-defaults.sh" "$STAGING/blossom-rules-defaults.sh"
+    log_info "Copied deploy/blossom-rules-defaults.sh to staging"
+else
+    log_warn "deploy/blossom-rules-defaults.sh not found; config drift repair must be manual"
+fi
 
 # Copy web templates and static files to staging
 cp "$RELAY_DIR/web/templates/index.html" "$STAGING/index.html"
@@ -249,6 +258,12 @@ fi
 log_info "Copying Blossom runtime artifacts..."
 scp -i "$AWS_KEY" "$STAGING/blossom-artifacts.tgz" "$AWS_HOST:$REMOTE_STAGE/blossom-artifacts.tgz"
 scp -i "$AWS_KEY" "$STAGING/blossom.service" "$AWS_HOST:$REMOTE_STAGE/blossom.service"
+
+# Ship the rules-defaults script so operators can repair config drift
+# on the production host without a full redeploy.
+if [ -f "$STAGING/blossom-rules-defaults.sh" ]; then
+    scp -i "$AWS_KEY" "$STAGING/blossom-rules-defaults.sh" "$AWS_HOST:$REMOTE_STAGE/blossom-rules-defaults.sh"
+fi
 
 log_info "All files copied to $AWS_HOST:$REMOTE_STAGE"
 echo ""
@@ -442,6 +457,27 @@ else
 fi
 BLOSSOM_DEPLOYED=1
 
+# 5b. Repair storage.rules drift if needed. The deploy ships the
+#     canonical config.yml in the artifact bundle, but the live
+#     /opt/blossom/config.yml is preserved (it holds S3 credentials
+#     via env interpolation). If the live config has an empty
+#     storage.rules list, the rules-defaults script patches it with
+#     the same defaults that ship in the tracked config. The script
+#     is idempotent: it only patches if rules: [] is present.
+if [ -f "$REMOTE_STAGE/blossom-rules-defaults.sh" ]; then
+    echo "Checking for storage.rules drift..."
+    if sudo grep -q "^  rules: \[\]" /opt/blossom/config.yml; then
+        echo "Empty storage.rules detected; running blossom-rules-defaults.sh"
+        sudo cp "$REMOTE_STAGE/blossom-rules-defaults.sh" /opt/blossom/scripts/blossom-rules-defaults.sh 2>/dev/null || true
+        sudo mkdir -p /opt/blossom/scripts
+        sudo cp "$REMOTE_STAGE/blossom-rules-defaults.sh" /opt/blossom/scripts/blossom-rules-defaults.sh
+        sudo chmod +x /opt/blossom/scripts/blossom-rules-defaults.sh
+        sudo bash /opt/blossom/scripts/blossom-rules-defaults.sh || echo "WARN: rules-defaults script failed; manual repair required"
+    else
+        echo "storage.rules already configured; no drift repair needed"
+    fi
+fi
+
 # 5. Restart the relay service. If `restart` fails, restore the backup files
 #    so the relay is not left pointing at a non-running binary.
 if ! sudo systemctl restart relay.service; then
@@ -572,6 +608,123 @@ for attempt in {1..12}; do
 done
 if [[ ! "$BLOSSOM_HTTP" =~ ^2|^3 ]]; then
     log_error "Blossom service verification failed after 60 seconds with HTTP ${BLOSSOM_HTTP:-unknown}"
+fi
+
+# Functional upload probe: verify that blossom.nostr.ltd actually accepts
+# an authenticated upload. This catches the class of failure where the
+# service is up (HTTP 200 on /) but uploads are rejected because of
+# misconfigured storage.rules, missing S3 credentials, or auth
+# middleware regressions.
+#
+# The probe uses a disposable test identity generated on the fly and a
+# random 1KB blob. It uploads, retrieves, and cleans up. No real user
+# credentials or production data are involved.
+#
+# The probe is skipped automatically if BLOSSOM_UPLOAD_PROBE=n is set,
+# or if the required tools (nak, openssl, jq) are not available on the
+# deploy host. When skipped, the verification log explicitly marks
+# upload verification as MANUAL so operators know to run it by hand.
+log_info "Checking Blossom upload functionality (functional probe)..."
+BLOSSOM_UPLOAD_PROBE="${BLOSSOM_UPLOAD_PROBE:-y}"
+
+if [[ "$BLOSSOM_UPLOAD_PROBE" != "y" ]]; then
+    log_warn "Blossom upload probe disabled (BLOSSOM_UPLOAD_PROBE=$BLOSSOM_UPLOAD_PROBE); upload verification is MANUAL"
+elif ! command -v nak >/dev/null 2>&1 || ! command -v openssl >/dev/null 2>&1; then
+    log_warn "Blossom upload probe requires 'nak' and 'openssl' on the deploy host; upload verification is MANUAL"
+else
+    PROBE_RESULT=$(ssh -i "$AWS_KEY" "$AWS_HOST" "BLOSSOM_PUBLIC_URL='${BLOSSOM_PUBLIC_URL:-https://blossom.nostr.ltd}' bash -s" << 'PROBE_EOF' 2>&1 || true
+set -uo pipefail
+
+: "${BLOSSOM_PUBLIC_URL:?BLOSSOM_PUBLIC_URL must be set by caller}"
+
+# Generate a disposable test identity (not a real user's key).
+TEST_NSEC=$(nak key generate private 2>/dev/null || npx -y @nostr/tools key generate private 2>/dev/null || true)
+if [ -z "$TEST_NSEC" ]; then
+    echo "PROBE_STATUS=skipped"
+    echo "PROBE_REASON=unable to generate test key (nak or npx not available)"
+    exit 0
+fi
+
+# Create a 1KB random blob and compute its SHA-256.
+TMPDIR=$(mktemp -d)
+trap "rm -rf '$TMPDIR'" EXIT
+dd if=/dev/urandom of="$TMPDIR/blob.bin" bs=1024 count=1 status=none
+BLOB_SHA256=$(sha256sum "$TMPDIR/blob.bin" | awk '{print $1}')
+
+# Build and sign a NIP-42 auth event (kind 24242) for the upload.
+AUTH_EVENT=$(nak event --kind 24242 \
+    --tag t=upload \
+    --tag expiration=$(( $(date +%s) + 300 )) \
+    --tag x="$BLOB_SHA256" \
+    --content "" \
+    --sec "$TEST_NSEC" 2>/dev/null || true)
+
+if [ -z "$AUTH_EVENT" ]; then
+    echo "PROBE_STATUS=skipped"
+    echo "PROBE_REASON=unable to build auth event"
+    exit 0
+fi
+
+# Upload the blob.
+UPLOAD_RESPONSE=$(curl --silent --show-error --max-time 30 \
+    -X PUT \
+    -H "Authorization: Nostr $AUTH_EVENT" \
+    -H "Content-Type: image/png" \
+    -H "X-Sha-256: $BLOB_SHA256" \
+    --data-binary "@$TMPDIR/blob.bin" \
+    "$BLOSSOM_PUBLIC_URL/upload" 2>&1 || true)
+
+UPLOAD_HTTP=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+    -X PUT \
+    -H "Authorization: Nostr $AUTH_EVENT" \
+    -H "Content-Type: image/png" \
+    -H "X-Sha-256: $BLOB_SHA256" \
+    --data-binary "@$TMPDIR/blob.bin" \
+    "$BLOSSOM_PUBLIC_URL/upload" 2>/dev/null || echo "000")
+
+if [[ "$UPLOAD_HTTP" =~ ^2 ]]; then
+    # Verify retrieval.
+    RETRIEVE_HTTP=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+        --max-time 10 \
+        "$BLOSSOM_PUBLIC_URL/$BLOB_SHA256" 2>/dev/null || echo "000")
+    if [[ "$RETRIEVE_HTTP" == "200" ]]; then
+        echo "PROBE_STATUS=pass"
+        echo "PROBE_UPLOAD_HTTP=$UPLOAD_HTTP"
+        echo "PROBE_RETRIEVE_HTTP=$RETRIEVE_HTTP"
+        echo "PROBE_SHA256=$BLOB_SHA256"
+    else
+        echo "PROBE_STATUS=fail"
+        echo "PROBE_REASON=upload succeeded (HTTP $UPLOAD_HTTP) but retrieval returned HTTP $RETRIEVE_HTTP"
+        echo "PROBE_SHA256=$BLOB_SHA256"
+    fi
+else
+    echo "PROBE_STATUS=fail"
+    echo "PROBE_REASON=upload returned HTTP $UPLOAD_HTTP"
+    echo "PROBE_BODY=$(echo "$UPLOAD_RESPONSE" | head -c 200)"
+fi
+PROBE_EOF
+)
+
+# Parse and report probe results. Never log the auth event or nsec.
+PROBE_STATUS=$(echo "$PROBE_RESULT" | grep -oE 'PROBE_STATUS=[a-z]+' | cut -d= -f2 || echo "unknown")
+PROBE_REASON=$(echo "$PROBE_RESULT" | grep -oE 'PROBE_REASON=[^[:space:]].*' | cut -d= -f2- || echo "")
+PROBE_UPLOAD_HTTP=$(echo "$PROBE_RESULT" | grep -oE 'PROBE_UPLOAD_HTTP=[0-9]+' | cut -d= -f2 || echo "n/a")
+PROBE_RETRIEVE_HTTP=$(echo "$PROBE_RESULT" | grep -oE 'PROBE_RETRIEVE_HTTP=[0-9]+' | cut -d= -f2 || echo "n/a")
+
+case "$PROBE_STATUS" in
+    pass)
+        log_info "Blossom upload probe PASSED (upload HTTP $PROBE_UPLOAD_HTTP, retrieve HTTP $PROBE_RETRIEVE_HTTP)"
+        ;;
+    fail)
+        log_error "Blossom upload probe FAILED: $PROBE_REASON"
+        ;;
+    skipped)
+        log_warn "Blossom upload probe SKIPPED: $PROBE_REASON (upload verification is MANUAL)"
+        ;;
+    *)
+        log_warn "Blossom upload probe returned unexpected status: $PROBE_STATUS"
+        ;;
+esac
 fi
 
 # Check /api/stats endpoint
