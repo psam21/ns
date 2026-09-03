@@ -712,10 +712,17 @@ if [ -z "$AUTH_EVENT" ]; then
     exit 0
 fi
 
+# Blossom expects the Authorization header to carry a base64-encoded
+# JSON event (the auth middleware calls atob() on the value after the
+# "Nostr " prefix). nak emits raw JSON, so we encode here. Without
+# this step the server returns 400 Bad Request with no body and no
+# log line, which makes the failure look like a transport problem.
+AUTH_B64=$(printf '%s' "$AUTH_EVENT" | base64 -w 0)
+
 # Upload the blob.
 UPLOAD_RESPONSE=$(curl --silent --show-error --max-time 30 \
     -X PUT \
-    -H "Authorization: Nostr $AUTH_EVENT" \
+    -H "Authorization: Nostr $AUTH_B64" \
     -H "Content-Type: image/png" \
     -H "X-Sha-256: $BLOB_SHA256" \
     --data-binary "@$TMPDIR/blob.bin" \
@@ -723,7 +730,7 @@ UPLOAD_RESPONSE=$(curl --silent --show-error --max-time 30 \
 
 UPLOAD_HTTP=$(curl --silent --output /dev/null --write-out '%{http_code}' \
     -X PUT \
-    -H "Authorization: Nostr $AUTH_EVENT" \
+    -H "Authorization: Nostr $AUTH_B64" \
     -H "Content-Type: image/png" \
     -H "X-Sha-256: $BLOB_SHA256" \
     --data-binary "@$TMPDIR/blob.bin" \
