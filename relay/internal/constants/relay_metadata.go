@@ -174,6 +174,19 @@ const (
 	HealthCheckTimeout = 5 // Timeout for health check operations
 )
 
+// Dashboard cache bounds. These are guardrails against unbounded growth
+// of in-memory caches used by the public dashboard. The actual data is
+// bounded by the number of distinct (year, kind) combinations in the
+// events table, but these constants provide a hard ceiling so a
+// misconfigured query or schema change cannot exhaust memory.
+const (
+	// EventBreakdownMaxRows caps the number of (year, kind, month) rows
+	// returned by the grouped breakdown query. With ~100 kinds and a
+	// few years, the practical maximum is ~6000 rows; 10000 leaves
+	// headroom while still preventing unbounded scans.
+	EventBreakdownMaxRows = 10000
+)
+
 // DefaultRelayMetadata returns the default relay metadata document
 func DefaultRelayMetadata(cfg *config.Config) nip11.RelayInformationDocument {
 	// Get or create relay identity, using configured public key if provided

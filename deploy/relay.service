@@ -13,6 +13,15 @@ Restart=always
 RestartSec=5
 LimitNOFILE=65535
 
+# Memory guardrails. The relay has been OOM-killed by the system OOM
+# killer during heavy dashboard refresh windows (observed 2026-09-02).
+# MemoryMax triggers a clean systemd restart before the system OOM
+# killer fires; MemoryHigh triggers a slower allocation backpressure.
+# These are guardrails, not the primary fix — the primary fix is
+# bounded caches and single-flight refreshes in the code.
+MemoryHigh=768M
+MemoryMax=1G
+
 # Security hardening
 NoNewPrivileges=true
 ProtectSystem=strict

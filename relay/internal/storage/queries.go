@@ -799,9 +799,10 @@ func (db *DB) GetEventCountsByKindMonthFromYear(ctx context.Context, startYear i
 		WHERE created_at >= $1
 		GROUP BY kind, year, month
 		ORDER BY year, kind, month
+		LIMIT $2
 	`
 
-	rows, err := db.Pool.Query(ctx, query, startOfYear)
+	rows, err := db.Pool.Query(ctx, query, startOfYear, constants.EventBreakdownMaxRows)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query event counts from %d: %w", startYear, err)
 	}
