@@ -167,6 +167,12 @@ trap "rm -rf '$STAGING'" EXIT
 # Copy relay binary to staging
 cp "$RELAY_DIR/bin/relay-arm64" "$STAGING/relay-arm64"
 
+# Validate relay binary before staging. A missing or zero-byte binary
+# would cause the remote relay to fail to start after the swap.
+if [ ! -s "$STAGING/relay-arm64" ]; then
+    log_error "Relay binary is missing or empty at $STAGING/relay-arm64"
+fi
+
 # Build a self-contained Blossom artifact bundle. The existing remote
 # /opt/blossom/.env and data directory are intentionally not replaced.
 if [ ! -d "$BLOSSOM_DIR/build" ] || [ ! -d "$BLOSSOM_DIR/admin/dist" ] || [ ! -d "$BLOSSOM_DIR/public" ]; then
@@ -188,6 +194,14 @@ fi
 cp "$RELAY_DIR/web/templates/index.html" "$STAGING/index.html"
 cp "$RELAY_DIR/web/static/style.css" "$STAGING/style.css"
 cp "$RELAY_DIR/web/static/script.js" "$STAGING/script.js"
+
+# Validate web assets before staging. Missing templates or static
+# files would cause the dashboard to render incorrectly after deploy.
+for f in index.html style.css script.js; do
+    if [ ! -s "$STAGING/$f" ]; then
+        log_error "Web asset $f is missing or empty in staging"
+    fi
+done
 
 # Copy systemd service unit (CRITICAL: was previously missing!)
 if [ -f "$NS_DIR/deploy/relay.service" ]; then
@@ -423,6 +437,20 @@ trap rollback_blossom_on_exit EXIT
 
 sudo systemctl stop blossom.service
 BLOSSOM_SWAPPED=1
+
+# Pre-swap validation: confirm the extracted artifact is complete
+# before swapping it into the live tree. This catches tar extraction
+# failures, missing directories, and pnpm install errors that would
+# otherwise leave the live tree in a broken state.
+echo "Validating extracted Blossom artifact before swap..."
+if [ ! -d "$BLOSSOM_NEW/build" ] || [ ! -d "$BLOSSOM_NEW/public" ] || [ ! -d "$BLOSSOM_NEW/admin/dist" ] || [ ! -f "$BLOSSOM_NEW/build/index.js" ]; then
+    echo "ERROR: Extracted Blossom artifact is incomplete; aborting before swap"
+    echo "  Expected: $BLOSSOM_NEW/build/index.js, build/, public/, admin/dist/"
+    sudo ls -la "$BLOSSOM_NEW" 2>/dev/null || true
+    exit 1
+fi
+echo "Blossom artifact validation passed"
+
 if ! sudo mv "$BLOSSOM_REMOTE_DIR/build" "$BLOSSOM_BACKUP/build.live" ||
    ! sudo mv "$BLOSSOM_REMOTE_DIR/public" "$BLOSSOM_BACKUP/public.live" ||
    ! sudo mkdir -p "$BLOSSOM_REMOTE_DIR/admin" ||
@@ -479,15 +507,26 @@ if [ -f "$REMOTE_STAGE/blossom-rules-defaults.sh" ]; then
 fi
 
 # 5. Restart the relay service. If `restart` fails, restore the backup files
-#    so the relay is not left pointing at a non-running binary.
+#    so the relay is not left pointing at a non-running binary. Also
+#    restore Blossom from its backup since the two-service deploy is
+#    not atomic; a relay failure after Blossom was swapped leaves
+#    Blossom in the new state unless we explicitly roll it back.
 if ! sudo systemctl restart relay.service; then
-    echo "ERROR: systemctl restart relay.service failed; rolling back"
+    echo "ERROR: systemctl restart relay.service failed; rolling back both services"
     sudo cp -a "$BACKUP/relay-arm64.bak"             /opt/relay/relay-arm64
     sudo cp -a "$BACKUP/index.html.bak"               /opt/relay/web/templates/index.html
     sudo cp -a "$BACKUP/style.css.bak"                /opt/relay/web/static/style.css
     sudo cp -a "$BACKUP/script.js.bak"                /opt/relay/web/static/script.js
     sudo systemctl restart relay.service || true
     sudo systemctl --no-pager --full status relay.service || true
+    # Restore Blossom if it was already swapped. This is a best-effort
+    # rollback; the two-service deploy is not atomic by design (each
+    # service has its own backup and rollback path).
+    if [ "$BLOSSOM_DEPLOYED" -eq 0 ] && [ "$BLOSSOM_SWAPPED" -eq 1 ]; then
+        echo "Restoring Blossom from backup as part of two-service rollback"
+        restore_blossom || true
+        sudo systemctl restart blossom.service || true
+    fi
     exit 1
 fi
 sleep 2
@@ -503,6 +542,12 @@ else
     sudo cp -a "$BACKUP/script.js.bak"                /opt/relay/web/static/script.js
     sudo systemctl restart relay.service || true
     sudo systemctl --no-pager --full status relay.service || true
+    # Restore Blossom if it was already swapped (two-service rollback).
+    if [ "$BLOSSOM_DEPLOYED" -eq 0 ] && [ "$BLOSSOM_SWAPPED" -eq 1 ]; then
+        echo "Restoring Blossom from backup as part of two-service rollback"
+        restore_blossom || true
+        sudo systemctl restart blossom.service || true
+    fi
     exit 1
 fi
 
@@ -629,8 +674,10 @@ BLOSSOM_UPLOAD_PROBE="${BLOSSOM_UPLOAD_PROBE:-y}"
 
 if [[ "$BLOSSOM_UPLOAD_PROBE" != "y" ]]; then
     log_warn "Blossom upload probe disabled (BLOSSOM_UPLOAD_PROBE=$BLOSSOM_UPLOAD_PROBE); upload verification is MANUAL"
+    BLOSSOM_UPLOAD_PROBE_STATUS="DISABLED"
 elif ! command -v nak >/dev/null 2>&1 || ! command -v openssl >/dev/null 2>&1; then
     log_warn "Blossom upload probe requires 'nak' and 'openssl' on the deploy host; upload verification is MANUAL"
+    BLOSSOM_UPLOAD_PROBE_STATUS="SKIPPED (tools missing)"
 else
     PROBE_RESULT=$(ssh -i "$AWS_KEY" "$AWS_HOST" "BLOSSOM_PUBLIC_URL='${BLOSSOM_PUBLIC_URL:-https://blossom.nostr.ltd}' bash -s" << 'PROBE_EOF' 2>&1 || true
 set -uo pipefail
@@ -714,15 +761,19 @@ PROBE_RETRIEVE_HTTP=$(echo "$PROBE_RESULT" | grep -oE 'PROBE_RETRIEVE_HTTP=[0-9]
 case "$PROBE_STATUS" in
     pass)
         log_info "Blossom upload probe PASSED (upload HTTP $PROBE_UPLOAD_HTTP, retrieve HTTP $PROBE_RETRIEVE_HTTP)"
+        BLOSSOM_UPLOAD_PROBE_STATUS="PASS (upload $PROBE_UPLOAD_HTTP, retrieve $PROBE_RETRIEVE_HTTP)"
         ;;
     fail)
         log_error "Blossom upload probe FAILED: $PROBE_REASON"
+        BLOSSOM_UPLOAD_PROBE_STATUS="FAIL ($PROBE_REASON)"
         ;;
     skipped)
         log_warn "Blossom upload probe SKIPPED: $PROBE_REASON (upload verification is MANUAL)"
+        BLOSSOM_UPLOAD_PROBE_STATUS="SKIPPED (MANUAL: $PROBE_REASON)"
         ;;
     *)
         log_warn "Blossom upload probe returned unexpected status: $PROBE_STATUS"
+        BLOSSOM_UPLOAD_PROBE_STATUS="UNKNOWN ($PROBE_STATUS)"
         ;;
 esac
 fi
@@ -821,6 +872,23 @@ case "$EVENTS_OUTCOME" in
 esac
 
 log_info "Deployment verification complete"
+echo ""
+
+# ============================================
+# Separate Status Reporting (issue #108)
+# ============================================
+# Print five separate status lines so operators can see at a glance
+# which layer is healthy and which is degraded. No secrets in any
+# line; only HTTP status codes and readiness flags.
+log_info "=========================================="
+log_info "DEPLOYMENT STATUS (separate layers)"
+log_info "=========================================="
+log_info "1. Relay process:        $(ssh -i "$AWS_KEY" "$AWS_HOST" "sudo systemctl is-active --quiet relay.service && echo ACTIVE || echo INACTIVE" 2>/dev/null || echo UNKNOWN)"
+log_info "2. Blossom process:      $(ssh -i "$AWS_KEY" "$AWS_HOST" "sudo systemctl is-active --quiet blossom.service && echo ACTIVE || echo INACTIVE" 2>/dev/null || echo UNKNOWN)"
+log_info "3. Direct event totals:  $(printf '%s' "$EVENTS_JSON" | jq -r '.stored_events_ready // false' 2>/dev/null | sed 's/true/READY/; s/false/PENDING/')"
+log_info "4. Grouped telemetry:    $(printf '%s' "$EVENTS_JSON" | jq -r '.status // "unknown"' 2>/dev/null | tr '[:lower:]' '[:upper:]')"
+log_info "5. Upload functionality: ${BLOSSOM_UPLOAD_PROBE_STATUS:-SKIPPED}"
+log_info "=========================================="
 echo ""
 
 # ============================================
