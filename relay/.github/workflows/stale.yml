@@ -30,7 +30,7 @@ jobs:
             - Add the "keep-open" label to prevent auto-closure
             - Provide any additional context or updates
             
-            Thank you for your contributions to the Shugur Relay project! 🚀
+            Thank you for your contributions to the nostr.ltd Relay project! 🚀
           
           close-issue-message: |
             This issue has been automatically closed due to inactivity.

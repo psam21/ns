@@ -16,7 +16,7 @@ jobs:
   merge-queue:
     name: Manage Merge Queue
     runs-on: ubuntu-latest
-    if: github.repository == 'Shugur-Network/relay'
+    if: github.repository == 'psam21/ns'
     
     steps:
       - name: Auto-merge approved PRs

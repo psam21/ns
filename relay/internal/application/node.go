@@ -19,7 +19,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// Node ties together the various components needed to run the Shugur node.
+// Node ties together the various components needed to run the nostr.ltd relay.
 type Node struct {
 	ctx    context.Context
 	cancel context.CancelFunc

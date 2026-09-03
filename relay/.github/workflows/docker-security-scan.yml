@@ -19,7 +19,7 @@ jobs:
   docker-scan:
     name: Docker Security Scan
     runs-on: ubuntu-latest
-    if: github.repository == 'Shugur-Network/relay' # Only run on main repository
+    if: github.repository == 'psam21/ns' # Only run on main repository
     
     strategy:
       matrix:
