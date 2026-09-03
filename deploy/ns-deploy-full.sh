@@ -685,10 +685,13 @@ set -uo pipefail
 : "${BLOSSOM_PUBLIC_URL:?BLOSSOM_PUBLIC_URL must be set by caller}"
 
 # Generate a disposable test identity (not a real user's key).
-TEST_NSEC=$(nak key generate private 2>/dev/null || npx -y @nostr/tools key generate private 2>/dev/null || true)
+# Prefer nak (fiatjaf/nak) when available; fall back to nostr-tools
+# via npx. The previous fallback used @nostr/tools which is not a
+# real npm package; the correct name is nostr-tools.
+TEST_NSEC=$(nak key generate private 2>/dev/null || npx -y nostr-tools key generate private 2>/dev/null || true)
 if [ -z "$TEST_NSEC" ]; then
     echo "PROBE_STATUS=skipped"
-    echo "PROBE_REASON=unable to generate test key (nak or npx not available)"
+    echo "PROBE_REASON=unable to generate test key (nak or nostr-tools not available)"
     exit 0
 fi
 
