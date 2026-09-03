@@ -105,6 +105,7 @@ type Handler struct {
 		GetEventCountsByKindMonthFromYear(ctx context.Context, startYear int) ([]storage.EventCountByKindMonth, error)
 		GetEventKindStats(ctx context.Context) ([]storage.EventKindStat, error)
 		RefreshEventKindStats(ctx context.Context) error
+		IsConnected() bool
 	} // Database interface
 	eventsCacheMu            sync.RWMutex
 	eventsCache              EventBreakdownData
@@ -1361,12 +1362,25 @@ func (h *Handler) HandleEventsAPI(w http.ResponseWriter, r *http.Request) {
 
 	status, message := eventCacheState(snapshot.updatedAt, snapshot.refreshing, snapshot.lastErr)
 	totalStatus, totalMessage := eventTotalState(totalUpdatedAt, totalRefreshing, totalLastErr)
+	// Relay health is independent of all dashboard telemetry. The
+	// process and database are available as long as this handler
+	// reached this point, so relay_health is always "ok" unless the
+	// database connection has been lost.
+	relayHealth := "ok"
+	relayHealthMessage := "Relay process and database are available."
+	if h.db == nil || !h.db.IsConnected() {
+		relayHealth = "unavailable"
+		relayHealthMessage = "Database connection is not available."
+	}
+
 	response := struct {
 		Status              string             `json:"status"`
 		Refreshing          bool               `json:"refreshing"`
 		UpdatedAt           string             `json:"updated_at,omitempty"`
 		Message             string             `json:"message,omitempty"`
 		Error               string             `json:"error,omitempty"`
+		RelayHealth         string             `json:"relay_health"`
+		RelayHealthMessage  string             `json:"relay_health_message,omitempty"`
 		TotalEvents         int64              `json:"total_events"`
 		TotalReady          bool               `json:"total_ready"`
 		TotalStatus         string             `json:"total_status"`
@@ -1385,6 +1399,8 @@ func (h *Handler) HandleEventsAPI(w http.ResponseWriter, r *http.Request) {
 		Refreshing:          snapshot.refreshing,
 		UpdatedAt:           formatEventCacheTime(snapshot.updatedAt),
 		Message:             message,
+		RelayHealth:         relayHealth,
+		RelayHealthMessage:  relayHealthMessage,
 		TotalEvents:         totalEvents,
 		TotalReady:          totalReady,
 		TotalStatus:         totalStatus,

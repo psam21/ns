@@ -258,6 +258,9 @@ func (f *fakeEventKindStatsDB) RefreshEventKindStats(ctx context.Context) error 
 	f.refreshes++
 	return f.refreshErr
 }
+func (f *fakeEventKindStatsDB) IsConnected() bool {
+	return true
+}
 
 func TestEventKindStatsToSummaries(t *testing.T) {
 	stats := []storage.EventKindStat{

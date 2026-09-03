@@ -304,6 +304,13 @@ func (db *DB) isConnected() bool {
 	return db.state == DBStateConnected
 }
 
+// IsConnected is the exported version of isConnected for use by
+// packages that should not depend on the internal state machine
+// (e.g. the web layer's readiness reporting).
+func (db *DB) IsConnected() bool {
+	return db.isConnected()
+}
+
 // recordError records an error in the database service
 func (db *DB) recordError(err error) {
 	db.errorCountMu.Lock()
