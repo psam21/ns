@@ -1294,11 +1294,11 @@ body.cockpit-page { background: var(--bg); color: var(--text); font-family: var(
 
 /* ── Final home-page typography scale ─────────────────────── */
 .cockpit-page {
-  --type-meta: .62rem;
-  --type-label: .68rem;
-  --type-body: .75rem;
-  --type-heading: 1.1rem;
-  --type-value: 1.1rem;
+  --type-meta: .66rem;
+  --type-label: .7rem;
+  --type-body: .78rem;
+  --type-heading: 1.14rem;
+  --type-value: 1.12rem;
 }
 
 .cockpit-page .brand { font-size: .82rem; }
@@ -1315,7 +1315,7 @@ body.cockpit-page { background: var(--bg); color: var(--text); font-family: var(
   line-height: 1.1;
 }
 .cockpit-page .essential-value--small { font-size: .92rem; }
-.cockpit-page .essential-sub { font-size: var(--type-meta); }
+.cockpit-page .essential-sub { font-size: var(--type-meta); line-height: 1.35; }
 .cockpit-page .essential-cell--endpoint .endpoint-copy-row code {
   font-size: clamp(.88rem, 1.15vw, 1.04rem);
 }
@@ -1343,21 +1343,21 @@ body.cockpit-page { background: var(--bg); color: var(--text); font-family: var(
 }
 
 .cockpit-page .nips-grid--full .nip-item { padding: .38rem .42rem; }
-.cockpit-page .nips-grid--full .nip-num { font-size: .64rem; }
-.cockpit-page .nips-grid--full .nip-desc { font-size: .58rem; }
-.cockpit-page .registry-note { font-size: var(--type-meta); }
+.cockpit-page .nips-grid--full .nip-num { font-size: .67rem; }
+.cockpit-page .nips-grid--full .nip-desc { font-size: .62rem; }
+.cockpit-page .registry-note { font-size: .64rem; }
 
-.cockpit-page .kind-table-head { font-size: .57rem; }
-.cockpit-page .kind-name strong { font-size: .67rem; }
+.cockpit-page .kind-table-head { font-size: .6rem; }
+.cockpit-page .kind-name strong { font-size: .7rem; }
 .cockpit-page .kind-name span,
 .cockpit-page .kind-count,
-.cockpit-page .kind-share small { font-size: .62rem; }
-.cockpit-page .limits-grid--large { font-size: .62rem; }
+.cockpit-page .kind-share small { font-size: .65rem; }
+.cockpit-page .limits-grid--large { font-size: .66rem; }
 .cockpit-page .relay-facts span,
-.cockpit-page .relay-facts strong { font-size: .59rem; }
-.cockpit-page .commit-hash { font-size: .72rem; }
-.cockpit-page .repo-link-inline { font-size: .62rem; }
-.cockpit-page .foot--cockpit { font-size: .6rem; }
+.cockpit-page .relay-facts strong { font-size: .62rem; }
+.cockpit-page .commit-hash { font-size: .74rem; }
+.cockpit-page .repo-link-inline { font-size: .65rem; }
+.cockpit-page .foot--cockpit { font-size: .62rem; }
 
 @media (max-width: 650px) {
   .cockpit-page .essential-value { font-size: 1rem; }
@@ -1365,10 +1365,10 @@ body.cockpit-page { background: var(--bg); color: var(--text); font-family: var(
   .cockpit-page .essential-label { font-size: .62rem; }
   .cockpit-page .essential-sub { font-size: .58rem; }
   .cockpit-page .console-heading h2 { font-size: 1rem; }
-  .cockpit-page .registry-intro { font-size: .72rem; }
-  .cockpit-page .nips-grid--full .nip-num { font-size: .62rem; }
-  .cockpit-page .nips-grid--full .nip-desc { font-size: .57rem; }
-  .cockpit-page .kind-name strong { font-size: .65rem; }
+  .cockpit-page .registry-intro { font-size: .74rem; }
+  .cockpit-page .nips-grid--full .nip-num { font-size: .65rem; }
+  .cockpit-page .nips-grid--full .nip-desc { font-size: .6rem; }
+  .cockpit-page .kind-name strong { font-size: .68rem; }
   .cockpit-page .kind-name span,
-  .cockpit-page .kind-count { font-size: .61rem; }
+  .cockpit-page .kind-count { font-size: .64rem; }
 }
