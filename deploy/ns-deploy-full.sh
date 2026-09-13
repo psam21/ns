@@ -195,7 +195,7 @@ if [ ! -d "$BLOSSOM_DIR/build" ] || [ ! -d "$BLOSSOM_DIR/admin/dist" ] || [ ! -d
     log_error "Blossom build artifacts are incomplete under $BLOSSOM_DIR"
 fi
 mkdir -p "$STAGING/blossom"
-tar -C "$BLOSSOM_DIR" -czf "$STAGING/blossom-artifacts.tgz" build public admin/dist package.json pnpm-lock.yaml config.yml patches
+tar -C "$BLOSSOM_DIR" -czf "$STAGING/blossom-artifacts.tgz" build public admin/dist package.json pnpm-lock.yaml pnpm-workspace.yaml config.yml patches
 
 # Ship the rules-defaults script so operators can patch a drifted
 # production config without a full redeploy. The script is idempotent.
@@ -388,7 +388,7 @@ sudo cp -a "$BLOSSOM_REMOTE_DIR/build" "$BLOSSOM_BACKUP/build.bak"
 sudo cp -a "$BLOSSOM_REMOTE_DIR/public" "$BLOSSOM_BACKUP/public.bak"
 sudo cp -a "$BLOSSOM_REMOTE_DIR/admin/dist" "$BLOSSOM_BACKUP/admin-dist.bak"
 sudo cp -a /etc/systemd/system/blossom.service "$BLOSSOM_BACKUP/blossom.service.bak"
-for path in node_modules package.json pnpm-lock.yaml patches config.yml; do
+for path in node_modules package.json pnpm-lock.yaml pnpm-workspace.yaml patches config.yml; do
     if [ -e "$BLOSSOM_REMOTE_DIR/$path" ]; then
         sudo cp -a "$BLOSSOM_REMOTE_DIR/$path" "$BLOSSOM_BACKUP/${path//\//-}.bak"
     else
@@ -425,12 +425,13 @@ restore_blossom() {
     sudo rm -rf "$BLOSSOM_REMOTE_DIR/build" "$BLOSSOM_REMOTE_DIR/public" \
         "$BLOSSOM_REMOTE_DIR/admin/dist" "$BLOSSOM_REMOTE_DIR/node_modules" \
         "$BLOSSOM_REMOTE_DIR/package.json" "$BLOSSOM_REMOTE_DIR/pnpm-lock.yaml" \
+        "$BLOSSOM_REMOTE_DIR/pnpm-workspace.yaml" \
         "$BLOSSOM_REMOTE_DIR/patches" "$BLOSSOM_REMOTE_DIR/config.yml"
     sudo mkdir -p "$BLOSSOM_REMOTE_DIR/admin"
     sudo cp -a "$BLOSSOM_BACKUP/build.bak" "$BLOSSOM_REMOTE_DIR/build"
     sudo cp -a "$BLOSSOM_BACKUP/public.bak" "$BLOSSOM_REMOTE_DIR/public"
     sudo cp -a "$BLOSSOM_BACKUP/admin-dist.bak" "$BLOSSOM_REMOTE_DIR/admin/dist"
-    for path in node_modules package.json pnpm-lock.yaml patches config.yml; do
+    for path in node_modules package.json pnpm-lock.yaml pnpm-workspace.yaml patches config.yml; do
         backup_path="$BLOSSOM_BACKUP/${path//\//-}.bak"
         if [ -e "$backup_path" ]; then
             sudo cp -a "$backup_path" "$BLOSSOM_REMOTE_DIR/$path"
@@ -515,7 +516,7 @@ sudo rm -rf "$NEW_RELEASE"
 #    /opt/blossom/data are deliberately preserved.
 sudo tar -xzf "$REMOTE_STAGE/blossom-artifacts.tgz" -C "$BLOSSOM_NEW"
 for required in \
-    package.json pnpm-lock.yaml \
+    package.json pnpm-lock.yaml pnpm-workspace.yaml \
     patches/minio@8.0.7.patch patches/stream-json@3.6.0.patch \
     build public admin/dist; do
     if [ ! -e "$BLOSSOM_NEW/$required" ]; then
@@ -541,6 +542,37 @@ sudo chown -R www-data:www-data "$BLOSSOM_NEW"
 sudo -u www-data env HOME=/tmp bash -c 'cd "$1" && pnpm install --prod --frozen-lockfile' bash "$BLOSSOM_NEW"
 if [ ! -d "$BLOSSOM_NEW/node_modules" ]; then
     echo "ERROR: Blossom production dependency installation did not create node_modules"
+    exit 1
+fi
+
+# pnpm 9 records these patched packages in the virtual-store name but can
+# leave the case-compatibility patch files unapplied on a clean host. Apply
+# the two small runtime compatibility changes explicitly, then validate the
+# files that MinIO loads at startup before allowing a live swap.
+STREAM_JSON_DIR=$(find "$BLOSSOM_NEW/node_modules/.pnpm" -type d -path '*/node_modules/stream-json' -print -quit)
+MINIO_DIR=$(find "$BLOSSOM_NEW/node_modules/.pnpm" -type d -path '*/node_modules/minio' -print -quit)
+if [ -z "$STREAM_JSON_DIR" ] || [ -z "$MINIO_DIR" ]; then
+    echo "ERROR: Blossom runtime dependency directories are missing after pnpm install"
+    exit 1
+fi
+if [ ! -f "$STREAM_JSON_DIR/src/jsonl/Parser.js" ]; then
+    if [ -f "$STREAM_JSON_DIR/src/jsonl/parser.js" ]; then
+        cp "$STREAM_JSON_DIR/src/jsonl/parser.js" "$STREAM_JSON_DIR/src/jsonl/Parser.js"
+    else
+        echo "ERROR: stream-json parser compatibility file is missing"
+        exit 1
+    fi
+fi
+for minio_notification in \
+    "$MINIO_DIR/dist/esm/notification.mjs" \
+    "$MINIO_DIR/dist/main/notification.js"; do
+    if [ -f "$minio_notification" ]; then
+        sed -i 's#stream-json/jsonl/Parser.js#stream-json/jsonl/parser.js#g' "$minio_notification"
+    fi
+done
+if grep -Fq 'stream-json/jsonl/Parser.js' "$MINIO_DIR/dist/esm/notification.mjs" || \
+   [ ! -f "$STREAM_JSON_DIR/src/jsonl/Parser.js" ]; then
+    echo "ERROR: Blossom runtime compatibility normalization failed"
     exit 1
 fi
 sudo chown -R root:root "$BLOSSOM_NEW"
@@ -571,7 +603,7 @@ if ! sudo mv "$BLOSSOM_REMOTE_DIR/build" "$BLOSSOM_BACKUP/build.live" ||
     echo "ERROR: Blossom live artifact backup failed"
     exit 1
 fi
-for path in node_modules package.json pnpm-lock.yaml patches; do
+for path in node_modules package.json pnpm-lock.yaml pnpm-workspace.yaml patches; do
     if [ -e "$BLOSSOM_REMOTE_DIR/$path" ]; then
         sudo mv "$BLOSSOM_REMOTE_DIR/$path" "$BLOSSOM_BACKUP/${path//\//-}.live"
     fi
@@ -583,6 +615,7 @@ sudo mv "$BLOSSOM_NEW/admin/dist" "$BLOSSOM_REMOTE_DIR/admin/dist"
 sudo mv "$BLOSSOM_NEW/node_modules" "$BLOSSOM_REMOTE_DIR/node_modules"
 sudo mv "$BLOSSOM_NEW/package.json" "$BLOSSOM_REMOTE_DIR/package.json"
 sudo mv "$BLOSSOM_NEW/pnpm-lock.yaml" "$BLOSSOM_REMOTE_DIR/pnpm-lock.yaml"
+sudo mv "$BLOSSOM_NEW/pnpm-workspace.yaml" "$BLOSSOM_REMOTE_DIR/pnpm-workspace.yaml"
 sudo mv "$BLOSSOM_NEW/patches" "$BLOSSOM_REMOTE_DIR/patches"
 sudo rm -rf "$BLOSSOM_NEW"
 sudo install -o root -g root -m 0644 "$REMOTE_STAGE/blossom.service" /etc/systemd/system/blossom.service
