@@ -1020,7 +1020,7 @@ while [ "$EVENTS_ATTEMPT" -lt "$EVENTS_MAX_ATTEMPTS" ]; do
     # Parse each readiness layer defensively. Missing fields default
     # to false/unknown so a malformed response is classified as
     # Unhealthy, not silently treated as Healthy.
-    if [[ "$EVENTS_HTTP" == "200" ]]; then
+    if [[ "$EVENTS_HTTP" == "200" || "$EVENTS_HTTP" == "202" ]]; then
         RELAY_HEALTH=$(printf '%s' "$EVENTS_JSON" | jq -r '.relay_health // "unknown"' 2>/dev/null || echo "unknown")
         STORED_READY=$(printf '%s' "$EVENTS_JSON" | jq -r '.stored_events_ready // false' 2>/dev/null || echo "false")
         TOTAL_READY=$(printf '%s' "$EVENTS_JSON" | jq -r '.total_ready // false' 2>/dev/null || echo "false")
@@ -1042,7 +1042,7 @@ while [ "$EVENTS_ATTEMPT" -lt "$EVENTS_MAX_ATTEMPTS" ]; do
             break
         fi
     else
-        echo "Event endpoint unreachable: HTTP $EVENTS_HTTP (attempt $EVENTS_ATTEMPT/$EVENTS_MAX_ATTEMPTS)."
+        echo "Event endpoint not ready or unreachable: HTTP $EVENTS_HTTP (attempt $EVENTS_ATTEMPT/$EVENTS_MAX_ATTEMPTS)."
     fi
 
     sleep "$EVENTS_INTERVAL"
