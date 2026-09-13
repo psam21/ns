@@ -51,12 +51,21 @@ await storage.setup();
 
 export async function searchStorage(search: BlobSearch): Promise<StoragePointer | undefined> {
   const blob = await blobDB.getBlob(search.hash);
-  if (blob && (await storage.hasBlob(search.hash))) {
-    const type = blob.type || (await storage.getBlobType(search.hash));
-    const size = blob.size || (await storage.getBlobSize(search.hash));
+  if (!(await storage.hasBlob(search.hash))) return;
+
+  // Older deployments can leave the object in S3 while losing its SQLite
+  // metadata. The hash is still authoritative, so serve the object using
+  // storage metadata instead of forcing a Nostr discovery round-trip.
+  const type = blob?.type || (await storage.getBlobType(search.hash)) || search.type;
+  const size = blob?.size || (await storage.getBlobSize(search.hash));
+  if (!size) return;
+
+  if (blob) {
     log("Found", search.hash);
-    return { kind: "storage", hash: search.hash, type: type, size };
+  } else {
+    log("Found legacy object without metadata", search.hash);
   }
+  return { kind: "storage", hash: search.hash, type, size };
 }
 
 export function getStorageRedirect(pointer: StoragePointer) {
