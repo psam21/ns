@@ -323,7 +323,7 @@ log_info "=== Step 8: Restarting relay and Blossom services on AWS ==="
 # variable assignment and the heredoc body would never execute.
 REMOTE_RUN_ID="$(date +%s)-$RANDOM-$$"
 ssh -i "$AWS_KEY" "$AWS_HOST" \
-    "sudo flock -n /var/lock/nostr-ltd-deploy.lock bash -s -- '$REMOTE_STAGE' '$BLOSSOM_REMOTE_DIR' '$GIT_COMMIT_SHORT' '$RELAY_BACKUP_RETAIN' '$BLOSSOM_BACKUP_RETAIN' '$REMOTE_RUN_ID' || { echo 'ERROR: another nostr.ltd deployment is already running'; exit 75; }" << 'REMOTE_EOF'
+    "sudo flock -n -E 75 /var/lock/nostr-ltd-deploy.lock bash -s -- '$REMOTE_STAGE' '$BLOSSOM_REMOTE_DIR' '$GIT_COMMIT_SHORT' '$RELAY_BACKUP_RETAIN' '$BLOSSOM_BACKUP_RETAIN' '$REMOTE_RUN_ID'; status=\$?; if [ \"\$status\" -eq 75 ]; then echo 'ERROR: another nostr.ltd deployment is already running'; fi; exit \"\$status\"" << 'REMOTE_EOF'
 set -Eeuo pipefail
 
 : "${1:?REMOTE_STAGE must be passed by caller}"
@@ -538,7 +538,7 @@ if ! command -v make >/dev/null 2>&1 || ! command -v g++ >/dev/null 2>&1 || ! co
     fi
 fi
 sudo chown -R www-data:www-data "$BLOSSOM_NEW"
-sudo -u www-data env HOME=/tmp pnpm --dir "$BLOSSOM_NEW" install --prod --frozen-lockfile
+sudo -u www-data env HOME=/tmp bash -c 'cd "$1" && pnpm install --prod --frozen-lockfile' bash "$BLOSSOM_NEW"
 if [ ! -d "$BLOSSOM_NEW/node_modules" ]; then
     echo "ERROR: Blossom production dependency installation did not create node_modules"
     exit 1
