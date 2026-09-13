@@ -164,6 +164,21 @@ CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
   go build -o bin/relay-arm64 ./cmd
 ```
 
+The full deployment script requires the authorized SSH destination and key
+to be supplied by the operator. They are intentionally not stored in the
+repository:
+
+```bash
+export AWS_HOST='user@example-host'
+export AWS_KEY="$HOME/.ssh/your-relay-key.pem"
+./deploy/ns-deploy-full.sh
+```
+
+Optional `RELAY_BACKUP_RETAIN` and `BLOSSOM_BACKUP_RETAIN` values retain that
+many successful on-host backups; both default to `0`. Set
+`BLOSSOM_UPLOAD_PROBE=n` only when the authenticated upload check is being
+performed manually.
+
 The production service uses `/opt/relay/relay-arm64`, `/opt/relay/config.yaml`, `/opt/relay/web/templates/`, `/opt/relay/web/static/`, and `/opt/relay/.env`. Credentials remain outside the repository and are injected through the systemd environment file. Deploy the binary and web files using your authorized host access, then verify with:
 
 ```bash

@@ -5,14 +5,17 @@ set -Eeuo pipefail
 # Safely clones/pulls code, builds, and deploys both services to AWS EC2
 # Ensures systemd units and service artifacts are updated together
 
-# Configuration - override via environment or edit these values
+# Configuration. AWS_HOST and AWS_KEY are required operator inputs; keep
+# them in the shell environment or an ignored local configuration file.
 NS_DIR="${NS_DIR:-/home/jack/Documents/ns}"
 RELAY_DIR="${NS_DIR}/relay"
 BLOSSOM_DIR="${NS_DIR}/blossom"
 BLOSSOM_REMOTE_DIR="/opt/blossom"
-AWS_HOST="${AWS_HOST:-ubuntu@13.201.250.44}"
-AWS_KEY="${AWS_KEY:-$HOME/.ssh/nostr-relay-key.pem}"
+AWS_HOST="${AWS_HOST:-}"
+AWS_KEY="${AWS_KEY:-}"
 GIT_REPO="${GIT_REPO:-https://github.com/psam21/ns.git}"
+RELAY_BACKUP_RETAIN="${RELAY_BACKUP_RETAIN:-0}"
+BLOSSOM_BACKUP_RETAIN="${BLOSSOM_BACKUP_RETAIN:-0}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -33,6 +36,18 @@ log_error() {
     exit 1
 }
 
+if [[ -z "$AWS_HOST" ]]; then
+    log_error "AWS_HOST is required. Set it to the authorized SSH destination (for example, ubuntu@example-host)."
+fi
+if [[ -z "$AWS_KEY" ]]; then
+    log_error "AWS_KEY is required. Set it to the authorized SSH private key path."
+fi
+for retention in "$RELAY_BACKUP_RETAIN" "$BLOSSOM_BACKUP_RETAIN"; do
+    if [[ ! "$retention" =~ ^[0-9]+$ ]]; then
+        log_error "Backup retention values must be non-negative integers."
+    fi
+done
+
 # ============================================
 # Step 1: Fetch latest code from GitHub
 # ============================================
@@ -47,8 +62,9 @@ fi
 if [ -d "$NS_DIR/.git" ]; then
     log_info "Repository exists at $NS_DIR, checking for uncommitted changes..."
 
-    # Check for dirty worktree
-    if ! git -C "$NS_DIR" diff-index --quiet HEAD --; then
+    # Check tracked and untracked files so the deploy cannot build from
+    # source that is not represented by the commit being deployed.
+    if [[ -n "$(git -C "$NS_DIR" status --porcelain --untracked-files=all)" ]]; then
         log_error "Local repository has uncommitted changes. Commit or stash them before deploying."
     fi
 
@@ -175,11 +191,11 @@ fi
 
 # Build a self-contained Blossom artifact bundle. The existing remote
 # /opt/blossom/.env and data directory are intentionally not replaced.
-if [ ! -d "$BLOSSOM_DIR/build" ] || [ ! -d "$BLOSSOM_DIR/admin/dist" ] || [ ! -d "$BLOSSOM_DIR/public" ]; then
+if [ ! -d "$BLOSSOM_DIR/build" ] || [ ! -d "$BLOSSOM_DIR/admin/dist" ] || [ ! -d "$BLOSSOM_DIR/public" ] || [ ! -d "$BLOSSOM_DIR/patches" ]; then
     log_error "Blossom build artifacts are incomplete under $BLOSSOM_DIR"
 fi
 mkdir -p "$STAGING/blossom"
-tar -C "$BLOSSOM_DIR" -czf "$STAGING/blossom-artifacts.tgz" build public admin/dist package.json pnpm-lock.yaml config.yml
+tar -C "$BLOSSOM_DIR" -czf "$STAGING/blossom-artifacts.tgz" build public admin/dist package.json pnpm-lock.yaml config.yml patches
 
 # Ship the rules-defaults script so operators can patch a drifted
 # production config without a full redeploy. The script is idempotent.
@@ -215,9 +231,9 @@ log_info "All files prepared in $STAGING"
 echo ""
 
 # ============================================
-# Step 6: Copy files to AWS EC2 via SSH
+# Step 7: Copy files to AWS EC2 via SSH
 # ============================================
-log_info "=== Step 6: Copying files to AWS EC2 ==="
+log_info "=== Step 7: Copying files to AWS EC2 ==="
 
 # Verify SSH key exists
 if [ ! -f "$AWS_KEY" ]; then
@@ -234,7 +250,7 @@ log_info "Deploying commit: $GIT_COMMIT_SHORT"
 # Use a unique remote staging directory to avoid collisions with concurrent
 # or interrupted runs that may have left files in /tmp.
 REMOTE_STAGE="/tmp/ns-deploy-$(date +%s)-$RANDOM"
-ssh -i "$AWS_KEY" "$AWS_HOST" "sudo mkdir -p '$REMOTE_STAGE' && sudo chown ubuntu:ubuntu '$REMOTE_STAGE' && sudo chmod 0755 '$REMOTE_STAGE'"
+ssh -i "$AWS_KEY" "$AWS_HOST" "mkdir -p '$REMOTE_STAGE' && chmod 0755 '$REMOTE_STAGE'"
 
 # Update the exit trap to also clean the remote staging directory on exit
 trap "rm -rf '$STAGING'; ssh -i '$AWS_KEY' '$AWS_HOST' 'sudo rm -rf \"$REMOTE_STAGE\"' >/dev/null 2>&1 || true" EXIT
@@ -305,15 +321,36 @@ log_info "=== Step 8: Restarting relay and Blossom services on AWS ==="
 # IMPORTANT: `bash -s` is required so the heredoc is read as a script on
 # the remote side; without it the remote command would just be the
 # variable assignment and the heredoc body would never execute.
+REMOTE_RUN_ID="$(date +%s)-$RANDOM-$$"
 ssh -i "$AWS_KEY" "$AWS_HOST" \
-    "REMOTE_STAGE='$REMOTE_STAGE' BLOSSOM_REMOTE_DIR='$BLOSSOM_REMOTE_DIR' RELAY_GIT_COMMIT='$GIT_COMMIT_SHORT' bash -s" << 'REMOTE_EOF'
+    "sudo flock -n /var/lock/nostr-ltd-deploy.lock bash -s -- '$REMOTE_STAGE' '$BLOSSOM_REMOTE_DIR' '$GIT_COMMIT_SHORT' '$RELAY_BACKUP_RETAIN' '$BLOSSOM_BACKUP_RETAIN' '$REMOTE_RUN_ID' || { echo 'ERROR: another nostr.ltd deployment is already running'; exit 75; }" << 'REMOTE_EOF'
 set -Eeuo pipefail
 
-: "${REMOTE_STAGE:?REMOTE_STAGE must be set by caller}"
-: "${BLOSSOM_REMOTE_DIR:?BLOSSOM_REMOTE_DIR must be set by caller}"
+: "${1:?REMOTE_STAGE must be passed by caller}"
+: "${2:?BLOSSOM_REMOTE_DIR must be passed by caller}"
+: "${3:?RELAY_GIT_COMMIT must be passed by caller}"
+: "${4:?RELAY_BACKUP_RETAIN must be passed by caller}"
+: "${5:?BLOSSOM_BACKUP_RETAIN must be passed by caller}"
+: "${6:?REMOTE_RUN_ID must be passed by caller}"
+
+REMOTE_STAGE="$1"
+BLOSSOM_REMOTE_DIR="$2"
+RELAY_GIT_COMMIT="$3"
+RELAY_BACKUP_RETAIN="$4"
+BLOSSOM_BACKUP_RETAIN="$5"
+REMOTE_RUN_ID="$6"
+
+for retention in "$RELAY_BACKUP_RETAIN" "$BLOSSOM_BACKUP_RETAIN"; do
+    case "$retention" in
+        ''|*[!0-9]*)
+            echo "ERROR: backup retention values must be non-negative integers"
+            exit 2
+            ;;
+    esac
+done
 
 RELEASES="/opt/relay/releases"
-NEW_RELEASE="${RELEASES}/$(date +%Y%m%d_%H%M%S)"
+NEW_RELEASE="${RELEASES}/${REMOTE_RUN_ID}"
 
 # Retention policy: keep zero on-disk backups. The full source is
 # tracked in git, and every artifact we ship (the Go binary, the
@@ -323,13 +360,14 @@ NEW_RELEASE="${RELEASES}/$(date +%Y%m%d_%H%M%S)"
 # backup directory created below is removed at the end of the
 # current deploy, freeing ~30MB of relay and ~270MB of Blossom
 # space each run.
-RELAY_BACKUP_RETAIN="${RELAY_BACKUP_RETAIN:-0}"
-
 # 1. Create a timestamped backup directory (each run gets its own).
 #    This is the rollback anchor for THIS deploy; it is removed at
 #    the end of the deploy if RELAY_BACKUP_RETAIN=0 (the default).
-BACKUP="/opt/relay/backup_$(date +%Y%m%d_%H%M%S)"
+BACKUP="/opt/relay/backup_${REMOTE_RUN_ID}"
+BLOSSOM_BACKUP="/opt/blossom-backup_${REMOTE_RUN_ID}"
+BLOSSOM_NEW="${BLOSSOM_REMOTE_DIR}/.release_${REMOTE_RUN_ID}"
 sudo mkdir -p "$BACKUP"
+sudo mkdir -p "$BLOSSOM_BACKUP" "$BLOSSOM_NEW"
 
 # Snapshot the live release and the live systemd unit.
 sudo cp -a /opt/relay/relay-arm64             "$BACKUP/relay-arm64.bak"
@@ -337,6 +375,91 @@ sudo cp -a /opt/relay/web/templates/index.html "$BACKUP/index.html.bak"
 sudo cp -a /opt/relay/web/static/style.css    "$BACKUP/style.css.bak"
 sudo cp -a /opt/relay/web/static/script.js    "$BACKUP/script.js.bak"
 sudo cp -a /etc/systemd/system/relay.service  "$BACKUP/relay.service.bak"
+if [ -f /opt/relay/.last-commit ]; then
+    sudo cp -a /opt/relay/.last-commit "$BACKUP/last-commit.bak"
+else
+    sudo touch "$BACKUP/last-commit.absent"
+fi
+
+# Snapshot Blossom before the relay is changed. The dependency tree and
+# manifests are part of the rollback boundary because the service runs from
+# /opt/blossom, not from the temporary release directory.
+sudo cp -a "$BLOSSOM_REMOTE_DIR/build" "$BLOSSOM_BACKUP/build.bak"
+sudo cp -a "$BLOSSOM_REMOTE_DIR/public" "$BLOSSOM_BACKUP/public.bak"
+sudo cp -a "$BLOSSOM_REMOTE_DIR/admin/dist" "$BLOSSOM_BACKUP/admin-dist.bak"
+sudo cp -a /etc/systemd/system/blossom.service "$BLOSSOM_BACKUP/blossom.service.bak"
+for path in node_modules package.json pnpm-lock.yaml patches config.yml; do
+    if [ -e "$BLOSSOM_REMOTE_DIR/$path" ]; then
+        sudo cp -a "$BLOSSOM_REMOTE_DIR/$path" "$BLOSSOM_BACKUP/${path//\//-}.bak"
+    else
+        sudo touch "$BLOSSOM_BACKUP/${path//\//-}.absent"
+    fi
+done
+
+RELAY_SWAPPED=0
+BLOSSOM_SWAPPED=0
+RELAY_STOPPED=0
+BLOSSOM_STOPPED=0
+DEPLOYMENT_COMPLETED=0
+
+restore_relay() {
+    echo "Restoring relay release from $BACKUP"
+    sudo systemctl stop relay.service || true
+    sudo cp -a "$BACKUP/relay-arm64.bak" /opt/relay/relay-arm64
+    sudo cp -a "$BACKUP/index.html.bak" /opt/relay/web/templates/index.html
+    sudo cp -a "$BACKUP/style.css.bak" /opt/relay/web/static/style.css
+    sudo cp -a "$BACKUP/script.js.bak" /opt/relay/web/static/script.js
+    sudo install -o root -g root -m 0644 "$BACKUP/relay.service.bak" /etc/systemd/system/relay.service
+    if [ -f "$BACKUP/last-commit.bak" ]; then
+        sudo install -o relay -g relay -m 0644 "$BACKUP/last-commit.bak" /opt/relay/.last-commit
+    else
+        sudo rm -f /opt/relay/.last-commit
+    fi
+    sudo systemctl daemon-reload
+    sudo systemctl restart relay.service || true
+}
+
+restore_blossom() {
+    echo "Restoring Blossom release from $BLOSSOM_BACKUP"
+    sudo systemctl stop blossom.service || true
+    sudo rm -rf "$BLOSSOM_REMOTE_DIR/build" "$BLOSSOM_REMOTE_DIR/public" \
+        "$BLOSSOM_REMOTE_DIR/admin/dist" "$BLOSSOM_REMOTE_DIR/node_modules" \
+        "$BLOSSOM_REMOTE_DIR/package.json" "$BLOSSOM_REMOTE_DIR/pnpm-lock.yaml" \
+        "$BLOSSOM_REMOTE_DIR/patches" "$BLOSSOM_REMOTE_DIR/config.yml"
+    sudo mkdir -p "$BLOSSOM_REMOTE_DIR/admin"
+    sudo cp -a "$BLOSSOM_BACKUP/build.bak" "$BLOSSOM_REMOTE_DIR/build"
+    sudo cp -a "$BLOSSOM_BACKUP/public.bak" "$BLOSSOM_REMOTE_DIR/public"
+    sudo cp -a "$BLOSSOM_BACKUP/admin-dist.bak" "$BLOSSOM_REMOTE_DIR/admin/dist"
+    for path in node_modules package.json pnpm-lock.yaml patches config.yml; do
+        backup_path="$BLOSSOM_BACKUP/${path//\//-}.bak"
+        if [ -e "$backup_path" ]; then
+            sudo cp -a "$backup_path" "$BLOSSOM_REMOTE_DIR/$path"
+        fi
+    done
+    sudo install -o root -g root -m 0644 "$BLOSSOM_BACKUP/blossom.service.bak" /etc/systemd/system/blossom.service
+    sudo systemctl daemon-reload
+    sudo systemctl restart blossom.service || true
+}
+
+rollback_deployment_on_exit() {
+    local status=$?
+    if [ "$status" -ne 0 ] && [ "$DEPLOYMENT_COMPLETED" -eq 0 ]; then
+        echo "ERROR: deployment failed; restoring any live service state that was changed"
+        if [ "$BLOSSOM_SWAPPED" -eq 1 ]; then
+            restore_blossom || true
+        elif [ "$BLOSSOM_STOPPED" -eq 1 ]; then
+            sudo systemctl restart blossom.service || true
+        fi
+        if [ "$RELAY_SWAPPED" -eq 1 ]; then
+            restore_relay || true
+        elif [ "$RELAY_STOPPED" -eq 1 ]; then
+            sudo systemctl restart relay.service || true
+        fi
+    fi
+    sudo rm -rf "$NEW_RELEASE" "$BLOSSOM_NEW" 2>/dev/null || true
+    exit "$status"
+}
+trap rollback_deployment_on_exit EXIT
 
 # 2. Stage the new release in a fresh directory. If any install fails,
 #    the live paths are untouched and we abort before any swap.
@@ -349,20 +472,17 @@ sudo install -o relay  -g relay  -m 0644 "$REMOTE_STAGE/index.html" "$NEW_RELEAS
 sudo install -o relay  -g relay  -m 0644 "$REMOTE_STAGE/style.css"  "$NEW_RELEASE/web/static/style.css"
 sudo install -o relay  -g relay  -m 0644 "$REMOTE_STAGE/script.js"  "$NEW_RELEASE/web/static/script.js"
 
-# Write the commit hash so the running relay can read it back from
-# disk on startup. RELAY_GIT_COMMIT is also passed in the heredoc
-# env (above) so a process that hasn't read the file yet still has
-# it set.
+# Stage the commit hash so it is swapped with the relay release and
+# never describes a different binary during rollback.
 if [ -n "${RELAY_GIT_COMMIT:-}" ] && [ "${RELAY_GIT_COMMIT}" != "unknown" ]; then
-    echo "${RELAY_GIT_COMMIT}" | sudo tee /opt/relay/.last-commit >/dev/null
-    sudo chown relay:relay /opt/relay/.last-commit
-    sudo chmod 0644 /opt/relay/.last-commit
+    echo "${RELAY_GIT_COMMIT}" | sudo tee "$NEW_RELEASE/last-commit" >/dev/null
+    sudo chown relay:relay "$NEW_RELEASE/last-commit"
+    sudo chmod 0644 "$NEW_RELEASE/last-commit"
 fi
 
-# Install the systemd unit and reload before the swap so the unit is
-# valid by the time the service is restarted.
-sudo install -o root -g root -m 0644 "$REMOTE_STAGE/relay.service" /etc/systemd/system/relay.service
-sudo systemctl daemon-reload
+# Stage the systemd unit; install it into /etc only with the rest of
+# the relay swap after all rollback handlers are active.
+sudo install -o root -g root -m 0644 "$REMOTE_STAGE/relay.service" "$NEW_RELEASE/relay.service"
 
 # 3. Atomic swap: rename(2) within the same filesystem is atomic, so a
 #    reader sees either the old file or the new file, never a
@@ -371,11 +491,21 @@ sudo install -o root  -g root  -m 0755 "$NEW_RELEASE/relay-arm64" /opt/relay/rel
 sudo install -o relay  -g relay  -m 0644 "$NEW_RELEASE/web/templates/index.html" /opt/relay/web/templates/index.html.tmp
 sudo install -o relay  -g relay  -m 0644 "$NEW_RELEASE/web/static/style.css"     /opt/relay/web/static/style.css.tmp
 sudo install -o relay  -g relay  -m 0644 "$NEW_RELEASE/web/static/script.js"     /opt/relay/web/static/script.js.tmp
+sudo install -o root -g root -m 0644 "$NEW_RELEASE/relay.service" /etc/systemd/system/relay.service.tmp
+if [ -f "$NEW_RELEASE/last-commit" ]; then
+    sudo install -o relay -g relay -m 0644 "$NEW_RELEASE/last-commit" /opt/relay/.last-commit.tmp
+fi
 
+RELAY_SWAPPED=1
+sudo mv -f /etc/systemd/system/relay.service.tmp /etc/systemd/system/relay.service
 sudo mv -f /opt/relay/relay-arm64.tmp             /opt/relay/relay-arm64
 sudo mv -f /opt/relay/web/templates/index.html.tmp /opt/relay/web/templates/index.html
 sudo mv -f /opt/relay/web/static/style.css.tmp     /opt/relay/web/static/style.css
 sudo mv -f /opt/relay/web/static/script.js.tmp     /opt/relay/web/static/script.js
+if [ -f /opt/relay/.last-commit.tmp ]; then
+    sudo mv -f /opt/relay/.last-commit.tmp /opt/relay/.last-commit
+fi
+sudo systemctl daemon-reload
 
 # The per-deploy staging tree at /opt/relay/releases/<ts>/ is dead
 # weight now: we never read from it again. Drop it to free ~30MB.
@@ -383,15 +513,16 @@ sudo rm -rf "$NEW_RELEASE"
 
 # 4. Deploy and restart Blossom. The existing /opt/blossom/.env and
 #    /opt/blossom/data are deliberately preserved.
-BLOSSOM_BACKUP_RETAIN="${BLOSSOM_BACKUP_RETAIN:-0}"
-BLOSSOM_BACKUP="/opt/blossom-backup_$(date +%Y%m%d_%H%M%S)"
-BLOSSOM_NEW="${BLOSSOM_REMOTE_DIR}/.release_$(date +%Y%m%d_%H%M%S)"
-sudo mkdir -p "$BLOSSOM_BACKUP" "$BLOSSOM_NEW"
-sudo cp -a "$BLOSSOM_REMOTE_DIR/build" "$BLOSSOM_BACKUP/build.bak"
-sudo cp -a "$BLOSSOM_REMOTE_DIR/public" "$BLOSSOM_BACKUP/public.bak"
-sudo cp -a "$BLOSSOM_REMOTE_DIR/admin/dist" "$BLOSSOM_BACKUP/admin-dist.bak"
-sudo cp -a /etc/systemd/system/blossom.service "$BLOSSOM_BACKUP/blossom.service.bak"
 sudo tar -xzf "$REMOTE_STAGE/blossom-artifacts.tgz" -C "$BLOSSOM_NEW"
+for required in \
+    package.json pnpm-lock.yaml \
+    patches/minio@8.0.7.patch patches/stream-json@3.6.0.patch \
+    build public admin/dist; do
+    if [ ! -e "$BLOSSOM_NEW/$required" ]; then
+        echo "ERROR: Blossom artifact is missing $required"
+        exit 1
+    fi
+done
 if ! command -v pnpm >/dev/null 2>&1; then
     echo "ERROR: pnpm is required on the AWS host to install Blossom production dependencies"
     exit 1
@@ -408,64 +539,51 @@ if ! command -v make >/dev/null 2>&1 || ! command -v g++ >/dev/null 2>&1 || ! co
 fi
 sudo chown -R www-data:www-data "$BLOSSOM_NEW"
 sudo -u www-data env HOME=/tmp pnpm --dir "$BLOSSOM_NEW" install --prod --frozen-lockfile
+if [ ! -d "$BLOSSOM_NEW/node_modules" ]; then
+    echo "ERROR: Blossom production dependency installation did not create node_modules"
+    exit 1
+fi
 sudo chown -R root:root "$BLOSSOM_NEW"
 sudo find "$BLOSSOM_NEW" -type d -exec chmod 0755 {} +
 sudo find "$BLOSSOM_NEW" -type f -exec chmod 0644 {} +
 
-restore_blossom() {
-    sudo rm -rf "$BLOSSOM_REMOTE_DIR/build" "$BLOSSOM_REMOTE_DIR/public" "$BLOSSOM_REMOTE_DIR/admin/dist"
-    sudo mkdir -p "$BLOSSOM_REMOTE_DIR/admin"
-    sudo cp -a "$BLOSSOM_BACKUP/build.bak" "$BLOSSOM_REMOTE_DIR/build"
-    sudo cp -a "$BLOSSOM_BACKUP/public.bak" "$BLOSSOM_REMOTE_DIR/public"
-    sudo cp -a "$BLOSSOM_BACKUP/admin-dist.bak" "$BLOSSOM_REMOTE_DIR/admin/dist"
-    sudo install -o root -g root -m 0644 "$BLOSSOM_BACKUP/blossom.service.bak" /etc/systemd/system/blossom.service
-    sudo systemctl daemon-reload
-}
-
-BLOSSOM_DEPLOYED=0
-BLOSSOM_SWAPPED=0
-rollback_blossom_on_exit() {
-    local status=$?
-    if [ "$status" -ne 0 ] && [ "$BLOSSOM_DEPLOYED" -eq 0 ] && [ "$BLOSSOM_SWAPPED" -eq 1 ]; then
-        echo "ERROR: Blossom deployment did not complete; restoring backup"
-        restore_blossom || true
-        sudo systemctl restart blossom.service || true
-    fi
-    exit "$status"
-}
-trap rollback_blossom_on_exit EXIT
-
 sudo systemctl stop blossom.service
-BLOSSOM_SWAPPED=1
+BLOSSOM_STOPPED=1
 
 # Pre-swap validation: confirm the extracted artifact is complete
 # before swapping it into the live tree. This catches tar extraction
 # failures, missing directories, and pnpm install errors that would
 # otherwise leave the live tree in a broken state.
 echo "Validating extracted Blossom artifact before swap..."
-if [ ! -d "$BLOSSOM_NEW/build" ] || [ ! -d "$BLOSSOM_NEW/public" ] || [ ! -d "$BLOSSOM_NEW/admin/dist" ] || [ ! -f "$BLOSSOM_NEW/build/index.js" ]; then
+if [ ! -d "$BLOSSOM_NEW/build" ] || [ ! -d "$BLOSSOM_NEW/public" ] || [ ! -d "$BLOSSOM_NEW/admin/dist" ] || [ ! -f "$BLOSSOM_NEW/build/index.js" ] || [ ! -d "$BLOSSOM_NEW/node_modules" ]; then
     echo "ERROR: Extracted Blossom artifact is incomplete; aborting before swap"
-    echo "  Expected: $BLOSSOM_NEW/build/index.js, build/, public/, admin/dist/"
+    echo "  Expected: $BLOSSOM_NEW/build/index.js, build/, public/, admin/dist/, node_modules/"
     sudo ls -la "$BLOSSOM_NEW" 2>/dev/null || true
     exit 1
 fi
 echo "Blossom artifact validation passed"
 
+BLOSSOM_SWAPPED=1
 if ! sudo mv "$BLOSSOM_REMOTE_DIR/build" "$BLOSSOM_BACKUP/build.live" ||
    ! sudo mv "$BLOSSOM_REMOTE_DIR/public" "$BLOSSOM_BACKUP/public.live" ||
    ! sudo mkdir -p "$BLOSSOM_REMOTE_DIR/admin" ||
-   ! sudo mv "$BLOSSOM_REMOTE_DIR/admin/dist" "$BLOSSOM_BACKUP/admin-dist.live" ||
-   ! sudo mv "$BLOSSOM_NEW/build" "$BLOSSOM_REMOTE_DIR/build" ||
-   ! sudo mv "$BLOSSOM_NEW/public" "$BLOSSOM_REMOTE_DIR/public" ||
-   ! sudo mkdir -p "$BLOSSOM_REMOTE_DIR/admin" ||
-   ! sudo mv "$BLOSSOM_NEW/admin/dist" "$BLOSSOM_REMOTE_DIR/admin/dist"; then
-    echo "ERROR: Blossom artifact swap failed"
+   ! sudo mv "$BLOSSOM_REMOTE_DIR/admin/dist" "$BLOSSOM_BACKUP/admin-dist.live"; then
+    echo "ERROR: Blossom live artifact backup failed"
     exit 1
 fi
-# The staging dir is now empty of artifacts. Drop it -- it still
-# holds a fresh ~270MB node_modules from the pnpm install above,
-# which we don't need once the swap is complete (the live tree has
-# its own node_modules at /opt/blossom/node_modules).
+for path in node_modules package.json pnpm-lock.yaml patches; do
+    if [ -e "$BLOSSOM_REMOTE_DIR/$path" ]; then
+        sudo mv "$BLOSSOM_REMOTE_DIR/$path" "$BLOSSOM_BACKUP/${path//\//-}.live"
+    fi
+done
+sudo mv "$BLOSSOM_NEW/build" "$BLOSSOM_REMOTE_DIR/build"
+sudo mv "$BLOSSOM_NEW/public" "$BLOSSOM_REMOTE_DIR/public"
+sudo mkdir -p "$BLOSSOM_REMOTE_DIR/admin"
+sudo mv "$BLOSSOM_NEW/admin/dist" "$BLOSSOM_REMOTE_DIR/admin/dist"
+sudo mv "$BLOSSOM_NEW/node_modules" "$BLOSSOM_REMOTE_DIR/node_modules"
+sudo mv "$BLOSSOM_NEW/package.json" "$BLOSSOM_REMOTE_DIR/package.json"
+sudo mv "$BLOSSOM_NEW/pnpm-lock.yaml" "$BLOSSOM_REMOTE_DIR/pnpm-lock.yaml"
+sudo mv "$BLOSSOM_NEW/patches" "$BLOSSOM_REMOTE_DIR/patches"
 sudo rm -rf "$BLOSSOM_NEW"
 sudo install -o root -g root -m 0644 "$REMOTE_STAGE/blossom.service" /etc/systemd/system/blossom.service
 sudo systemctl daemon-reload
@@ -483,7 +601,6 @@ else
     sudo systemctl --no-pager --full status blossom.service || true
     exit 1
 fi
-BLOSSOM_DEPLOYED=1
 
 # 5b. Repair storage.rules drift if needed. The deploy ships the
 #     canonical config.yml in the artifact bundle, but the live
@@ -496,7 +613,6 @@ if [ -f "$REMOTE_STAGE/blossom-rules-defaults.sh" ]; then
     echo "Checking for storage.rules drift..."
     if sudo grep -q "^  rules: \[\]" /opt/blossom/config.yml; then
         echo "Empty storage.rules detected; running blossom-rules-defaults.sh"
-        sudo cp "$REMOTE_STAGE/blossom-rules-defaults.sh" /opt/blossom/scripts/blossom-rules-defaults.sh 2>/dev/null || true
         sudo mkdir -p /opt/blossom/scripts
         sudo cp "$REMOTE_STAGE/blossom-rules-defaults.sh" /opt/blossom/scripts/blossom-rules-defaults.sh
         sudo chmod +x /opt/blossom/scripts/blossom-rules-defaults.sh
@@ -512,21 +628,8 @@ fi
 #    not atomic; a relay failure after Blossom was swapped leaves
 #    Blossom in the new state unless we explicitly roll it back.
 if ! sudo systemctl restart relay.service; then
-    echo "ERROR: systemctl restart relay.service failed; rolling back both services"
-    sudo cp -a "$BACKUP/relay-arm64.bak"             /opt/relay/relay-arm64
-    sudo cp -a "$BACKUP/index.html.bak"               /opt/relay/web/templates/index.html
-    sudo cp -a "$BACKUP/style.css.bak"                /opt/relay/web/static/style.css
-    sudo cp -a "$BACKUP/script.js.bak"                /opt/relay/web/static/script.js
-    sudo systemctl restart relay.service || true
+    echo "ERROR: systemctl restart relay.service failed; the transaction rollback handler will restore both services"
     sudo systemctl --no-pager --full status relay.service || true
-    # Restore Blossom if it was already swapped. This is a best-effort
-    # rollback; the two-service deploy is not atomic by design (each
-    # service has its own backup and rollback path).
-    if [ "$BLOSSOM_DEPLOYED" -eq 0 ] && [ "$BLOSSOM_SWAPPED" -eq 1 ]; then
-        echo "Restoring Blossom from backup as part of two-service rollback"
-        restore_blossom || true
-        sudo systemctl restart blossom.service || true
-    fi
     exit 1
 fi
 sleep 2
@@ -535,21 +638,12 @@ sleep 2
 if sudo systemctl is-active --quiet relay.service; then
     echo "relay.service is ACTIVE"
 else
-    echo "ERROR: relay.service is NOT active after restart!"
-    sudo cp -a "$BACKUP/relay-arm64.bak"             /opt/relay/relay-arm64
-    sudo cp -a "$BACKUP/index.html.bak"               /opt/relay/web/templates/index.html
-    sudo cp -a "$BACKUP/style.css.bak"                /opt/relay/web/static/style.css
-    sudo cp -a "$BACKUP/script.js.bak"                /opt/relay/web/static/script.js
-    sudo systemctl restart relay.service || true
+    echo "ERROR: relay.service is NOT active after restart; the transaction rollback handler will restore both services"
     sudo systemctl --no-pager --full status relay.service || true
-    # Restore Blossom if it was already swapped (two-service rollback).
-    if [ "$BLOSSOM_DEPLOYED" -eq 0 ] && [ "$BLOSSOM_SWAPPED" -eq 1 ]; then
-        echo "Restoring Blossom from backup as part of two-service rollback"
-        restore_blossom || true
-        sudo systemctl restart blossom.service || true
-    fi
     exit 1
 fi
+
+DEPLOYMENT_COMPLETED=1
 
 # Show full service status
 echo "Service status:"
@@ -574,18 +668,25 @@ sudo journalctl -u blossom.service -n 30 --no-pager
 # release is ~270MB, each relay binary is ~30MB). Operators who want
 # a one-step on-host rollback can set RELAY_BACKUP_RETAIN=1 /
 # BLOSSOM_BACKUP_RETAIN=1 in the environment.
-sudo bash -c "if [ \"\$RELAY_BACKUP_RETAIN\" -gt 0 ]; then ls -dt /opt/relay/backup_* 2>/dev/null | tail -n +\$((RELAY_BACKUP_RETAIN + 1)) | xargs -r rm -rf; else rm -rf /opt/relay/backup_* 2>/dev/null; fi"
-sudo bash -c "if [ \"\$BLOSSOM_BACKUP_RETAIN\" -gt 0 ]; then ls -dt /opt/blossom-backup_* 2>/dev/null | tail -n +\$((BLOSSOM_BACKUP_RETAIN + 1)) | xargs -r rm -rf; else rm -rf /opt/blossom-backup_* 2>/dev/null; fi"
-# Also drop the staging directories that the deploy creates but
-# never reads back from: /opt/relay/releases/* holds the per-deploy
-# relay-binary copy (30MB each) and /opt/blossom/.release_* holds
-# per-deploy pnpm installs (270MB each). The live tree at
-# /opt/relay/relay-arm64 and /opt/blossom/{build,public,admin/dist}
-# is what runs; the staging trees are dead weight.
-sudo rm -rf /opt/relay/releases /opt/blossom/.release_* 2>/dev/null
+prune_backups() {
+    local base="$1"
+    local prefix="$2"
+    local retain="$3"
+    local index=0
+    local path
+    while IFS= read -r -d '' path; do
+        index=$((index + 1))
+        if [ "$index" -gt "$retain" ]; then
+            sudo rm -rf "$path"
+        fi
+    done < <(sudo find "$base" -mindepth 1 -maxdepth 1 -type d -name "${prefix}*" -print0 | sort -z -r)
+}
 
-echo "On-host cleanup: kept 0 backups, removed staging dirs"
-df -h / | tail -1
+prune_backups /opt/relay "backup_" "$RELAY_BACKUP_RETAIN"
+prune_backups /opt "blossom-backup_" "$BLOSSOM_BACKUP_RETAIN"
+
+echo "On-host cleanup: retained relay=$RELAY_BACKUP_RETAIN, blossom=$BLOSSOM_BACKUP_RETAIN backups"
+df -h /
 REMOTE_EOF
 
 log_info "Remote service restart completed"
@@ -598,6 +699,7 @@ log_info "=== Step 9: Verifying deployment ==="
 
 # Check if relay is responding with NIP-11
 log_info "Checking relay NIP-11 endpoint..."
+NIP11_BRANDING_STATUS="UNKNOWN"
 
 # Fetch the COMPLETE NIP-11 response (the 77-entry registry exceeds 500
 # bytes, so we must not truncate before piping to jq). Relay startup can take
@@ -620,8 +722,10 @@ else
     # Verify key fields in NIP-11 response
     if echo "$NIP11_RESPONSE" | grep -q "nostr.ltd"; then
         log_info "Relay NIP-11 response contains 'nostr.ltd' - branding verified"
+        NIP11_BRANDING_STATUS="VERIFIED"
     else
         log_warn "Relay NIP-11 response does not contain 'nostr.ltd' - branding may need attention"
+        NIP11_BRANDING_STATUS="WARNING"
     fi
 
     if echo "$NIP11_RESPONSE" | grep -q '"name"'; then
@@ -665,19 +769,15 @@ fi
 # random 1KB blob. It uploads, retrieves, and cleans up. No real user
 # credentials or production data are involved.
 #
-# The probe is skipped automatically if BLOSSOM_UPLOAD_PROBE=n is set,
-# or if the required tools (nak, openssl, jq) are not available on the
-# deploy host. When skipped, the verification log explicitly marks
-# upload verification as MANUAL so operators know to run it by hand.
+# The probe is skipped automatically if BLOSSOM_UPLOAD_PROBE=n is set.
+# The remote probe reports SKIPPED when neither nak nor its npx fallback
+# is available, and the verification log marks that as MANUAL.
 log_info "Checking Blossom upload functionality (functional probe)..."
 BLOSSOM_UPLOAD_PROBE="${BLOSSOM_UPLOAD_PROBE:-y}"
 
 if [[ "$BLOSSOM_UPLOAD_PROBE" != "y" ]]; then
     log_warn "Blossom upload probe disabled (BLOSSOM_UPLOAD_PROBE=$BLOSSOM_UPLOAD_PROBE); upload verification is MANUAL"
     BLOSSOM_UPLOAD_PROBE_STATUS="DISABLED"
-elif ! command -v nak >/dev/null 2>&1 || ! command -v openssl >/dev/null 2>&1; then
-    log_warn "Blossom upload probe requires 'nak' and 'openssl' on the deploy host; upload verification is MANUAL"
-    BLOSSOM_UPLOAD_PROBE_STATUS="SKIPPED (tools missing)"
 else
     PROBE_RESULT=$(ssh -i "$AWS_KEY" "$AWS_HOST" "BLOSSOM_PUBLIC_URL='${BLOSSOM_PUBLIC_URL:-https://blossom.nostr.ltd}' bash -s" << 'PROBE_EOF' 2>&1 || true
 set -uo pipefail
@@ -697,7 +797,27 @@ fi
 
 # Create a 1KB random blob and compute its SHA-256.
 TMPDIR=$(mktemp -d)
-trap "rm -rf '$TMPDIR'" EXIT
+PROBE_UPLOADED=0
+PROBE_DELETED=0
+cleanup_probe_blob() {
+    if [ "${PROBE_UPLOADED:-0}" -eq 1 ] && [ "${PROBE_DELETED:-0}" -eq 0 ] && [ -n "${BLOB_SHA256:-}" ] && [ -n "${TEST_NSEC:-}" ]; then
+        CLEANUP_EVENT=$(nak event --kind 24242 \
+            --tag t=delete \
+            --tag expiration=$(( $(date +%s) + 300 )) \
+            --tag x="$BLOB_SHA256" \
+            --content "" \
+            --sec "$TEST_NSEC" </dev/null 2>/dev/null || true)
+        if [ -n "$CLEANUP_EVENT" ]; then
+            CLEANUP_B64=$(printf '%s' "$CLEANUP_EVENT" | base64 -w 0)
+            curl --silent --output /dev/null --max-time 10 \
+                -X DELETE \
+                -H "Authorization: Nostr $CLEANUP_B64" \
+                "$BLOSSOM_PUBLIC_URL/$BLOB_SHA256" 2>/dev/null || true
+        fi
+    fi
+    rm -rf "$TMPDIR"
+}
+trap cleanup_probe_blob EXIT
 dd if=/dev/urandom of="$TMPDIR/blob.bin" bs=1024 count=1 status=none
 BLOB_SHA256=$(sha256sum "$TMPDIR/blob.bin" | awk '{print $1}')
 
@@ -725,16 +845,11 @@ fi
 # log line, which makes the failure look like a transport problem.
 AUTH_B64=$(printf '%s' "$AUTH_EVENT" | base64 -w 0)
 
-# Upload the blob.
-UPLOAD_RESPONSE=$(curl --silent --show-error --max-time 30 \
-    -X PUT \
-    -H "Authorization: Nostr $AUTH_B64" \
-    -H "Content-Type: image/png" \
-    -H "X-Sha-256: $BLOB_SHA256" \
-    --data-binary "@$TMPDIR/blob.bin" \
-    "$BLOSSOM_PUBLIC_URL/upload" 2>&1 || true)
-
-UPLOAD_HTTP=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+# Upload the blob exactly once and keep the response body out of logs
+# unless a bounded, secret-free diagnostic is needed.
+UPLOAD_BODY_FILE="$TMPDIR/upload-response"
+UPLOAD_HTTP=$(curl --silent --show-error --max-time 30 \
+    --output "$UPLOAD_BODY_FILE" --write-out '%{http_code}' \
     -X PUT \
     -H "Authorization: Nostr $AUTH_B64" \
     -H "Content-Type: image/png" \
@@ -743,24 +858,53 @@ UPLOAD_HTTP=$(curl --silent --output /dev/null --write-out '%{http_code}' \
     "$BLOSSOM_PUBLIC_URL/upload" 2>/dev/null || echo "000")
 
 if [[ "$UPLOAD_HTTP" =~ ^2 ]]; then
-    # Verify retrieval.
-    RETRIEVE_HTTP=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+    PROBE_UPLOADED=1
+    # Verify retrieval and its content hash before deleting the probe blob.
+    RETRIEVE_FILE="$TMPDIR/retrieved.bin"
+    RETRIEVE_HTTP=$(curl --silent --output "$RETRIEVE_FILE" --write-out '%{http_code}' \
         --max-time 10 \
         "$BLOSSOM_PUBLIC_URL/$BLOB_SHA256" 2>/dev/null || echo "000")
-    if [[ "$RETRIEVE_HTTP" == "200" ]]; then
+    RETRIEVE_SHA256=""
+    if [[ "$RETRIEVE_HTTP" == "200" && -f "$RETRIEVE_FILE" ]]; then
+        RETRIEVE_SHA256=$(sha256sum "$RETRIEVE_FILE" | awk '{print $1}')
+    fi
+
+    # Blossom deletion uses the same kind-24242 identity with t=delete and
+    # the blob hash in the x tag. Attempt cleanup even when retrieval fails.
+    DELETE_EVENT=$(nak event --kind 24242 \
+        --tag t=delete \
+        --tag expiration=$(( $(date +%s) + 300 )) \
+        --tag x="$BLOB_SHA256" \
+        --content "" \
+        --sec "$TEST_NSEC" </dev/null 2>/dev/null || true)
+    DELETE_HTTP="000"
+    if [ -n "$DELETE_EVENT" ]; then
+        DELETE_B64=$(printf '%s' "$DELETE_EVENT" | base64 -w 0)
+        DELETE_HTTP=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --max-time 10 \
+            -X DELETE \
+            -H "Authorization: Nostr $DELETE_B64" \
+            "$BLOSSOM_PUBLIC_URL/$BLOB_SHA256" 2>/dev/null || echo "000")
+        if [[ "$DELETE_HTTP" =~ ^2 ]]; then
+            PROBE_DELETED=1
+        fi
+    fi
+
+    if [[ "$RETRIEVE_HTTP" == "200" && "$RETRIEVE_SHA256" == "$BLOB_SHA256" && "$DELETE_HTTP" =~ ^2 ]]; then
         echo "PROBE_STATUS=pass"
         echo "PROBE_UPLOAD_HTTP=$UPLOAD_HTTP"
         echo "PROBE_RETRIEVE_HTTP=$RETRIEVE_HTTP"
+        echo "PROBE_DELETE_HTTP=$DELETE_HTTP"
         echo "PROBE_SHA256=$BLOB_SHA256"
     else
         echo "PROBE_STATUS=fail"
-        echo "PROBE_REASON=upload succeeded (HTTP $UPLOAD_HTTP) but retrieval returned HTTP $RETRIEVE_HTTP"
+        echo "PROBE_REASON=upload HTTP $UPLOAD_HTTP, retrieve HTTP $RETRIEVE_HTTP (sha256 $RETRIEVE_SHA256), delete HTTP $DELETE_HTTP"
         echo "PROBE_SHA256=$BLOB_SHA256"
     fi
 else
     echo "PROBE_STATUS=fail"
     echo "PROBE_REASON=upload returned HTTP $UPLOAD_HTTP"
-    echo "PROBE_BODY=$(echo "$UPLOAD_RESPONSE" | head -c 200)"
+    echo "PROBE_BODY=$(tr '\n' ' ' < "$UPLOAD_BODY_FILE" | cut -c1-200)"
 fi
 PROBE_EOF
 )
@@ -770,11 +914,12 @@ PROBE_STATUS=$(echo "$PROBE_RESULT" | grep -oE 'PROBE_STATUS=[a-z]+' | cut -d= -
 PROBE_REASON=$(echo "$PROBE_RESULT" | grep -oE 'PROBE_REASON=[^[:space:]].*' | cut -d= -f2- || echo "")
 PROBE_UPLOAD_HTTP=$(echo "$PROBE_RESULT" | grep -oE 'PROBE_UPLOAD_HTTP=[0-9]+' | cut -d= -f2 || echo "n/a")
 PROBE_RETRIEVE_HTTP=$(echo "$PROBE_RESULT" | grep -oE 'PROBE_RETRIEVE_HTTP=[0-9]+' | cut -d= -f2 || echo "n/a")
+PROBE_DELETE_HTTP=$(echo "$PROBE_RESULT" | grep -oE 'PROBE_DELETE_HTTP=[0-9]+' | cut -d= -f2 || echo "n/a")
 
 case "$PROBE_STATUS" in
     pass)
-        log_info "Blossom upload probe PASSED (upload HTTP $PROBE_UPLOAD_HTTP, retrieve HTTP $PROBE_RETRIEVE_HTTP)"
-        BLOSSOM_UPLOAD_PROBE_STATUS="PASS (upload $PROBE_UPLOAD_HTTP, retrieve $PROBE_RETRIEVE_HTTP)"
+        log_info "Blossom upload probe PASSED (upload HTTP $PROBE_UPLOAD_HTTP, retrieve HTTP $PROBE_RETRIEVE_HTTP, delete HTTP $PROBE_DELETE_HTTP)"
+        BLOSSOM_UPLOAD_PROBE_STATUS="PASS (upload $PROBE_UPLOAD_HTTP, retrieve $PROBE_RETRIEVE_HTTP, delete $PROBE_DELETE_HTTP)"
         ;;
     fail)
         log_error "Blossom upload probe FAILED: $PROBE_REASON"
@@ -823,6 +968,10 @@ log_info "Checking /api/events endpoint (partial-readiness aware)..."
 EVENTS_HTTP=""
 EVENTS_JSON=""
 EVENTS_OUTCOME="unknown"
+RELAY_HEALTH="unknown"
+STORED_READY="false"
+TOTAL_READY="false"
+GROUPED_STATUS="unknown"
 EVENTS_MAX_ATTEMPTS="${EVENTS_MAX_ATTEMPTS:-120}"   # 120 * 15s = 30 min
 EVENTS_INTERVAL="${EVENTS_INTERVAL:-15}"
 EVENTS_ATTEMPT=0
@@ -877,10 +1026,10 @@ case "$EVENTS_OUTCOME" in
         log_warn "Deployment continues; grouped breakdown will complete in the background"
         ;;
     unhealthy|unknown)
-        log_error "Relay dashboard: UNHEALTHY (relay_health=$RELAY_HEALTH, stored_events_ready=$STORED_READY, grouped=$GROUPED_STATUS)"
+        log_warn "Relay dashboard: UNHEALTHY (relay_health=$RELAY_HEALTH, stored_events_ready=$STORED_READY, grouped=$GROUPED_STATUS, http=${EVENTS_HTTP:-unknown})"
         ssh -i "$AWS_KEY" "$AWS_HOST" \
             "sudo journalctl -u relay.service --since '10 minutes ago' --no-pager | grep -Ei 'cache|event|postgres|database|query|error|fatal|panic' || true"
-        exit 1
+        log_error "Relay dashboard verification failed"
         ;;
 esac
 
@@ -915,6 +1064,6 @@ log_info "Relay binary: $RELAY_DIR/bin/relay-arm64"
 log_info "Blossom artifacts: $BLOSSOM_DIR/build, $BLOSSOM_DIR/public, $BLOSSOM_DIR/admin/dist"
 log_info "AWS Host: $AWS_HOST"
 log_info "Services: nostr.ltd Nostr Relay + Blossom Media Server"
-log_info "NIP-11 branding: verified (nostr.ltd in response)"
+log_info "NIP-11 branding: $NIP11_BRANDING_STATUS"
 log_info "Blossom HTTP: verified on localhost:3000"
 log_info "=========================================="

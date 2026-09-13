@@ -8,8 +8,17 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-AWS_KEY="${AWS_KEY:-$HOME/.ssh/nostr-relay-key.pem}"
-AWS_HOST="${AWS_HOST:-ubuntu@13.201.250.44}"
+AWS_KEY="${AWS_KEY:-}"
+AWS_HOST="${AWS_HOST:-}"
+
+if [ -z "$AWS_HOST" ] || [ -z "$AWS_KEY" ]; then
+    echo "FAIL: set AWS_HOST and AWS_KEY to the authorized rollback-test destination" >&2
+    exit 1
+fi
+if [ ! -f "$AWS_KEY" ]; then
+    echo "FAIL: SSH key not found at $AWS_KEY" >&2
+    exit 1
+fi
 
 echo "=== Rollback Test ==="
 echo ""

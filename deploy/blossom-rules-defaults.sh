@@ -13,12 +13,12 @@
 # is configured is a no-op.
 #
 # Run on the production host:
-#   ssh ubuntu@13.201.250.44 'bash /opt/blossom/scripts/blossom-rules-defaults.sh'
+#   ssh "$AWS_HOST" 'bash /opt/blossom/scripts/blossom-rules-defaults.sh'
 #
 # This script lives in the deploy/ directory so it is shipped with
-# the rest of the deploy tooling and tracked in git. It is NOT
-# executed automatically by ns-deploy-full.sh; run it by hand if
-# you suspect the production config has drifted.
+# the rest of the deploy tooling and tracked in git. ns-deploy-full.sh runs
+# it automatically when it detects an empty storage.rules list; run it by
+# hand when repairing the same drift outside a full deployment.
 set -e
 
 CONFIG="/opt/blossom/config.yml"

@@ -7,9 +7,9 @@
 
 | Item | Value |
 |---|---|
-| Hostname | ip-172-31-20-20 (AWS EC2) |
-| Public IP | 13.201.250.44 |
-| SSH access | ubuntu@13.201.250.44 via /home/jack/.ssh/nostr-relay-key.pem |
+| Hostname | Production AWS EC2 host (operator-configured) |
+| Public IP | Not tracked; use the operator's authorized destination |
+| SSH access | Not tracked; provide `AWS_HOST` and `AWS_KEY` locally |
 | Relay service | /etc/systemd/system/relay.service |
 | Blossom service | /etc/systemd/system/blossom.service |
 
