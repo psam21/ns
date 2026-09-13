@@ -1,0 +1,39 @@
+[1mdiff --git a/dist/esm/notification.mjs b/dist/esm/notification.mjs[m
+[1mindex 2fe075b73a9f98ece945993ebc151f601e0d52ee..b6b2b6a60f3b2e699a351540bd9f6aa8259b2e33 100644[m
+[1m--- a/dist/esm/notification.mjs[m
+[1m+++ b/dist/esm/notification.mjs[m
+[36m@@ -15,7 +15,7 @@[m
+  */[m
+ [m
+ import { EventEmitter } from 'eventemitter3';[m
+[31m-import jsonLineParser from 'stream-json/jsonl/Parser.js';[m
+[32m+[m[32mimport jsonLineParser from 'stream-json/jsonl/parser.js';[m
+ import { DEFAULT_REGION } from "./helpers.mjs";[m
+ import { pipesetup, uriEscape } from "./internal/helper.mjs";[m
+ [m
+[1mdiff --git a/dist/main/notification.js b/dist/main/notification.js[m
+[1mindex 8d8e8b389bc313de072c603b302e4c39d373d345..84abcb1b303e5e8e648b56cfbfb20c54b696bf31 100644[m
+[1m--- a/dist/main/notification.js[m
+[1m+++ b/dist/main/notification.js[m
+[36m@@ -4,7 +4,7 @@[m [mObject.defineProperty(exports, "__esModule", {[m
+   value: true[m
+ });[m
+ var _eventemitter = require("eventemitter3");[m
+[31m-var _Parser = require("stream-json/jsonl/Parser.js");[m
+[32m+[m[32mvar _Parser = require("stream-json/jsonl/parser.js");[m
+ var _helpers = require("./helpers.js");[m
+ var _helper = require("./internal/helper.js");[m
+ /*[m
+[1mdiff --git a/src/notification.ts b/src/notification.ts[m
+[1mindex 64c24112d225a234d3b5acf06043020e9fe414af..debce83dc4708745137abc4eb45218a7c7d40f0c 100644[m
+[1m--- a/src/notification.ts[m
+[1m+++ b/src/notification.ts[m
+[36m@@ -15,7 +15,7 @@[m
+  */[m
+ [m
+ import { EventEmitter } from 'eventemitter3'[m
+[31m-import jsonLineParser from 'stream-json/jsonl/Parser.js'[m
+[32m+[m[32mimport jsonLineParser from 'stream-json/jsonl/parser.js'[m
+ [m
+ import { DEFAULT_REGION } from './helpers.ts'[m
+ import type { TypedClient } from './internal/client.ts'[m

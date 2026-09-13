@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Shugur-Network/relay/internal/logger"
+	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 )
 
@@ -34,7 +35,7 @@ func (db *DB) CreateDatabaseIfNotExists(ctx context.Context, dbName string) erro
 	if !exists {
 		// Create database
 		logger.Info("Creating database...", zap.String("database", dbName))
-		_, err = db.Pool.Exec(ctx, fmt.Sprintf("CREATE DATABASE %s", dbName))
+		_, err = db.Pool.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{dbName}.Sanitize())
 		if err != nil {
 			return fmt.Errorf("failed to create database %s: %w", dbName, err)
 		}
