@@ -1,0 +1,5 @@
+packages: []
+overrides:
+  qs: ^6.16.0
+  decode-uri-component: ^0.5.0
+  stream-json: ^3.5.0
