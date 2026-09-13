@@ -618,6 +618,13 @@ sudo mv "$BLOSSOM_NEW/pnpm-lock.yaml" "$BLOSSOM_REMOTE_DIR/pnpm-lock.yaml"
 sudo mv "$BLOSSOM_NEW/pnpm-workspace.yaml" "$BLOSSOM_REMOTE_DIR/pnpm-workspace.yaml"
 sudo mv "$BLOSSOM_NEW/patches" "$BLOSSOM_REMOTE_DIR/patches"
 sudo rm -rf "$BLOSSOM_NEW"
+# Keep the preserved production config aligned with the canonical relay URL.
+# The live config is intentionally not replaced wholesale because it is
+# operator-managed, but this alias correction is safe and restart-required.
+if sudo grep -q 'wss://www.nostr.ltd' "$BLOSSOM_REMOTE_DIR/config.yml"; then
+    echo "Updating Blossom discovery relay to wss://nostr.ltd"
+    sudo sed -i 's#wss://www.nostr.ltd#wss://nostr.ltd#g' "$BLOSSOM_REMOTE_DIR/config.yml"
+fi
 sudo install -o root -g root -m 0644 "$REMOTE_STAGE/blossom.service" /etc/systemd/system/blossom.service
 sudo systemctl daemon-reload
 

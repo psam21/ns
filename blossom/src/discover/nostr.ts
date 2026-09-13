@@ -6,20 +6,38 @@ import logger from "../logger.js";
 import ndk from "../ndk.js";
 
 const log = logger.extend("nostr-discovery");
+const NOSTR_DISCOVERY_TIMEOUT_MS = 5_000;
+
+async function fetchEventsWithTimeout(hash: string) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const eventsPromise = ndk.fetchEvents({
+      kinds: [NDKKind.Media],
+      "#x": [hash],
+    });
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Nostr discovery timed out")), NOSTR_DISCOVERY_TIMEOUT_MS);
+    });
+    return await Promise.race([eventsPromise, timeoutPromise]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 export async function search(search: BlobSearch) {
   log("Looking for", search.hash);
   const pointers: BlobPointer[] = [];
 
-  const events = Array.from(
-    await ndk.fetchEvents({
-      kinds: [NDKKind.Media],
-      "#x": [search.hash],
-    }),
-  );
+  let events: Awaited<ReturnType<typeof fetchEventsWithTimeout>>;
+  try {
+    events = await fetchEventsWithTimeout(search.hash);
+  } catch (error) {
+    log("Nostr discovery failed", error instanceof Error ? error.message : String(error));
+    return pointers;
+  }
 
   // try to use the 1063 events
-  if (events.length > 0) {
+  if (events.size > 0) {
     for (const event of events) {
       log(`Found 1063 event by ${npubEncode(event.pubkey)}`);
       const url = event.tags.find((t) => t[0] === "url")?.[1];

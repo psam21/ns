@@ -34,6 +34,8 @@ assert_contains 'sudo mv "$BLOSSOM_NEW/node_modules" "$BLOSSOM_REMOTE_DIR/node_m
 assert_contains 'STREAM_JSON_DIR=' "$DEPLOY_SCRIPT"
 assert_contains 'src/jsonl/Parser.js' "$DEPLOY_SCRIPT"
 assert_contains 'stream-json/jsonl/parser.js' "$DEPLOY_SCRIPT"
+assert_contains 'wss://www.nostr.ltd' "$DEPLOY_SCRIPT"
+assert_contains 'wss://nostr.ltd' "$DEPLOY_SCRIPT"
 assert_contains 'sudo flock -n -E 75 /var/lock/nostr-ltd-deploy.lock' "$DEPLOY_SCRIPT"
 assert_contains 'RELAY_BACKUP_RETAIN' "$DEPLOY_SCRIPT"
 assert_contains 'BLOSSOM_BACKUP_RETAIN' "$DEPLOY_SCRIPT"

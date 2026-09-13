@@ -14,7 +14,7 @@ discovery:
   nostr:
     enabled: true
     relays:
-      - wss://www.nostr.ltd
+      - wss://nostr.ltd
   upstream:
     enabled: false
     domains: []
