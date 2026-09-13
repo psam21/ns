@@ -1,0 +1,7 @@
+[1mdiff --git a/src/jsonl/Parser.js b/src/jsonl/Parser.js[m
+[1mnew file mode 100644[m
+[1mindex 0000000000000000000000000000000000000000..84d579544cf1c21bba8fbaab5465eac1c1175f86[m
+[1m--- /dev/null[m
+[1m+++ b/src/jsonl/Parser.js[m
+[36m@@ -0,0 +1 @@[m
+[32m+[m[32mexport { default } from "./parser.js";[m
