@@ -195,7 +195,7 @@ if [ ! -d "$BLOSSOM_DIR/build" ] || [ ! -d "$BLOSSOM_DIR/admin/dist" ] || [ ! -d
     log_error "Blossom build artifacts are incomplete under $BLOSSOM_DIR"
 fi
 mkdir -p "$STAGING/blossom"
-tar -C "$BLOSSOM_DIR" -czf "$STAGING/blossom-artifacts.tgz" build public admin/dist package.json pnpm-lock.yaml pnpm-workspace.yaml config.yml patches
+tar -C "$BLOSSOM_DIR" -czf "$STAGING/blossom-artifacts.tgz" build public admin/dist package.json pnpm-lock.yaml pnpm-workspace.yaml config.yml patches scripts/normalize-runtime-patches.mjs
 
 # Ship the rules-defaults script so operators can patch a drifted
 # production config without a full redeploy. The script is idempotent.
@@ -388,7 +388,7 @@ sudo cp -a "$BLOSSOM_REMOTE_DIR/build" "$BLOSSOM_BACKUP/build.bak"
 sudo cp -a "$BLOSSOM_REMOTE_DIR/public" "$BLOSSOM_BACKUP/public.bak"
 sudo cp -a "$BLOSSOM_REMOTE_DIR/admin/dist" "$BLOSSOM_BACKUP/admin-dist.bak"
 sudo cp -a /etc/systemd/system/blossom.service "$BLOSSOM_BACKUP/blossom.service.bak"
-for path in node_modules package.json pnpm-lock.yaml pnpm-workspace.yaml patches config.yml; do
+for path in node_modules package.json pnpm-lock.yaml pnpm-workspace.yaml patches config.yml scripts/normalize-runtime-patches.mjs; do
     if [ -e "$BLOSSOM_REMOTE_DIR/$path" ]; then
         sudo cp -a "$BLOSSOM_REMOTE_DIR/$path" "$BLOSSOM_BACKUP/${path//\//-}.bak"
     else
@@ -426,12 +426,13 @@ restore_blossom() {
         "$BLOSSOM_REMOTE_DIR/admin/dist" "$BLOSSOM_REMOTE_DIR/node_modules" \
         "$BLOSSOM_REMOTE_DIR/package.json" "$BLOSSOM_REMOTE_DIR/pnpm-lock.yaml" \
         "$BLOSSOM_REMOTE_DIR/pnpm-workspace.yaml" \
-        "$BLOSSOM_REMOTE_DIR/patches" "$BLOSSOM_REMOTE_DIR/config.yml"
+        "$BLOSSOM_REMOTE_DIR/patches" "$BLOSSOM_REMOTE_DIR/config.yml" \
+        "$BLOSSOM_REMOTE_DIR/scripts/normalize-runtime-patches.mjs"
     sudo mkdir -p "$BLOSSOM_REMOTE_DIR/admin"
     sudo cp -a "$BLOSSOM_BACKUP/build.bak" "$BLOSSOM_REMOTE_DIR/build"
     sudo cp -a "$BLOSSOM_BACKUP/public.bak" "$BLOSSOM_REMOTE_DIR/public"
     sudo cp -a "$BLOSSOM_BACKUP/admin-dist.bak" "$BLOSSOM_REMOTE_DIR/admin/dist"
-    for path in node_modules package.json pnpm-lock.yaml pnpm-workspace.yaml patches config.yml; do
+    for path in node_modules package.json pnpm-lock.yaml pnpm-workspace.yaml patches config.yml scripts/normalize-runtime-patches.mjs; do
         backup_path="$BLOSSOM_BACKUP/${path//\//-}.bak"
         if [ -e "$backup_path" ]; then
             sudo cp -a "$backup_path" "$BLOSSOM_REMOTE_DIR/$path"
@@ -516,7 +517,7 @@ sudo rm -rf "$NEW_RELEASE"
 #    /opt/blossom/data are deliberately preserved.
 sudo tar -xzf "$REMOTE_STAGE/blossom-artifacts.tgz" -C "$BLOSSOM_NEW"
 for required in \
-    package.json pnpm-lock.yaml pnpm-workspace.yaml \
+    package.json pnpm-lock.yaml pnpm-workspace.yaml scripts/normalize-runtime-patches.mjs \
     patches/minio@8.0.7.patch patches/stream-json@3.6.0.patch \
     build public admin/dist; do
     if [ ! -e "$BLOSSOM_NEW/$required" ]; then
@@ -603,7 +604,7 @@ if ! sudo mv "$BLOSSOM_REMOTE_DIR/build" "$BLOSSOM_BACKUP/build.live" ||
     echo "ERROR: Blossom live artifact backup failed"
     exit 1
 fi
-for path in node_modules package.json pnpm-lock.yaml pnpm-workspace.yaml patches; do
+for path in node_modules package.json pnpm-lock.yaml pnpm-workspace.yaml patches scripts/normalize-runtime-patches.mjs; do
     if [ -e "$BLOSSOM_REMOTE_DIR/$path" ]; then
         sudo mv "$BLOSSOM_REMOTE_DIR/$path" "$BLOSSOM_BACKUP/${path//\//-}.live"
     fi
@@ -617,6 +618,8 @@ sudo mv "$BLOSSOM_NEW/package.json" "$BLOSSOM_REMOTE_DIR/package.json"
 sudo mv "$BLOSSOM_NEW/pnpm-lock.yaml" "$BLOSSOM_REMOTE_DIR/pnpm-lock.yaml"
 sudo mv "$BLOSSOM_NEW/pnpm-workspace.yaml" "$BLOSSOM_REMOTE_DIR/pnpm-workspace.yaml"
 sudo mv "$BLOSSOM_NEW/patches" "$BLOSSOM_REMOTE_DIR/patches"
+sudo mkdir -p "$BLOSSOM_REMOTE_DIR/scripts"
+sudo mv "$BLOSSOM_NEW/scripts/normalize-runtime-patches.mjs" "$BLOSSOM_REMOTE_DIR/scripts/normalize-runtime-patches.mjs"
 sudo rm -rf "$BLOSSOM_NEW"
 # Keep the preserved production config aligned with the canonical relay URL.
 # The live config is intentionally not replaced wholesale because it is
@@ -651,8 +654,8 @@ fi
 #     is idempotent: it only patches if rules: [] is present.
 if [ -f "$REMOTE_STAGE/blossom-rules-defaults.sh" ]; then
     echo "Checking for storage.rules drift..."
-    if sudo grep -q "^  rules: \[\]" /opt/blossom/config.yml; then
-        echo "Empty storage.rules detected; running blossom-rules-defaults.sh"
+    if sudo grep -q "^  rules: \[\]" /opt/blossom/config.yml || sudo grep -Eq '^      expiration: (1 month|2 days)$' /opt/blossom/config.yml; then
+        echo "Legacy storage.rules retention detected; running blossom-rules-defaults.sh"
         sudo mkdir -p /opt/blossom/scripts
         sudo cp "$REMOTE_STAGE/blossom-rules-defaults.sh" /opt/blossom/scripts/blossom-rules-defaults.sh
         sudo chmod +x /opt/blossom/scripts/blossom-rules-defaults.sh

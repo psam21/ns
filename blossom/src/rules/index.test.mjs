@@ -3,7 +3,7 @@
 // Imports from the compiled build/ output to avoid TypeScript runtime issues.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { getFileRule } from "../../build/rules/index.js";
+import { getExpirationTime, getFileRule } from "../../build/rules/index.js";
 
 const VALID_PUBKEY = "a".repeat(64);
 
@@ -76,15 +76,20 @@ test("getFileRule accepts when pubkey is in the rule's pubkey list", () => {
   );
 });
 
+test("never expiration keeps a blob outside cleanup", () => {
+  assert.equal(getExpirationTime({ type: "*", expiration: "never" }, Math.floor(Date.now() / 1000)), -Infinity);
+  assert.equal(getExpirationTime({ type: "*", expiration: "permanent" }, Math.floor(Date.now() / 1000)), -Infinity);
+});
+
 // Production rule set from blossom/config.yml.
 // Keep these in sync with the rules in config.yml and deploy/blossom-rules-defaults.sh.
 const PRODUCTION_RULES = [
-  { id: "text", type: "text/*", expiration: "1 month" },
-  { id: "image", type: "image/*", expiration: "1 month" },
-  { id: "video", type: "video/*", expiration: "1 month" },
-  { id: "audio", type: "audio/*", expiration: "1 month" },
-  { id: "model", type: "model/*", expiration: "1 month" },
-  { id: "catchall", type: "*", expiration: "2 days" },
+  { id: "text", type: "text/*", expiration: "never" },
+  { id: "image", type: "image/*", expiration: "never" },
+  { id: "video", type: "video/*", expiration: "never" },
+  { id: "audio", type: "audio/*", expiration: "never" },
+  { id: "model", type: "model/*", expiration: "never" },
+  { id: "catchall", type: "*", expiration: "never" },
 ];
 
 test("production rules accept text/plain", () => {

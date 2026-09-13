@@ -59,23 +59,25 @@ assert_contains 'DELETE_EVENT=' "$PROBE_SCRIPT"
 assert_contains 'RETRIEVE_SHA256' "$PROBE_SCRIPT"
 
 FIXTURE="$TEMP_DIR/blossom"
-mkdir -p "$FIXTURE/build" "$FIXTURE/public" "$FIXTURE/admin/dist" "$FIXTURE/patches"
+mkdir -p "$FIXTURE/build" "$FIXTURE/public" "$FIXTURE/admin/dist" "$FIXTURE/patches" "$FIXTURE/scripts"
 printf 'build\n' > "$FIXTURE/build/index.js"
 printf 'public\n' > "$FIXTURE/public/index.html"
 printf 'admin\n' > "$FIXTURE/admin/dist/index.html"
 printf 'package\n' > "$FIXTURE/package.json"
 printf 'lock\n' > "$FIXTURE/pnpm-lock.yaml"
 printf 'packages: []\n' > "$FIXTURE/pnpm-workspace.yaml"
+printf 'normalizer\n' > "$FIXTURE/scripts/normalize-runtime-patches.mjs"
 printf 'config\n' > "$FIXTURE/config.yml"
 printf 'minio\n' > "$FIXTURE/patches/minio@8.0.7.patch"
 printf 'stream-json\n' > "$FIXTURE/patches/stream-json@3.6.0.patch"
 tar -C "$FIXTURE" -czf "$TEMP_DIR/blossom-artifacts.tgz" \
-    build public admin/dist package.json pnpm-lock.yaml pnpm-workspace.yaml config.yml patches
+    build public admin/dist package.json pnpm-lock.yaml pnpm-workspace.yaml config.yml patches scripts/normalize-runtime-patches.mjs
 
 tar -tzf "$TEMP_DIR/blossom-artifacts.tgz" > "$TEMP_DIR/archive.list"
 for required in \
     build/index.js public/index.html admin/dist/index.html package.json \
-    pnpm-lock.yaml pnpm-workspace.yaml config.yml patches/minio@8.0.7.patch \
+    pnpm-lock.yaml pnpm-workspace.yaml scripts/normalize-runtime-patches.mjs \
+    config.yml patches/minio@8.0.7.patch \
     patches/stream-json@3.6.0.patch; do
     rg -F --quiet "$required" "$TEMP_DIR/archive.list" || fail "archive missing $required"
 done

@@ -38,6 +38,10 @@ export function getFileRule({ pubkey, type }: RuleSearchInput, ruleset: Rule[], 
 }
 
 export function getExpirationTime(rule: Rule, start: number): number {
+  if (/^(never|permanent)$/i.test(rule.expiration.trim())) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
   const match = rule.expiration.match(/(\d+)\s*(\w+)/);
   if (!match) throw new Error("Failed to parse expiration");
   const count = parseInt(match[1]);

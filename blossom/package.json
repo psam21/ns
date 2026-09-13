@@ -8,6 +8,7 @@
   "license": "MIT",
   "scripts": {
     "prepublish": "pnpm build",
+    "postinstall": "node scripts/normalize-runtime-patches.mjs",
     "start": "node build/index.js",
     "build": "tsc",
     "postbuild": "cd admin && pnpm install --frozen-lockfile && pnpm build",

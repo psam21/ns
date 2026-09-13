@@ -10,7 +10,6 @@ import logger from "../logger.js";
 import { getExpirationTime } from "../rules/index.js";
 import { forgetBlobAccessed, updateBlobAccess } from "../db/methods.js";
 import { readUpload, removeUpload, UploadDetails } from "./upload.js";
-import { mapParams } from "../admin-api/helpers.js";
 
 /**
  * Convert a rule's `type` pattern (using `*` as wildcard) to a SQL LIKE
@@ -203,24 +202,6 @@ export async function pruneStorage() {
     if (n > 0) log("Checked", n, "blobs for rule #" + config.storage.rules.indexOf(rule));
   }
 
-  // remove blobs with no owners
-  if (config.storage.removeWhenNoOwners) {
-    const blobs = db
-      .prepare<[], { sha256: string }>(
-        `
-      SELECT blobs.sha256
-      FROM blobs
-        LEFT JOIN owners ON owners.blob = sha256
-      WHERE owners.blob is NULL
-    `,
-      )
-      .all();
-
-    if (blobs.length > 0) {
-      log(`Removing ${blobs.length} because they have no owners`);
-      db.prepare<string[]>(`DELETE FROM blobs WHERE sha256 IN ${mapParams(blobs)}`).run(...blobs.map((b) => b.sha256));
-    }
-  }
 }
 
 export default storage;

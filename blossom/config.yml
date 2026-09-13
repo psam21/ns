@@ -36,21 +36,21 @@ storage:
     region: ap-south-1
 
   rules:
-    # Deliberate production rules. An empty rules list rejects every upload
-    # with HTTP 401 because getFileRule() returns null. Keep this list in
-    # sync with deploy/blossom-rules-defaults.sh.
+    # Preserve content until an authenticated delete. `never` prevents the
+    # cleanup worker from aging out attachments referenced by old messages.
+    # Keep this list in sync with deploy/blossom-rules-defaults.sh.
     - type: text/*
-      expiration: 1 month
+      expiration: never
     - type: "image/*"
-      expiration: 1 month
+      expiration: never
     - type: "video/*"
-      expiration: 1 month
+      expiration: never
     - type: "audio/*"
-      expiration: 1 month
+      expiration: never
     - type: "model/*"
-      expiration: 1 month
+      expiration: never
     - type: "*"
-      expiration: 2 days
+      expiration: never
 
 upload:
   enabled: true
