@@ -245,8 +245,8 @@ if (config.dashboard.enabled) {
   app.use(mount("/api", adminApi.routes())).use(mount("/api", adminApi.allowedMethods()));
   app.use(mount("/admin", serve(path.resolve(__dirname, "../admin/dist"))));
 
-  // never log the password itself
-  logger(`Dashboard started with username=${config.dashboard.username} (password length: ${password.length})`);
+  // never log sensitive auth details
+  logger("Dashboard started");
 }
 
 try {
