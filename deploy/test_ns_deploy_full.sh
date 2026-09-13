@@ -43,6 +43,33 @@ assert_contains 'restore_relay' "$DEPLOY_SCRIPT"
 assert_contains 'restore_blossom' "$DEPLOY_SCRIPT"
 assert_contains 'NIP11_BRANDING_STATUS' "$DEPLOY_SCRIPT"
 
+prune_backups_fixture() {
+    local base="$1"
+    local prefix="$2"
+    local retain="$3"
+    local index=0
+    local path
+    while IFS= read -r -d '' path; do
+        index=$((index + 1))
+        if [ "$index" -gt "$retain" ]; then
+            rm -rf "$path"
+        fi
+    done < <(find "$base" -mindepth 1 -maxdepth 1 -type d -name "${prefix}*" -print0 | sort -z -r)
+}
+
+BACKUP_FIXTURE="$TEMP_DIR/backups"
+mkdir -p "$BACKUP_FIXTURE/backup_001" "$BACKUP_FIXTURE/backup_002" "$BACKUP_FIXTURE/backup_003"
+prune_backups_fixture "$BACKUP_FIXTURE" "backup_" 1
+[[ "$(find "$BACKUP_FIXTURE" -mindepth 1 -maxdepth 1 -type d | wc -l)" == "1" ]] || fail "backup retention did not keep exactly one backup"
+
+LOCK_FIXTURE="$TEMP_DIR/deploy.lock"
+exec 9>"$LOCK_FIXTURE"
+flock -n 9
+if flock -n "$LOCK_FIXTURE" -c true; then
+    fail "deployment lock allowed a second holder"
+fi
+exec 9>&-
+
 PROBE_SCRIPT="$TEMP_DIR/probe.sh"
 awk '
     /<< '\''PROBE_EOF'\''/ { capture = 1; next }
