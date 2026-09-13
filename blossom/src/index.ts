@@ -258,8 +258,17 @@ try {
   app.use(serve(www));
 }
 
-app.listen(process.env.PORT || 3000);
-logger("Started app on port", process.env.PORT || 3000);
+export { app };
+
+export function startServer(port = Number(process.env.PORT) || 3000) {
+  const server = app.listen(port);
+  logger("Started app on port", port);
+  return server;
+}
+
+if (process.env.BLOSSOM_TEST_MODE !== "1") {
+  startServer();
+}
 
 async function cron() {
   try {
@@ -268,7 +277,9 @@ async function cron() {
   setTimeout(cron, 30_000);
 }
 
-setTimeout(cron, 60_000);
+if (process.env.BLOSSOM_TEST_MODE !== "1") {
+  setTimeout(cron, 60_000);
+}
 
 async function shutdown() {
   logger("Saving database...");

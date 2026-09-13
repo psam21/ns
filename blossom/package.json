@@ -14,6 +14,7 @@
     "postbuild": "cd admin && pnpm install --frozen-lockfile && pnpm build",
     "dev": "nodemon -i '**/data/**' -i '**/database.json' -i '**/database.old.json' --exec 'node' --loader @swc-node/register/esm src/index.ts",
     "test": "tsc && node --test 'src/**/*.test.mjs'",
+    "test:e2e": "tsc && node --test src/api/e2e.test.mjs",
     "format": "prettier -w ."
   },
   "bin": "build/index.js",

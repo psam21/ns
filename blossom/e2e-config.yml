@@ -1,0 +1,41 @@
+publicDomain: "http://127.0.0.1"
+databasePath: /tmp/blossom-e2e/data/sqlite.db
+
+dashboard:
+  enabled: false
+
+discovery:
+  nostr:
+    enabled: false
+    relays: []
+  upstream:
+    enabled: false
+    domains: []
+
+storage:
+  backend: local
+  removeWhenNoOwners: true
+  local:
+    dir: /tmp/blossom-e2e/data/blobs
+  rules:
+    - type: "*"
+      expiration: never
+
+upload:
+  enabled: true
+  requireAuth: true
+  requirePubkeyInRule: false
+  maxUploadSize: 10485760
+
+media:
+  enabled: true
+  requireAuth: true
+  requirePubkeyInRule: false
+
+list:
+  requireAuth: false
+  allowListOthers: true
+
+tor:
+  enabled: false
+  proxy: ""

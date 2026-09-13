@@ -5,6 +5,8 @@ const ndk = new NDK({
   explicitRelayUrls: config.discovery.nostr.relays,
 });
 
-ndk.connect();
+if (process.env.BLOSSOM_TEST_MODE !== "1") {
+  ndk.connect();
+}
 
 export default ndk;
