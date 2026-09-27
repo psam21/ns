@@ -20,6 +20,27 @@ import (
 	"go.uber.org/zap"
 )
 
+// wsBufferSize returns a per-connection WebSocket buffer size that is safe to
+// hand to gorilla/websocket.
+//
+// RelayConfig.SendBufferSize is validated at load time to be a power of two in
+// [1KB, 1MB], so in practice this is a passthrough. The clamping exists so a
+// caller that constructs a RelayConfig directly (tests, embedded use) cannot
+// reintroduce the OOM this guards against:
+//
+//   - <= 0 means "let gorilla choose", which is the safe default.
+//   - above maxWSBufferSize would just relocate the memory pressure, so clamp.
+func wsBufferSize(configured int) int {
+	const maxWSBufferSize = 64 * 1024
+	if configured <= 0 {
+		return 0
+	}
+	if configured > maxWSBufferSize {
+		return maxWSBufferSize
+	}
+	return configured
+}
+
 // Server holds references to the relay configuration and node logic.
 type Server struct {
 	cfg           config.RelayConfig
@@ -72,28 +93,75 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 		s.webHandler.StartEventKindStatsRefresher(ctx)
 	}
 
-	// Derive the WebSocket origin allow-list from Relay.AllowedOrigins if
-	// set, else fall back to the public URL host (issue #64).
+	// WebSocket origin allow-list.
+	//
+	// A Nostr relay is a public, unauthenticated, read-and-write endpoint for
+	// public events. It has no session, no cookie, and no privileged action
+	// that a browser-origin check would protect — so unlike an application
+	// server, there is nothing for the check to defend here. Defaulting to
+	// same-host-only means a browser client served from ANY other domain gets
+	// 403, which silently excludes every web Nostr client: marmots-web-chat,
+	// WhiteNoise Web, and any hosted app that just wants a relay.
+	//
+	// Measured consequence before this change (nostr.ltd, 2026-09-26): 121
+	// handshake rejections in a single interop run, while the relay was
+	// healthy (ws=101, 313MB against a 768M MemoryHigh). MWC — a browser app
+	// on localhost:5200 — could not connect at all, and its failures surfaced
+	// as message timeouts three layers away.
+	//
+	// Explicitly empty AllowedOrigins now means "accept any origin", matching
+	// the existing DashboardAllowedHosts convention in config/relay.go, where
+	// empty already means "any host is allowed". Operators who want a
+	// restrictive posture can enumerate origins in config; the safe default
+	// for a public relay is to accept connections from anywhere.
 	allowedOrigins := map[string]struct{}{}
+	forbidForeignOrigins := false
 	if s.fullCfg != nil {
 		for _, o := range s.fullCfg.Relay.AllowedOrigins {
-			allowedOrigins[strings.ToLower(o)] = struct{}{}
+			if o = strings.ToLower(strings.TrimSpace(o)); o != "" {
+				allowedOrigins[o] = struct{}{}
+			}
 		}
 		if s.fullCfg.Relay.PublicURL != "" {
 			if u, err := url.Parse(s.fullCfg.Relay.PublicURL); err == nil {
-				allowedOrigins[strings.ToLower(u.Host)] = struct{}{}
-				allowedOrigins["https://"+strings.ToLower(u.Host)] = struct{}{}
-				allowedOrigins["wss://"+strings.ToLower(u.Host)] = struct{}{}
+				host := strings.ToLower(u.Host)
+				allowedOrigins[host] = struct{}{}
+				allowedOrigins["https://"+host] = struct{}{}
+				allowedOrigins["wss://"+host] = struct{}{}
 			}
 		}
+		// Only enforce the list when the operator actually configured one.
+		forbidForeignOrigins = len(s.fullCfg.Relay.AllowedOrigins) > 0
 	}
 	upgrader := websocket.Upgrader{
-		ReadBufferSize:  1024 * 1024,
-		WriteBufferSize: 1024 * 1024,
+		// Honour the configured SEND_BUFFER_SIZE instead of hardcoding 1MB.
+		//
+		// gorilla/websocket keeps one read and one write buffer per connection
+		// for the connection's lifetime. At the 1MB literal that was ~2MB of
+		// resident memory per client, which is what OOM-killed this service 52
+		// times in 7 days on a 1.8GB host: 95 live connections is ~190MB of
+		// pure buffer before stacks, the event cache, or GC headroom. The
+		// cgroup hit `memory.pressure full avg10=77.49` and the accept loop
+		// stopped draining, so the port stayed bound while nothing was served
+		// — systemd still reported `active (running)`.
+		//
+		// SEND_BUFFER_SIZE was already parsed, validated (power-of-two) and
+		// defaulted; it was simply never read. On the live host it is 4096.
+		// Applying it to both buffers makes the setting real, and the O(n)
+		// per-connection cost small enough that MAX_CONNECTIONS is reachable
+		// before the memory limit.
+		//
+		// Guard against a zero or absurd value: 0 lets gorilla pick its own
+		// default, and an out-of-range value would just move the OOM.
+		ReadBufferSize:  wsBufferSize(s.cfg.SendBufferSize),
+		WriteBufferSize: wsBufferSize(s.cfg.SendBufferSize),
 		CheckOrigin: func(r *http.Request) bool {
 			origin := r.Header.Get("Origin")
 			if origin == "" {
-				// Non-browser clients do not always send Origin; allow.
+				// Non-browser clients do not send Origin; allow.
+				return true
+			}
+			if !forbidForeignOrigins {
 				return true
 			}
 			u, err := url.Parse(origin)
