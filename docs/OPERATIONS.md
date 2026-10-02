@@ -140,23 +140,72 @@ Leaving it off is the safer default. If the relay is genuinely broken (bad
 deploy, disk full, corrupt database), restarting every 5 minutes hides the
 real fault and destroys the evidence.
 
+## Memory: what is actually allocated
+
+Answered with a live heap profile on 2026-10-02, after the metrics/pprof
+endpoint was enabled. Total Go heap is **~27 MB** against a `MemoryHigh` of
+768 MB, and RSS sits at 50–65 MB.
+
+Top allocations, and all three are fixed-size structures allocated once at
+startup:
+
+| Site | Size | What it is |
+|---|---|---|
+| `willf/bitset.New` | 12.9 MB | the duplicate-event Bloom filter |
+| `storage.NewEventProcessor` | 10.2 MB | `make(chan nostr.Event, 100000)` — 104 bytes × 100,000 |
+| `secp256k1.init` | 1.1 MB | NIP-29 group keypair generation |
+
+Under a 400-connection load test, heap moved 26.7 MB → 27.7 MB and RSS went
+*down* from 64 MB to 56 MB. **There is no per-connection leak**; the buffer
+fix in `4da537e` did its job.
+
+### Taking a heap profile
+
+```bash
+ssh -i ~/.ssh/nostr-relay-key.pem ubuntu@13.201.250.44 \
+  'curl -s --max-time 30 -o /tmp/heap.pb.gz http://localhost:2112/debug/pprof/heap'
+scp -i ~/.ssh/nostr-relay-key.pem ubuntu@13.201.250.44:/tmp/heap.pb.gz .
+go tool pprof -top -inuse_space relay/bin/relay-arm64 /tmp/heap.pb.gz
+```
+
+`go` is not installed on the host, so copy the profile out and analyse it
+locally.
+
+Other useful profiles on the same port: `/debug/pprof/goroutine?debug=1`,
+`/debug/pprof/block`, `/debug/pprof/mutex`, `/debug/pprof/allocs`.
+
+The listener is bound to `127.0.0.1` and Caddy publishes only 443/80, so
+pprof is host-local only. Do not proxy it — it exposes heap contents and
+goroutine stacks.
+
+### Candidate reductions, not applied
+
+`NewEventProcessor`'s 100,000-slot channel is 10.2 MB of the 27 MB total.
+The queue **drops on full** rather than blocking, so the buffer only decides
+how quickly events are dropped under burst, not whether they are accepted.
+Reducing it would free ~10 MB, but it would also raise `EventsDropped`
+during bursts. Not changed: 10 MB against a 768 MB ceiling is not the
+outage's cause, and shrinking it risks dropping events that are currently
+accepted.
+
 ## Open items
 
-1. **RSS trend has no slope yet.** The watcher only reports a trend once two
-   runs are ≥1 hour apart. It has been running since 09:02 on 2026-10-02;
-   `jq 'select(.rss_mb_per_hour != "unknown")' /var/log/relay/watch.jsonl`
-   will show the first data point. If it trends upward over days, the growth
-   is not fully explained.
+1. **No alerting on the watcher.** `relay-watch.timer` records every 5
+   minutes to `/var/log/relay/watch.jsonl`, but nothing notifies. The script
+   exits 2 on a critical reading and that exit code currently goes
+   nowhere. Needs a notifier (email or webhook) to be useful.
 
-2. **The memory growth was never root-caused.** Ruled out by measurement:
-   bloom filter (11.4MB), database bloat (4.6% dead tuples, below the
-   autovacuum threshold), in-process maps (all have expiry sweeps).
-   Per-connection cost measured at ~20KB after `4da537e`. Conclusion was
-   load-driven growth amplified by the swap-thrash feedback loop.
-   `GOMEMLIMIT=512MiB` is a guardrail against that loop, not a fix.
+2. **Autorecovery is installed but off.** `relay-recover.service` performs
+   the SIGKILL-then-start sequence that recovered the relay on 2026-10-02,
+   and the watcher will trigger it when `WATCH_RECOVER=1`. Left off by
+   default because restarting every 5 minutes over a genuinely broken relay
+   hides the real fault.
 
-3. **One moderate GitHub vulnerability** on the default branch
-   (dependabot alert 141). Not triaged.
+3. **`MaxRequestsPerSecond`, `MaxBanDuration` and `ProgressiveBan` are
+   unimplemented.** They are accepted and validated, set in
+   `deploy/config.yaml`, and never read — see `knownUnused` in
+   `relay/internal/config/dead_config_test.go`. An operator who tunes them
+   gets no behaviour change and no warning. Either implement or remove.
 
 ## Rules learned the hard way
 
