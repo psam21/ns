@@ -118,10 +118,28 @@ rss_kb=$(awk '/^VmRSS/{print $2; exit}' "/proc/$(pgrep -f 'relay-arm64' | head -
 
 rss_trend="unknown"
 if [ "$rss_kb" != "unknown" ] && [ -f "$WATCH_STATE" ]; then
-    prev_rss=$(cat "$WATCH_STATE" 2>/dev/null || echo "")
-    prev_ts=$(awk '{print $1}' "$WATCH_STATE" 2>/dev/null || echo 0)
+    # Read fields explicitly rather than relying on `cat` and `awk '{print $1}'`.
+    #
+    # The state file holds "<epoch> <rss_kb>". Without a trailing newline,
+    # `$(cat ...)` returns both fields as one string, so `prev_rss` became
+    # "1790932559 66512" and the arithmetic below failed with:
+    #
+    #   syntax error in expression (error token is "66512")
+    #
+    # which aborted the watcher *before* it printed any status, and left
+    # `full=8.90` — a real pressure reading — unreported. A diagnostic tool
+    # that dies on its own input cannot report a real problem.
+    #
+    # `read -r ts rss` splits on whitespace and tolerates a missing newline.
+    read -r prev_ts prev_rss < "$WATCH_STATE" 2>/dev/null || true
     now_ts=$(date +%s)
-    if [ -n "$prev_rss" ] && [ "$now_ts" -gt "$prev_ts" ] && [ "$prev_ts" -gt 0 ]; then
+
+    # Guard both operands: an empty or non-numeric field must not reach $(( )).
+    case "${prev_ts:-}" in ''|*[!0-9]*) prev_ts=0 ;; esac
+    case "${prev_rss:-}" in ''|*[!0-9]*) prev_rss=0 ;; esac
+    case "$rss_kb" in ''|*[!0-9]*) rss_kb=0 ;; esac
+
+    if [ "$prev_ts" -gt 0 ] && [ "$now_ts" -gt "$prev_ts" ]; then
         elapsed_h=$(( (now_ts - prev_ts) / 3600 ))
         if [ "$elapsed_h" -ge 1 ]; then
             delta=$(( rss_kb - prev_rss ))
