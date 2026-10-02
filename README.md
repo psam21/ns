@@ -89,17 +89,20 @@ The configured upload limit is 10 MB. Files are stored in S3, authenticated with
 
 ## Repository structure
 
+All project documentation lives in a single file,
+[`.github/copilot-instructions.md`](.github/copilot-instructions.md) — the
+operations runbook, NIP registry and coverage, deployment and rollback policy,
+and the engineering lessons from production incidents.
+
 ```text
 ├── .github/
-│   └── copilot-instructions.md  # Repository-specific engineering guidance
+│   └── copilot-instructions.md  # All project documentation
 ├── deploy/
 │   ├── config.yaml              # Production relay configuration template
 │   ├── relay.service            # Relay systemd unit
 │   ├── blossom.service          # Blossom systemd unit
 │   ├── Caddyfile                # TLS reverse proxy configuration
 │   └── test_relay.sh            # Relay smoke-test suite
-├── docs/
-│   └── NIP-Tracking.md          # NIP registry, coverage, and upgrade notes
 ├── blossom/                     # Blossom media service and administration UI
 │   ├── src/                     # Server source (TypeScript)
 │   ├── admin/                   # Admin dashboard (React)

@@ -144,7 +144,7 @@ RELAY_URL=ws://localhost:8080 HTTP_URL=http://localhost:8080 ./deploy/test_relay
 | `test_nip_nostr_web.sh` | YY | Nostr Web Pages extension |
 | `test_nip_time_capsules.sh` | XX | Time Capsules extension |
 
-The full advertised registry is maintained separately in [`relay/internal/constants/relay_metadata.go`](../../internal/constants/relay_metadata.go) and tracked in [`docs/NIP-Tracking.md`](../../../docs/NIP-Tracking.md). The relay currently advertises 77 NIP identifiers, while this integration directory covers a smaller, behavior-focused subset.
+The full advertised registry is maintained separately in [`relay/internal/constants/relay_metadata.go`](../../internal/constants/relay_metadata.go) and tracked in [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md), which is the project's single documentation file. The relay currently advertises 77 NIP identifiers, while this integration directory covers a smaller, behavior-focused subset.
 
 ## Specialized tests
 
@@ -171,4 +171,4 @@ If a script fails, rerun it directly with `VERBOSE=1` or `bash -x`, inspect the 
 
 When adding a test, use the `test_nipXX.sh` naming convention, consume `RELAY_URL` rather than embedding an endpoint, fail clearly when prerequisites are missing, and clean up any events that do not need to persist. Document special dependencies and add the script to the coverage table. When a NIP specification changes, review both the validator and its integration test, then run shell syntax checks and the affected script against a disposable database before updating the tracking document.
 
-For authoritative specifications, consult the [Nostr NIP repository](https://github.com/nostr-protocol/nips) and the project’s current [`docs/NIP-Tracking.md`](../../../docs/NIP-Tracking.md).
+For authoritative specifications, consult the [Nostr NIP repository](https://github.com/nostr-protocol/nips) and the project’s NIP coverage section in [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md).
