@@ -508,7 +508,21 @@ func (c *WsConnection) sendMessageInternal(msg []byte, applyRateLimit bool) {
 	case c.backpressureChan <- struct{}{}:
 		defer func() { <-c.backpressureChan }()
 	default:
-		// Backpressure is too high, close connection
+		// Backpressure is too high, close connection.
+		//
+		// This used to close silently -- no log, no closeReason -- so a
+		// connection dropped here was indistinguishable from a network
+		// fault. Diagnosing that on the live host meant an empty journal and
+		// a broken pipe in the client with no server-side explanation.
+		// Backpressure is the *expected* outcome when a client stops reading
+		// during a burst, so it is a normal event worth recording, not an
+		// error, but it must be visible.
+		c.closeReason = "backpressure limit exceeded"
+		logger.Warn("Closing connection: outbound backpressure limit exceeded",
+			zap.Int("limit", cap(c.backpressureChan)),
+			zap.String("client", c.RemoteAddr()),
+			zap.String("real_client_ip", c.realClientIP))
+		metrics.IncrementErrorCount()
 		c.Close()
 		return
 	}
@@ -520,12 +534,23 @@ func (c *WsConnection) sendMessageInternal(msg []byte, applyRateLimit bool) {
 		return
 	}
 
-	// Apply rate limiting only if requested
+	// Apply rate limiting only if requested.
+	//
+	// Reaching the limit is not fatal on its own: a client that cannot keep up
+	// simply gets fewer messages and backfills on its next REQ. Only a
+	// sustained run of rejections means the connection is not draining at all.
 	if applyRateLimit && !c.limiter.Allow() {
 		c.exceededLimitCount++
 		if c.exceededLimitCount > 5 {
+			// Previously closed silently, leaving an empty journal and an
+			// unexplained broken pipe on the client.
+			c.closeReason = "outbound rate limit exceeded repeatedly"
+			logger.Warn("Closing connection: outbound rate limit exceeded repeatedly",
+				zap.Int("consecutive_rejections", c.exceededLimitCount),
+				zap.String("client", c.RemoteAddr()),
+				zap.String("real_client_ip", c.realClientIP))
+			metrics.IncrementErrorCount()
 			c.Close()
-			return
 		}
 		return
 	}
@@ -955,8 +980,21 @@ func (c *WsConnection) Close() {
 		c.isClosed.Store(true)
 
 		if c.closeReason != "" {
-			logger.Debug("WebSocket connection closed",
-				zap.String("reason", c.closeReason),
+			// Info, not Debug.
+			//
+			// This logged at Debug, and production runs at Info, so *every* close
+			// reason was invisible on the live host. That is why diagnosing a
+			// client-side broken pipe produced an empty journal: the relay knew
+			// why it had closed the socket and was not writing it down anywhere
+			// the operator could see.
+			//
+			// Info is the right level because closeReason is set on the
+			// abnormal paths -- backpressure, repeated rate limiting, banned
+			// client, no pong, malformed traffic. Those are exactly the events an
+			// operator is trying to explain after the fact. Normal client
+			// disconnects set "client closed connection normally" and are also
+			// logged, which is the one acceptable cost of this level.
+			logger.Info("WebSocket connection closed",
 				zap.String("client_ip", c.RemoteAddr()),
 				zap.String("real_client_ip", c.realClientIP),
 				zap.Duration("connection_duration", time.Since(c.startTime)))
