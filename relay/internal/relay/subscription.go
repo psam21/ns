@@ -116,7 +116,15 @@ func (c *WsConnection) handleRequest(ctx context.Context, arr []interface{}) {
 	}
 
 	// Enforce max subscription cap (finding #2)
-	if len(c.subscriptions) >= constants.MaxSubscriptions {
+	//
+	// The count is read under the lock. Reading c.subscriptions directly, as
+	// this did, races with Close(), which does
+	// c.subscriptions = make(map[string][]nostr.Filter) under the same mutex
+	// and expects this one to serialize against it. It is a data race, not
+	// just an unsynchronized read, and the cap is advisory so the worst case
+	// is one extra subscription rather than a crash -- but a map read racing
+	// a map replacement is a concurrent map access panic waiting for a load.
+	if c.subscriptionCount() >= constants.MaxSubscriptions {
 		logger.Warn("Subscription cap reached",
 			zap.String("client", c.RemoteAddr()),
 			zap.Int("max", constants.MaxSubscriptions))
@@ -124,14 +132,30 @@ func (c *WsConnection) handleRequest(ctx context.Context, arr []interface{}) {
 		return
 	}
 
-	// Store subscription
-	c.addSubscription(subID, []nostr.Filter{f})
+	// Store subscription.
+	//
+	// addSubscription reports whether subID was already registered, because a
+	// duplicate REQ (NIP-01: a second REQ with the same subscription_id
+	// replaces the first) must not increment the gauge again. Previously every
+	// REQ incremented unconditionally, so a client that reuses one sub_id
+	// inflated active_subscriptions without bound -- and Close() then
+	// decremented by the map size, so the gauge never returned to zero. The
+	// dashboard's "active subscriptions" figure drifted upward for the life of
+	// the process and the leak was invisible because nothing asserted the
+	// gauge against the map.
+	if replaced := c.addSubscription(subID, []nostr.Filter{f}); !replaced {
+		// Update metrics
+		metrics.ActiveSubscriptions.Inc()
+	}
 
-	// Update metrics
-	metrics.ActiveSubscriptions.Inc()
-
-	// Query DB and send events in a goroutine
-	go c.processSubscription(ctx, subID, f)
+	// Query DB and send events in a goroutine.
+	//
+	// Uses c.eventCtx, the per-connection context, not ctx. ctx here is the
+	// server-wide context threaded down from HandleMessages, which is canceled
+	// only at process shutdown -- so a REQ that arrived moments before the
+	// client disconnected kept its database query running against the
+	// now-dead connection.
+	go c.processSubscription(c.eventCtx, subID, f)
 }
 
 // processSubscription handles the database query and sending events to the client
@@ -144,13 +168,21 @@ func (c *WsConnection) processSubscription(ctx context.Context, subID string, f 
 				zap.String("sub_id", subID))
 		}
 	}()
-	// Create a context with timeout for the query
-	_, cancel := context.WithTimeout(ctx, 30*time.Second)
+	// Bound the database query.
+	//
+	// The timeout context created here used to be discarded -- assigned to
+	// `_` and immediately canceled by the deferred cancel, while the actual
+	// call below used the unbounded ctx. The 30s bound existed on paper and
+	// applied to nothing, so one slow query held a database connection and a
+	// goroutine indefinitely. This is the query side of the same class as the
+	// per-connection context leak: a bound that is written but not threaded
+	// through to the operation it was meant to limit.
+	queryCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	// Query events from the database
 	start := time.Now()
-	events, err := c.QueryEvents(ctx, f)
+	events, err := c.QueryEvents(queryCtx, f)
 	duration := time.Since(start)
 
 	// Log query performance
@@ -388,10 +420,25 @@ func (c *WsConnection) hasSubscription(subID string) bool {
 	return ok
 }
 
-func (c *WsConnection) addSubscription(subID string, filters []nostr.Filter) {
+// addSubscription registers filters under subID and reports whether subID was
+// already registered, so callers can keep the ActiveSubscriptions gauge in
+// step with the map.
+func (c *WsConnection) addSubscription(subID string, filters []nostr.Filter) bool {
 	c.subMu.Lock()
 	defer c.subMu.Unlock()
+	_, replaced := c.subscriptions[subID]
 	c.subscriptions[subID] = filters
+	return replaced
+}
+
+// subscriptionCount returns the number of registered subscriptions.
+//
+// Exists so callers can enforce MaxSubscriptions under the lock rather than
+// reading the map directly.
+func (c *WsConnection) subscriptionCount() int {
+	c.subMu.RLock()
+	defer c.subMu.RUnlock()
+	return len(c.subscriptions)
 }
 
 func (c *WsConnection) removeSubscription(subID string) {

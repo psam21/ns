@@ -215,7 +215,7 @@ func handleWebSocketConnection(ctx context.Context, w http.ResponseWriter, r *ht
 	if metrics.GetActiveConnectionsCount() >= int64(relayConfig.ThrottlingConfig.MaxConnections) {
 		// Use new error handling system
 		limitErr := errors.ConnectionLimitError(
-			int(metrics.GetActiveConnectionsCount()), 
+			int(metrics.GetActiveConnectionsCount()),
 			relayConfig.ThrottlingConfig.MaxConnections).
 			WithSeverity(errors.SeverityMedium)
 		errors.HandleHTTPError(w, r, limitErr)
@@ -307,12 +307,12 @@ type WsConnection struct {
 	eventCancel context.CancelFunc
 
 	// NIP-42 AUTH
-	authChallenge  string
+	authChallenge string
 	// authedPubkeys maps authenticated pubkey -> expiry timestamp.
 	// AUTHs expire after AuthTTL to limit the lifetime of a stolen session.
-	authedPubkeys  map[string]time.Time
-	authMu         sync.RWMutex
-	relayURL       string
+	authedPubkeys map[string]time.Time
+	authMu        sync.RWMutex
+	relayURL      string
 
 	// NIP-77 Negentropy Syncing
 	negSessions *negSessions
@@ -407,11 +407,29 @@ func NewWsConnection(
 		return nil
 	})
 
-	// Start monitoring
-	go conn.monitorConnection(ctx)
+	// Start monitoring.
+	//
+	// Uses conn.eventCtx for the same reason as the negentropy sweeper below:
+	// ctx is the server-wide context, canceled only at process shutdown, so
+	// monitoring every connection with it left one goroutine alive per closed
+	// connection.
+	go conn.monitorConnection(conn.eventCtx)
 
-	// Start negentropy idle-session sweeper
-	conn.startNegSweeper(ctx)
+	// Start negentropy idle-session sweeper.
+	//
+	// Must be given eventCtx, the per-connection context, not ctx. ctx here
+	// is the server-wide context threaded down from ListenAndServe, so it is
+	// only canceled at process shutdown. Passing it meant one sweeper
+	// goroutine outlived every closed WebSocket: measured on the production
+	// host 2026-10-02, 55 of 148 live goroutines were
+	// startNegSweeper.func1 parked on a 30s ticker, and the count grew with
+	// every connection the relay had ever accepted.
+	//
+	// That is the leak behind the RSS climb from 64MB to 124MB over ~3.6
+	// hours on a single process (watch.jsonl). Each abandoned goroutine also
+	// pins its WsConnection, so the websocket, its buffers and its
+	// subscription map are all kept alive well past Close().
+	conn.startNegSweeper(conn.eventCtx)
 
 	return conn, nil
 }

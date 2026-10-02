@@ -156,8 +156,58 @@ startup:
 | `secp256k1.init` | 1.1 MB | NIP-29 group keypair generation |
 
 Under a 400-connection load test, heap moved 26.7 MB → 27.7 MB and RSS went
-*down* from 64 MB to 56 MB. **There is no per-connection leak**; the buffer
-fix in `4da537e` did its job.
+*down* from 64 MB to 56 MB, which appeared to rule out a per-connection leak.
+**That conclusion was wrong**, and the load test is why: it ran for minutes,
+and the leak it missed is proportional to *connections over time*, not
+concurrent connections.
+
+### The real leak: per-connection goroutines
+
+`watch.jsonl` on the production host then showed RSS climbing 64 MB → 124 MB
+over ~3.6 hours in a single process, with the Go heap flat at 26.6 MB. Flat
+heap plus rising RSS is the signature of something the Go heap profiler cannot
+see — goroutine stacks and what they pin.
+
+The goroutine profile said it directly:
+
+```
+55 @ ... (*WsConnection).monitorConnection connection.go:944
+55 @ ... startNegSweeper.func1                nip77.go:112
+```
+
+`NewWsConnection` handed both background goroutines the **server-wide**
+context threaded down from `ListenAndServe`. That context is canceled only at
+process shutdown, so `Close()` stopped neither goroutine. Each abandoned
+goroutine also pins its `WsConnection` — the websocket, its read/write buffers
+and its subscription map — so every closed connection stayed resident
+permanently. `startNegSweeper` had carried a comment claiming it "exits when
+the WebSocket connection terminates"; that was false, and the comment is what
+made the bug hard to see.
+
+Fixed by passing `conn.eventCtx`, the per-connection context that `Close()`
+already cancels. Regression test: `TestConnectionGoroutinesExitOnClose`, with
+`TestConnectionGoroutinesLeakWithServerContext` as the negative control that
+deliberately reproduces the old call pattern and asserts the goroutines
+survive.
+
+**Lesson:** a load test bounds memory only if it runs long enough to cover the
+slowest growth. Minutes-long tests cannot see a leak that takes hours, and a
+flat heap is evidence about the *heap*, not about the process.
+
+### Related defects found in the same pass
+
+Auditing every other `go` spawn in `internal/relay` for the same
+server-context mistake turned up three more:
+
+| Site | Defect |
+|---|---|
+| `processSubscription` | built a 30s timeout context, assigned it to `_`, canceled it via `defer`, then queried with the **unbounded** ctx. The bound applied to nothing, so a slow query pinned a DB connection and a goroutine forever. |
+| REQ handler | passed the server ctx to `processSubscription`, so a REQ arriving just before disconnect kept querying. |
+| REQ handler | read `len(c.subscriptions)` without `subMu`, racing `Close()`'s whole-map replacement. |
+| REQ handler | incremented `ActiveSubscriptions` on every REQ including a duplicate `sub_id`. NIP-01 says a second REQ with the same id *replaces* the first, so the gauge grew without bound while `Close()` decremented by the map size — it never returned to zero. |
+
+All four are the same shape as the original: a limit that is written but not
+threaded through to the operation it is meant to bound.
 
 ### Taking a heap profile
 
