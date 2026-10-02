@@ -133,9 +133,29 @@ fi
 
 cd "$BLOSSOM_DIR" || log_error "Cannot cd to $BLOSSOM_DIR"
 log_info "Installing Blossom dependencies from the committed lockfiles..."
-pnpm install --frozen-lockfile 2>&1
+# CI=1 and --config.confirmModulesPurge=false are both load-bearing.
+#
+# pnpm prompts "The modules directory at ... will be removed and reinstalled
+# from scratch. Proceed? (Y/n)" when admin/node_modules was built by a
+# different pnpm major version than the current one. In an interactive shell
+# that prompt blocks forever with no output; it stalled a deploy on
+# 2026-10-02 until it was answered by hand.
+#
+# CI=1 makes pnpm non-interactive and takes the default (proceed).
+# --config.confirmModulesPurge=false suppresses the prompt outright. Either
+# alone is sufficient, but they fail in opposite directions, so both are set:
+# if a future pnpm drops one of them the other still prevents a hang.
+#
+# Never run a command that can prompt from inside a deploy.
+CI=1 pnpm install --frozen-lockfile 2>&1
 log_info "Building Blossom server and admin assets..."
-pnpm build 2>&1
+# `</dev/null` guarantees no step in the build can block on a prompt. A pnpm
+# modules-purge prompt inside an unattended deploy hangs forever and looks
+# like a slow build rather than a failure.
+( cd "$BLOSSOM_DIR" && npx tsc && CI=1 pnpm build ) </dev/null 2>&1 || {
+    log_error "Blossom build failed"
+    exit 1
+}
 log_info "Blossom build completed"
 echo ""
 
