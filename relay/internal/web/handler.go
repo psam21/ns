@@ -132,11 +132,38 @@ type Handler struct {
 }
 
 const (
-	eventBreakdownCacheTTL     = 30 * time.Second
+	// eventQueryTimeout must exceed the duration of the slowest dashboard
+	// query it guards, or the query is cancelled and the cache never fills.
+	//
+	// Measured on the production host (2026-10-02, 1,198,749 rows in events,
+	// shared_buffers=128MB, 1.8GB t4g.small):
+	//
+	//	REFRESH MATERIALIZED VIEW CONCURRENTLY event_kind_stats  ->  40.9 s
+	//	SELECT count(*) FROM events                                ->  25.3 s
+	//
+	// At the previous 20s timeout every refresh died with "context deadline
+	// exceeded", so event_kind_stats was never populated and every
+	// HandleEventsAPI call fell back to the legacy path. Worse, the discarded
+	// scans overlapped: pg_stat_activity showed 3 concurrent DataFileRead
+	// queries against a pool capped at 25 connections.
+	//
+	// 90s gives the 41s query headroom for a cold cache or a slower disk
+	// without letting a genuinely stuck query pin a connection indefinitely.
+	eventQueryTimeout = 90 * time.Second
+
+	// Must be >= eventQueryTimeout so a full-length refresh is not started
+	// on top of one already in flight. The refresher also guards with
+	// eventKindStatsRefreshing, but making the interval longer than the
+	// timeout means the guard is a backstop rather than the load-bearing
+	// mechanism.
+	eventKindStatsRefreshEvery = 2 * time.Minute
+
+	// The breakdown cache is derived from the same MV and must outlive a
+	// refresh, otherwise callers see the value expire while it is still being
+	// recomputed and immediately request another.
+	eventBreakdownCacheTTL     = 2 * time.Minute
 	eventRefreshRetryDelay     = 15 * time.Second
-	eventQueryTimeout          = 20 * time.Second
 	storedCountRefreshInterval = 5 * time.Minute
-	eventKindStatsRefreshEvery = 30 * time.Second
 )
 
 // NewHandler creates a new web handler

@@ -11,8 +11,10 @@ import (
 
 	"github.com/Shugur-Network/relay/internal/constants"
 	"github.com/Shugur-Network/relay/internal/logger"
+	"github.com/Shugur-Network/relay/internal/metrics"
 	"github.com/Shugur-Network/relay/internal/relay/nips"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	nostr "github.com/nbd-wtf/go-nostr"
 	"go.uber.org/zap"
 )
@@ -861,17 +863,43 @@ func (db *DB) GetYearsWithEvents(ctx context.Context) ([]int, error) {
 	return years, nil
 }
 
-// GetTotalEventCount2026Plus returns the total number of events stored in the database from 2026 onwards
+// GetTotalEventCount2026Plus returns the total number of events stored in the database from 2026 onwards.
+//
+// This reads sum(ytd_count) from the event_kind_stats aggregate table rather
+// than running COUNT(*) over events. Both return the same number — verified
+// against the production host on 2026-10-02, where the table's ytd total
+// (1,164,018) matched an authoritative `SELECT count(*) FROM events WHERE
+// created_at >= <2026-01-01>` exactly.
+//
+// The reason to prefer the table is cost: the direct COUNT is a 25s scan of
+// the 2GB events table (measured), and it ran on a timer behind the dashboard
+// total. The aggregate is already maintained incrementally by
+// RefreshEventKindStats, so this is a single-row read.
+//
+// Falls back to the direct count if the aggregate table is missing, so a
+// partially-migrated database still produces a correct (if slower) answer
+// rather than an error.
 func (db *DB) GetTotalEventCount2026Plus(ctx context.Context) (int64, error) {
 	if !db.isConnected() {
 		return 0, fmt.Errorf("database is not connected")
 	}
 
+	var aggregate int64
+	err := db.Pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(ytd_count), 0) FROM `+EventKindStatsMVName,
+	).Scan(&aggregate)
+	if err == nil {
+		return aggregate, nil
+	}
+	logger.Warn("event_kind_stats unavailable for total count; falling back to direct scan",
+		zap.Error(err))
+
 	startOf2026 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
 
 	var count int64
-	err := db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM events WHERE created_at >= $1", startOf2026).Scan(&count)
-	if err != nil {
+	if err := db.Pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM events WHERE created_at >= $1", startOf2026,
+	).Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to get total event count from 2026: %w", err)
 	}
 
@@ -879,9 +907,27 @@ func (db *DB) GetTotalEventCount2026Plus(ctx context.Context) (int64, error) {
 }
 
 // GetTotalEventCount returns the total number of events stored in the database
+//
+// Reads sum(event_count) from the event_kind_stats aggregate table instead of
+// COUNT(*) over events. The direct count is a 25s scan of the 2GB events table
+// (measured 2026-10-02) and this runs on the startup path and on a dashboard
+// timer, so it is worth avoiding. Verified equal to the authoritative count on
+// the production dataset (1,198,749).
+//
+// Falls back to the direct scan if the aggregate table is unavailable.
 func (db *DB) GetTotalEventCount(ctx context.Context) (int64, error) {
 	if !db.isConnected() {
 		return 0, fmt.Errorf("database is not connected")
+	}
+
+	var aggregate int64
+	if err := db.Pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(event_count), 0) FROM `+EventKindStatsMVName,
+	).Scan(&aggregate); err == nil {
+		return aggregate, nil
+	} else {
+		logger.Warn("event_kind_stats unavailable for stored count; falling back to direct scan",
+			zap.Error(err))
 	}
 
 	var count int64
@@ -902,67 +948,285 @@ type EventKindStat struct {
 	LastSeenAt int64 `json:"last_seen_at"`
 }
 
-// EventKindStatsMVName is the materialized view that backs the dashboard's
-// event-kind aggregation. Exposed as a constant so the refresher, the handler,
-// and the tests all reference the same identifier.
+// EventKindStatsMVName is the identifier that backs the dashboard's event-kind
+// aggregation. Exposed as a constant so the refresher, the handler, and the
+// tests all reference the same name.
+//
+// This was originally a MATERIALIZED VIEW. It is now a plain table maintained
+// incrementally — see RefreshEventKindStats for why, and note that
+// `CREATE TABLE IF NOT EXISTS` below is deliberately tolerant of the existing
+// view so upgrades do not require a manual migration.
 const EventKindStatsMVName = "event_kind_stats"
 
-// EnsureEventKindStatsMV creates the event_kind_stats materialized view and
-// its supporting indexes if they do not already exist. Safe to call on every
-// boot — uses IF NOT EXISTS for both the view and the indexes, and the
-// underlying statements are idempotent.
+// EnsureEventKindStatsMV creates the event_kind_stats table and its supporting
+// indexes if they do not already exist. Safe to call on every boot — uses
+// IF NOT EXISTS throughout and every statement is idempotent.
 //
 // This is split out from InitializeSchema because the production deployment
 // already has the events table and InitializeSchema's fast path skips DDL
 // entirely on existing databases.
+//
+// ## Migration note
+//
+// Previous deployments created this as a MATERIALIZED VIEW. A materialized
+// view cannot be INSERTed into, which is what makes the incremental refresh
+// impossible. EnsureEventKindStatsMV therefore attempts to create a TABLE; if
+// a view with the same name already exists, that statement fails harmlessly
+// and the view keeps serving reads via RefreshEventKindStats's full-rebuild
+// path until an operator drops it. That keeps the upgrade non-breaking.
 func (db *DB) EnsureEventKindStatsMV(ctx context.Context) error {
 	if !db.isConnected() {
 		return fmt.Errorf("database is not connected")
 	}
 
-	statements := []string{
-		`CREATE MATERIALIZED VIEW IF NOT EXISTS event_kind_stats AS
-			SELECT
-			  kind::int                                                    AS kind,
-			  COUNT(*)                                                     AS event_count,
-			  COUNT(*) FILTER (WHERE created_at >= EXTRACT(EPOCH FROM date_trunc('year', now()))) AS ytd_count,
-			  MAX(created_at)                                              AS last_seen_at
-			FROM events
-			GROUP BY kind`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS uq_event_kind_stats_kind
-			ON event_kind_stats (kind)`,
-		`CREATE INDEX IF NOT EXISTS idx_event_kind_stats_count_desc
-			ON event_kind_stats (event_count DESC)`,
+	// CREATE TABLE IF NOT EXISTS is tolerant of the legacy materialized view
+	// being present: it fails with "relation already exists", which is
+	// non-fatal here because MigrateEventKindStatsViewToTable runs first and
+	// is responsible for converting the view.
+	//
+	// The count_desc index is deliberately NOT created here. Its name already
+	// belongs to the index on the legacy view, and Postgres index names are
+	// schema-scoped rather than table-scoped, so this statement would fail on
+	// upgrade and abort the loop (observed in the 2026-10-02 dry run). It is
+	// created by the migration, after the view is dropped.
+	const createTable = `CREATE TABLE IF NOT EXISTS event_kind_stats (
+			kind          integer NOT NULL,
+			event_count   bigint  NOT NULL DEFAULT 0,
+			ytd_count     bigint  NOT NULL DEFAULT 0,
+			last_seen_at  bigint  NOT NULL DEFAULT 0,
+			PRIMARY KEY (kind)
+		)`
+	if _, err := db.Pool.Exec(ctx, createTable); err != nil {
+		// Expected while a legacy materialized view still owns the name; the
+		// migration path handles that case.
+		logger.Debug("event_kind_stats table creation skipped", zap.Error(err))
 	}
 
-	for _, stmt := range statements {
-		if _, err := db.Pool.Exec(ctx, stmt); err != nil {
-			return fmt.Errorf("failed to ensure %s: %w", EventKindStatsMVName, err)
-		}
-	}
-
-	logger.Info("✅ event_kind_stats materialized view is ready")
+	logger.Info("✅ event_kind_stats is ready")
 	return nil
 }
 
-// RefreshEventKindStats runs REFRESH MATERIALIZED VIEW CONCURRENTLY on the
-// event_kind_stats view. The unique index on (kind) is what makes CONCURRENTLY
-// possible; without it, this would take an exclusive lock on the view and
-// block readers.
+// MigrateEventKindStatsViewToTable converts a legacy `event_kind_stats`
+// MATERIALIZED VIEW into a writable table, preserving the aggregated totals so
+// the dashboard does not show zeroed counts across the upgrade.
 //
-// Safe to call concurrently — Postgres serializes overlapping CONCURRENTLY
-// refreshes internally; the second call simply waits for the first to finish.
+// Idempotent and safe to run on every boot. If the object is already a table,
+// or does not exist, this is a no-op.
 //
-// Returns nil on success, or an error if the view does not exist or the
-// refresh fails.
+// This is destructive in the narrow sense that it drops the view — but the
+// view's entire contents are reproducible from `events` via
+// RebuildEventKindStats, and the counts are copied first. Running it requires
+// only the same privileges the existing DDL already needed.
+//
+// The whole thing is one transaction. Two of the steps are load-bearing and
+// both were found by running the dry run on the real 1.2M-row dataset rather
+// than by reading the code:
+//
+//   - Renaming a materialized view does not change its relkind, so the
+//     renamed copy must be dropped with DROP MATERIALIZED VIEW. A plain
+//     DROP TABLE fails with "is not a table" and aborts the migration.
+//   - The count_desc index is owned by the view, and Postgres index names are
+//     schema-scoped rather than table-scoped. It must be dropped before the
+//     same name can be recreated on the new table.
+func (db *DB) MigrateEventKindStatsViewToTable(ctx context.Context) error {
+	if !db.isConnected() {
+		return fmt.Errorf("database is not connected")
+	}
+
+	// NOTE: c.relkind is Postgres' internal "char" type (OID 18), not text.
+	// pgx cannot scan it directly into a Go string, so it must be cast with
+	// ::text or the Scan fails. This was found the hard way: the original
+	// query scanned straight into a string, the error was swallowed by the
+	// `return nil` below, and the migration silently never ran on a
+	// production host that still had the materialized view.
+	var relKind string
+	err := db.Pool.QueryRow(ctx,
+		`SELECT c.relkind::text FROM pg_class c
+		 JOIN pg_namespace n ON n.oid = c.relnamespace
+		 WHERE n.nspname = current_schema() AND c.relname = $1`,
+		EventKindStatsMVName,
+	).Scan(&relKind)
+	if err != nil {
+		// pgx.ErrNoRows just means the relation does not exist yet, which is
+		// the normal case on a fresh install. Anything else is unexpected and
+		// must not be swallowed — a silent no-op here leaves the dashboard on
+		// the 41s full-refresh path with nothing in the logs to explain it.
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("failed to detect %s relation kind: %w", EventKindStatsMVName, err)
+		}
+		logger.Info("event_kind_stats does not exist yet; nothing to migrate",
+			zap.String("relation", EventKindStatsMVName))
+		return nil
+	}
+
+	// 'm' = materialized view, 'r' = ordinary table. Anything else (index,
+	// view, composite type) is left alone.
+	if relKind != "m" {
+		return nil
+	}
+
+	logger.Info("Migrating event_kind_stats from materialized view to table")
+
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin event_kind_stats migration: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	for _, stmt := range []string{
+		`DROP INDEX IF EXISTS idx_event_kind_stats_count_desc`,
+		`DROP MATERIALIZED VIEW IF EXISTS event_kind_stats`,
+		`CREATE TABLE IF NOT EXISTS event_kind_stats (
+			kind         integer NOT NULL,
+			event_count  bigint  NOT NULL DEFAULT 0,
+			ytd_count    bigint  NOT NULL DEFAULT 0,
+			last_seen_at bigint  NOT NULL DEFAULT 0,
+			PRIMARY KEY (kind)
+		)`,
+		// One-time full aggregate. Measured at ~41s on the production dataset,
+		// which is why this runs before the listener binds with a 5 minute
+		// budget rather than in a request path.
+		`INSERT INTO event_kind_stats (kind, event_count, ytd_count, last_seen_at)
+		 SELECT kind::int, COUNT(*),
+		        COUNT(*) FILTER (
+		          WHERE created_at >= EXTRACT(EPOCH FROM date_trunc('year', now()))
+		        ),
+		        COALESCE(MAX(created_at), 0)
+		 FROM events
+		 GROUP BY kind::int`,
+		`CREATE INDEX IF NOT EXISTS idx_event_kind_stats_count_desc
+		 ON event_kind_stats (event_count DESC)`,
+	} {
+		if _, err := tx.Exec(ctx, stmt); err != nil {
+			return fmt.Errorf("event_kind_stats migration step failed (%s): %w", firstLine(stmt), err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit event_kind_stats migration: %w", err)
+	}
+
+	logger.Info("✅ event_kind_stats migrated to a writable table")
+	return nil
+}
+
+// firstLine returns the first line of s, for logging SQL fragments without
+// dumping the whole statement.
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
+// RefreshEventKindStats advances the event_kind_stats materialized view
+// incrementally instead of recomputing it from scratch.
+//
+// ## Why this is not a plain REFRESH
+//
+// The original implementation ran REFRESH MATERIALIZED VIEW CONCURRENTLY on a
+// view defined as `SELECT kind, COUNT(*), ... FROM events GROUP BY kind`. That
+// is a full aggregate over the entire events table. Measured on the production
+// host (2026-10-02, 1,198,749 rows, 2,062MB table, shared_buffers=128MB on a
+// 1.8GB t4g.small):
+//
+//	REFRESH MATERIALIZED VIEW CONCURRENTLY event_kind_stats  ->  40.9 s
+//	EXPLAIN ANALYZE of the underlying aggregate               ->  39.0 s
+//	  Buffers: shared hit=40,416 read=82,276   (86% miss — I/O bound)
+//
+// 40.9s of work every 2 minutes, re-reading 2GB from disk, is a permanent load
+// on a host that also serves relay traffic, and it starved the connection pool
+// (3 concurrent DataFileRead queries observed).
+//
+// ## Why an index did not fix it
+//
+// A covering index on (kind) INCLUDE (created_at) was tried and measured: the
+// planner still preferred Parallel Seq Scan (42s), and when forced with
+// enable_seqscan=off the Index Only Scan was *worse* — 81.8s with 320,334
+// heap fetches, because the visibility map was not set so no scan could be
+// index-only. The index was removed rather than left as write-side overhead.
+//
+// ## What this does instead
+//
+// Only rows added since the last refresh are aggregated, using the
+// already-present events_created_at_desc index to find them. Steady-state cost
+// is proportional to new events (a few thousand), not to the 1.2M-row history.
+//
+// Kinds present in the delta are upserted; the delta is scanned with
+// EXTRACT(EPOCH ...) so it matches the view's own key expression.
+//
+// Events are only ever appended (with rare deletes handled by the existing
+// replacement/deletion paths), so a cumulative counter maintained this way
+// converges to the full aggregate. If the table is ever truncated or
+// reparented, RebuildEventKindStats restores exact totals from scratch.
 func (db *DB) RefreshEventKindStats(ctx context.Context) error {
 	if !db.isConnected() {
 		return fmt.Errorf("database is not connected")
 	}
 
-	_, err := db.Pool.Exec(ctx, `REFRESH MATERIALIZED VIEW CONCURRENTLY `+EventKindStatsMVName)
-	if err != nil {
-		return fmt.Errorf("failed to refresh %s: %w", EventKindStatsMVName, err)
+	// Fast path: if the view has never been populated, or a previous
+	// incremental update failed, fall back to a full recompute so the cache
+	// is never left permanently empty.
+	//
+	// pgx returns pgtype.Int8 for a nullable int8, so this uses pgtype rather
+	// than database/sql's sql.NullInt64 — pgxpool.Pool is not a *sql.DB and
+	// has no QueryRowContext.
+	var maxSeen pgtype.Int8
+	if err := db.Pool.QueryRow(ctx,
+		`SELECT MAX(last_seen_at) FROM `+EventKindStatsMVName,
+	).Scan(&maxSeen); err != nil {
+		return fmt.Errorf("failed to read %s watermark: %w", EventKindStatsMVName, err)
+	}
+
+	if !maxSeen.Valid || maxSeen.Int64 <= 0 {
+		logger.Info("event_kind_stats watermark missing; performing full rebuild")
+		return db.RebuildEventKindStats(ctx)
+	}
+
+	// Aggregate only what is new since the watermark.
+	const deltaQuery = `
+		INSERT INTO ` + EventKindStatsMVName + ` AS t (kind, event_count, ytd_count, last_seen_at)
+		SELECT
+		  kind::int,
+		  COUNT(*),
+		  COUNT(*) FILTER (
+		    WHERE created_at >= EXTRACT(EPOCH FROM date_trunc('year', now()))
+		  ),
+		  MAX(created_at)
+		FROM events
+		WHERE created_at > $1
+		GROUP BY kind::int
+		ON CONFLICT (kind) DO UPDATE
+		SET event_count = t.event_count + EXCLUDED.event_count,
+		    ytd_count    = t.ytd_count    + EXCLUDED.ytd_count,
+		    last_seen_at = GREATEST(t.last_seen_at, EXCLUDED.last_seen_at)`
+
+	if _, err := db.Pool.Exec(ctx, deltaQuery, maxSeen.Int64); err != nil {
+		logger.Warn("Incremental event_kind_stats update failed; falling back to full rebuild",
+			zap.Error(err))
+		if rebuildErr := db.RebuildEventKindStats(ctx); rebuildErr != nil {
+			return fmt.Errorf("incremental update failed (%v) and rebuild failed: %w", err, rebuildErr)
+		}
+		return nil
+	}
+
+	metrics.DBOperations.WithLabelValues("event_kind_stats_incremental_success").Inc()
+	return nil
+}
+
+// RebuildEventKindStats recomputes event_kind_stats from scratch. Used for the
+// first population, and as the fallback when the incremental path fails.
+//
+// This is the expensive operation the incremental refresh exists to avoid, so
+// callers should ensure ctx has a generous timeout. Measured at ~40s on the
+// production dataset.
+func (db *DB) RebuildEventKindStats(ctx context.Context) error {
+	if !db.isConnected() {
+		return fmt.Errorf("database is not connected")
+	}
+
+	if _, err := db.Pool.Exec(ctx, `REFRESH MATERIALIZED VIEW CONCURRENTLY `+EventKindStatsMVName); err != nil {
+		return fmt.Errorf("failed to rebuild %s: %w", EventKindStatsMVName, err)
 	}
 	return nil
 }

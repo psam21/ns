@@ -27,13 +27,34 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Handle OS signals for graceful shutdown
+	// Handle OS signals for graceful shutdown.
+	//
+	// A hard-exit escalation is required because graceful shutdown is not
+	// guaranteed to complete. Observed 2026-10-02: `systemctl restart relay`
+	// hung indefinitely in `deactivating (stop-sigterm)` because the process
+	// was thrashing on swap with threads in D state, so it could not make
+	// progress on draining connections. The only way out was a manual
+	// SIGKILL — during an incident, that is a delay you cannot afford.
+	//
+	// systemd's TimeoutStopSec would normally cover this, but the relay is
+	// also stopped by hand in incident response, and a supervisor that cannot
+	// be killed by SIGTERM is indistinguishable from a hung one. So: first
+	// signal requests a graceful stop, and if the process is still alive after
+	// shutdownGracePeriod, it exits hard.
+	const shutdownGracePeriod = 20 * time.Second
 	go func() {
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 		sig := <-signals
 		logger.Info("Received termination signal. Shutting down gracefully...", zap.String("signal", sig.String()))
 		cancel()
+
+		go func() {
+			time.Sleep(shutdownGracePeriod)
+			logger.Warn("Graceful shutdown did not complete in time; exiting hard",
+				zap.Duration("grace_period", shutdownGracePeriod))
+			os.Exit(1)
+		}()
 	}()
 
 	// Check if this is a server command that needs to block

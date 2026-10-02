@@ -329,9 +329,34 @@ func (b *NodeBuilder) BuildDB() error {
 		logger.Info("Initialized EventsStored metric", zap.Int64("count", count))
 	}
 
-	if err := b.database.RebuildBloomFilter(b.ctx); err != nil {
-		logger.Warn("Failed to rebuild bloom filter", zap.Error(err))
-	}
+	// Rebuild the duplicate-event Bloom filter in the background rather than
+	// on the startup path.
+	//
+	// This is `SELECT id FROM events` over the whole table — 1,198,749 rows on
+	// the production host. It previously ran inline with b.ctx (the root
+	// context, so no deadline at all) before ListenAndServe, which meant every
+	// restart and every deploy blocked for the duration of a full-table scan.
+	// Observed 2026-10-02: startup sat in "Rebuilding Bloom filter from
+	// database..." for ~56s, with the port unbound the whole time.
+	//
+	// The Bloom filter is a duplicate-event optimisation, not a correctness
+	// requirement: until it is warm, StoreEvent's duplicate check simply finds
+	// nothing and events are stored normally. Serving traffic first and warming
+	// in the background is strictly better than being down while it warms.
+	bloomCtx, cancelBloom := context.WithTimeout(b.ctx, 10*time.Minute)
+	go func() {
+		defer cancelBloom()
+		if err := b.database.RebuildBloomFilter(bloomCtx); err != nil {
+			// A cancelled rebuild is expected on shutdown; anything else is a
+			// real failure worth surfacing.
+			if bloomCtx.Err() == nil {
+				logger.Warn("Failed to rebuild bloom filter", zap.Error(err))
+			}
+			return
+		}
+		logger.Info("Bloom filter warm")
+	}()
+	logger.Info("Bloom filter rebuild started in background; relay will serve immediately")
 
 	// Initialize event dispatcher for real-time notifications
 	b.eventDispatcher = storage.NewEventDispatcher(b.database)

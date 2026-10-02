@@ -13,6 +13,15 @@ Restart=always
 RestartSec=5
 LimitNOFILE=65535
 
+# Hard stop deadline. The binary escalates to a hard exit after 20s, so 30s
+# here is the backstop for the case where the process cannot even run that
+# timer. This replaces the 90s systemd default, which is far longer than any
+# useful shutdown and turns every restart into a 90s outage.
+TimeoutStopSec=30
+KillSignal=SIGTERM
+FinalKillSignal=SIGKILL
+SendSIGKILL=yes
+
 # Memory guardrails. The relay has been OOM-killed by the system OOM
 # killer during heavy dashboard refresh windows (observed 2026-09-02).
 # MemoryMax triggers a clean systemd restart before the system OOM

@@ -81,13 +81,29 @@ func NewServer(relayCfg config.RelayConfig, node domain.NodeInterface, fullCfg *
 
 // ListenAndServe starts your WebSocket relay server and serves NIP-11 on normal HTTP requests.
 func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
-	// Ensure the event_kind_stats materialized view exists, then start the
-	// background goroutine that keeps it (and the in-memory cache) fresh.
+	// Ensure the event_kind_stats aggregate table exists, migrate it away from
+	// the legacy materialized view if needed, then start the background
+	// goroutine that keeps it (and the in-memory cache) fresh.
 	// See https://github.com/psam21/ns/issues/100.
+	//
+	// Ordering matters: the migration must run before Ensure, because Ensure
+	// creates a TABLE only if the name is free, and the migration needs the
+	// view to still be there to detect.
 	if db := s.node.DB(); db != nil {
+		// The migration does a one-time full aggregate over `events`. Measured
+		// at ~40s on the production dataset (1.2M rows), so it gets a longer
+		// budget than the routine ensure. It is a no-op on every boot after the
+		// first, and it runs before the listener binds, so give it room rather
+		// than risk a half-migrated table on a tight timeout.
+		migrateCtx, cancelMigrate := context.WithTimeout(ctx, 5*time.Minute)
+		if err := db.MigrateEventKindStatsViewToTable(migrateCtx); err != nil {
+			logger.Warn("event_kind_stats migration failed; dashboard will use the full-refresh path", zap.Error(err))
+		}
+		cancelMigrate()
+
 		ensureCtx, cancelEnsure := context.WithTimeout(ctx, 30*time.Second)
 		if err := db.EnsureEventKindStatsMV(ensureCtx); err != nil {
-			logger.Warn("Failed to ensure event_kind_stats materialized view; dashboard will fall back to legacy aggregation", zap.Error(err))
+			logger.Warn("Failed to ensure event_kind_stats table; dashboard will fall back to legacy aggregation", zap.Error(err))
 		}
 		cancelEnsure()
 		s.webHandler.StartEventKindStatsRefresher(ctx)
@@ -254,10 +270,37 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 		}
 	})
 
+	// These are deliberately literal rather than read from RelayConfig, and the
+	// reason is worth stating because it is a trap:
+	//
+	//   - RelayConfig.WriteTimeout is parsed, validated and defaulted, and then
+	//     never read anywhere in the tree. That is the same dead-config defect
+	//     that SEND_BUFFER_SIZE had before commit 4da537e. A grep for
+	//     WriteTimeout shows only the struct tag, the config files and the
+	//     literal 15s below.
+	//   - It cannot simply be wired up here. gorilla/websocket calls
+	//     netConn.SetDeadline(time.Time{}) immediately after Hijack()
+	//     (websocket@v1.5.3/server.go:251), so the HTTP server's read/write
+	//     deadlines never apply to an upgraded WebSocket connection. Binding
+	//     the value to http.Server.WriteTimeout would therefore make the
+	//     setting look live while changing nothing observable for the relay's
+	//     actual traffic, which is worse than leaving it obviously unused.
+	//
+	// So: HTTP values stay hardcoded. ReadTimeout is 15s and WriteTimeout is
+	// 30s, deliberately asymmetric, because the dashboard aggregation queries
+	// (full-table scans over events) are read-heavy: a response that starts
+	// promptly can legitimately take longer to finish than a request takes to
+	// arrive. At 15s/15s a slow aggregation was cut off mid-response, which the
+	// dashboard renders as an empty panel rather than as an error. IdleTimeout
+	// is 60s so keep-alive connections are reclaimed rather than accumulating.
+	//
+	// Keep these non-zero. A zero timeout in Go means *no deadline at all*, not
+	// "no limit on duration" — it is a silent permanent hang, which is exactly
+	// the failure mode the whole service is currently exhibiting.
 	httpSrv := &http.Server{
 		Addr:         addr,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
