@@ -242,6 +242,30 @@ else
     fi
 fi
 
+# --- notify ----------------------------------------------------------------
+#
+# The exit code below is the alert signal, and until this hook existed it went
+# nowhere: a wedge could sit undetected indefinitely because the timer recorded
+# a JSONL line nobody was reading.
+#
+# relay-alert.sh is edge-triggered on transitions, so a condition that persists
+# is announced once rather than 288 times a day. It always exits 0 and its
+# output is discarded: a failed webhook must not change the health status this
+# script reports, and must not fail the timer. The `|| true` makes that
+# explicit rather than relying on the notifier's own contract.
+#
+# Alerts are opt-in via ALERT_WEBHOOK. With it unset the notifier logs the
+# would-be alert to stderr and stays silent externally, so installing this
+# changes nothing until a webhook is configured.
+if command -v /usr/local/bin/relay-alert.sh >/dev/null 2>&1 && [ -x /usr/local/bin/relay-alert.sh ]; then
+    detail=""
+    for w in "${warnings[@]:-}"; do
+        [ -n "$w" ] && detail="${detail}${detail:+, }$w"
+    done
+    [ -n "$detail" ] || detail="status=$status"
+    /usr/local/bin/relay-alert.sh "$status" "$detail" >/dev/null 2>&1 || true
+fi
+
 if [ "$critical" -ne 0 ]; then exit 2; fi
 if [ "${#warnings[@]}" -gt 0 ]; then exit 1; fi
 exit 0

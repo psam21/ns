@@ -247,6 +247,26 @@ else
     log_error "deploy/relay.service not found at $NS_DIR/deploy/relay.service - this is a hard failure"
 fi
 
+# Stage the health-watcher assets.
+#
+# These were previously installed by hand and were NOT part of the deploy, so
+# they silently drifted: every edit to relay-memory-watch.sh between deploys
+# existed only on the local machine, and a fresh host would come up with no
+# monitoring at all. Staging them here makes the watcher part of the release,
+# so it can no longer diverge from the code it monitors.
+#
+# A missing file is a warning, not an error. The watcher is defence in depth;
+# refusing to deploy the relay because an optional observer is absent would
+# trade a real outage risk for a cosmetic one.
+for f in relay-memory-watch.sh relay-alert.sh relay-watch.service relay-watch.timer relay-recover.service; do
+    if [ -f "$NS_DIR/deploy/$f" ]; then
+        cp "$NS_DIR/deploy/$f" "$STAGING/$f"
+        log_info "Copied deploy/$f to staging"
+    else
+        log_warn "deploy/$f not found; monitoring asset will not be updated"
+    fi
+done
+
 log_info "All files prepared in $STAGING"
 echo ""
 
@@ -604,6 +624,39 @@ if [ -f "$NEW_RELEASE/last-commit" ]; then
     sudo install -o relay -g relay -m 0644 "$NEW_RELEASE/last-commit" /opt/relay/.last-commit.tmp
 fi
 
+# Install the health-watcher assets.
+#
+# Deliberately NOT transactional and NOT part of RELAY_SWAPPED: the watcher
+# observes the relay rather than constituting it, so a failure here must not
+# trigger a relay rollback. Each file is installed independently and a missing
+# one is reported without aborting.
+#
+# The webhook URL is deliberately not managed here. It is a secret, it belongs
+# in a systemd drop-in rather than a tracked file, and overwriting it on every
+# deploy would clobber an operator's configuration. Enabling alerting is:
+#
+#   sudo systemctl edit relay-watch.service
+#   # [Service]
+#   # Environment=ALERT_WEBHOOK=https://...
+#
+# With ALERT_WEBHOOK unset the notifier logs to stderr and sends nothing, so
+# shipping it is inert until that drop-in exists.
+for f in relay-memory-watch.sh relay-alert.sh; do
+    if [ -f "$REMOTE_STAGE/$f" ]; then
+        sudo install -o root -g root -m 0755 "$REMOTE_STAGE/$f" "/usr/local/bin/$f"
+    else
+        echo "WARN: $f not staged; existing /usr/local/bin/$f left untouched"
+    fi
+done
+
+for f in relay-watch.service relay-watch.timer relay-recover.service; do
+    if [ -f "$REMOTE_STAGE/$f" ]; then
+        sudo install -o root -g root -m 0644 "$REMOTE_STAGE/$f" "/etc/systemd/system/$f"
+    else
+        echo "WARN: $f not staged; existing unit left untouched"
+    fi
+done
+
 RELAY_SWAPPED=1
 sudo mv -f /etc/systemd/system/relay.service.tmp /etc/systemd/system/relay.service
 sudo mv -f /opt/relay/relay-arm64.tmp             /opt/relay/relay-arm64
@@ -618,6 +671,21 @@ sudo systemctl daemon-reload
 # The per-deploy staging tree at /opt/relay/releases/<ts>/ is dead
 # weight now: we never read from it again. Drop it to free ~30MB.
 sudo rm -rf "$NEW_RELEASE"
+
+# Enable the health watcher.
+#
+# `enable --now` is idempotent: on a host that already has it running this is a
+# no-op, and on a fresh host it starts the observer. A failed enable is
+# reported but does not abort the deploy, for the same reason the install above
+# is non-transactional -- the watcher guards the relay, it is not the relay.
+if [ -f "$REMOTE_STAGE/relay-watch.timer" ]; then
+    if sudo systemctl enable --now relay-watch.timer >/dev/null 2>&1; then
+        echo "OK: relay-watch.timer enabled and active"
+    else
+        echo "WARN: could not enable relay-watch.timer; health watching is OFF"
+        echo "      investigate with: journalctl -u relay-watch.service"
+    fi
+fi
 
 # 4. Deploy and restart Blossom. The existing /opt/blossom/.env and
 #    /opt/blossom/data are deliberately preserved.

@@ -301,10 +301,51 @@ accepted.
 
 ## Open items
 
-1. **No alerting on the watcher.** `relay-watch.timer` records every 5
-   minutes to `/var/log/relay/watch.jsonl`, but nothing notifies. The script
-   exits 2 on a critical reading and that exit code currently goes nowhere.
-   Needs a notifier (email or webhook) to be useful.
+1. ~~**No alerting on the watcher.**~~ **Done.** `deploy/relay-alert.sh`
+   consumes the watcher's exit code and posts to a webhook. The watcher and
+   the notifier are now installed by `ns-deploy-full.sh`, and the deploy
+   `enable --now`s the timer.
+
+   Alerts are **edge-triggered on status transitions**, not level-triggered.
+   `relay-watch.timer` runs every 5 minutes, so a condition persisting an hour
+   is the same finding 12 times; an operator paged 288 times a day stops
+   reading, which makes alerting worse than none. So `ok → degraded` alerts
+   once, `degraded → degraded` is silent, `degraded → critical` escalates, and
+   recovery is always announced — "the page was real and it is over" is the
+   message an operator most needs and least likely to get.
+
+   To enable, on the host:
+
+   ```bash
+   sudo systemctl edit relay-watch.service
+   # [Service]
+   # Environment=ALERT_WEBHOOK=https://discord.com/api/webhooks/...
+   ```
+
+   The webhook URL is deliberately not managed by the deploy: it is a secret,
+   it belongs in a drop-in rather than a tracked file, and overwriting it each
+   deploy would clobber operator configuration. With `ALERT_WEBHOOK` unset
+   the notifier logs the would-be alert to stderr and sends nothing, so
+   shipping it is inert until the drop-in exists.
+
+   Three properties the implementation guarantees, each because the opposite is
+   worse:
+
+   - The notifier **always exits 0**. A webhook outage must not change the
+     health status the watcher reports, nor fail the timer. Wiring it into the
+     status would let a bad webhook turn a healthy relay into an alerting one.
+   - Alerts are **not transactional** with the relay. The watcher observes the
+     relay; it is not the relay. A failure to install it warns rather than
+     rolling back a good release.
+   - The payload is built with **`jq`**, not string interpolation. The first
+     version used `printf` plus a hand-rolled escape and emitted **invalid
+     JSON** — only the body was escaped, so the title went in raw. `curl`
+     reported HTTP 200 from a receiver that never parsed it, so the test that
+     "passed" proved nothing. See below.
+
+   Corrupt state files, non-numeric cooldown stamps, and unwritable state
+   directories are all handled: arithmetic on a non-numeric value would abort
+   the script before it alerts, so the stamp is validated first.
 
 2. **Autorecovery is installed but off.** `relay-recover.service` performs
    the SIGKILL-then-start sequence that recovered the relay on 2026-10-02,
@@ -451,3 +492,14 @@ gh api repos/psam21/ns/dependabot/alerts --jq '[.[]|select(.state=="open")]|leng
   drifted out of `gofmt` compliance invisibly. Harmless in isolation, but it
   means a real formatting error in a new change cannot be told apart from the
   existing noise. The `fmt` CI job now fails on it.
+- **An endpoint that accepts malformed input makes a broken payload look
+  working.** The first webhook notifier emitted invalid JSON — a quoted title
+  went in unescaped — and `curl` reported HTTP 200 because the test receiver
+  never parsed the body. A test that observes *that something was sent* is not
+  a test; parse what arrived. The colour value had the same problem one round
+  later: `0xE01B24` is not a JSON integer, so `jq --argjson` rejected the whole
+  payload and the alert silently never sent.
+- **Put anything you maintain in the deploy script.** The watcher and its
+  units existed in `deploy/` but were installed by hand, so edits lived only
+  on one machine and a fresh host would come up unmonitored. Assets that are
+  not deployed are not deployed.
