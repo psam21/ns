@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/Shugur-Network/relay/internal/application"
 	"github.com/Shugur-Network/relay/internal/config"
@@ -143,6 +144,28 @@ func init() {
 			// Initialize metrics
 			metrics.RegisterMetrics()
 
+			// Start the metrics + pprof listener.
+			//
+			// METRICS_ENABLED and METRICS_PORT were parsed, validated and set in
+			// every config file but nothing ever read them to start a server, so
+			// the entire Prometheus surface was unreachable in production and
+			// port 2112 was closed. Starting it here also makes /debug/pprof
+			// available, which is the only way to answer "what is holding this
+			// much heap" on a live process — the question that could not be
+			// answered during the 2026-10-02 outage.
+			//
+			// Bound to loopback deliberately: pprof exposes heap contents and
+			// goroutine stacks. Caddy publishes 443/80 only, so this stays
+			// host-local unless someone explicitly proxies it.
+			//
+			// Started after RegisterMetrics so the first scrape is not empty,
+			// and it returns immediately so it cannot delay the relay listener.
+			if cfg.Metrics.Enabled {
+				metrics.StartMetricsServer("127.0.0.1", cfg.Metrics.Port)
+			} else {
+				logger.Info("Metrics server disabled by configuration")
+			}
+
 			// Initialize the application/relay
 			logger.Info("Starting relay...")
 			app, err := application.New(ctx, cfg, nil)
@@ -155,6 +178,13 @@ func init() {
 			go func() {
 				<-ctx.Done() // Wait for cancellation signal
 				logger.Info("Shutdown signal received, initiating graceful shutdown...")
+				// Stop the metrics listener before tearing down the app, so a
+				// scrape in flight does not observe a half-torn-down process.
+				shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				if err := metrics.StopMetricsServer(shutdownCtx); err != nil {
+					logger.Warn("Metrics server did not shut down cleanly", zap.Error(err))
+				}
+				cancel()
 				app.Shutdown() // Call the enhanced shutdown method
 			}()
 
