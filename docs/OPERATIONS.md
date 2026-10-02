@@ -429,6 +429,24 @@ curl -s --max-time 20 https://nostr.ltd/api/stats | jq '.stats.events_stored'
    default because restarting every 5 minutes over a genuinely broken relay
    hides the real fault.
 
+   Enabling it is one drop-in, the same mechanism as `ALERT_WEBHOOK` above:
+
+   ```bash
+   sudo systemctl edit relay-watch.service
+   # [Service]
+   # Environment=WATCH_RECOVER=1
+   ```
+
+   The threshold it acts on is memory, not liveness. A relay that is
+   responding but leaking gets killed and restarted every 5 minutes
+   forever, which converts a diagnosable slow leak into an unexplained
+   restart loop. If you turn it on, watch the restart count before trusting
+   it:
+
+   ```bash
+   systemctl show relay -p NRestarts --value
+   ```
+
 3. ~~**`MaxRequestsPerSecond`, `MaxBanDuration` and `ProgressiveBan` are
    unimplemented.**~~ **Fixed.** All three were configured in
    `deploy/config.yaml` and read nowhere in the codebase. See "Limits that were
@@ -441,6 +459,54 @@ curl -s --max-time 20 https://nostr.ltd/api/stats | jq '.stats.events_stored'
    `sha3`. Upgrading v0.52.0 → v0.56.0 cleared the other three advisories;
    this one cannot be cleared without dropping the validator dependency.
    `govulncheck` reports the relay's own code as unaffected.
+
+   Not actionable, recorded so it is not re-investigated. Re-check only if
+   `x/crypto` ships a maintained replacement for `openpgp`, or if the
+   validator dependency is dropped.
+
+5. **A `COUNT` with no author still times out.** `{"kinds":[1]}` with no
+   `authors` takes ~4.9 s and hits the 5 s query timeout, so the client gets
+   `Invalid COUNT filter: count operation timed out`. This is **not** the
+   `= ANY` bug fixed in `249efd5` / `b2c6f4c`; it reproduces identically on
+   the old binary and is inherent to the query:
+
+   ```
+   SELECT count(*) FROM events WHERE kind IN (1)
+     ->  Parallel Seq Scan on events
+           Filter: (kind = 1)
+           Rows Removed by Filter: 296,756
+           actual rows=102,960
+                                                  4,857 ms
+   ```
+
+   The relay has 308,879 kind-1 events. Counting them means visiting a large
+   fraction of 1.2M rows, and PostgreSQL chooses a sequential scan even
+   though `idx_events_kind_created_at_covering` exists. Options, none of
+   which this relay has taken unilaterally:
+
+   - `ALTER TABLE events SET (parallel_tuple_cost = 0)` together with a
+     lower `random_page_cost`, which pushes the planner toward the covering
+     index. Cheap to test, but it changes plans for *every* query on the
+     table, so it needs measuring rather than assuming.
+   - Maintain a per-kind count table updated on insert. Exact and no scan at
+     all, but it must stay consistent with `CleanExpiredEvents` and
+     `DeleteExpiredEvents`, which currently run outside the insert path.
+   - Reject authorless `COUNT` as a client error. `IsHLLEligible` may
+     already have been meant to gate exactly this.
+
+   Measured rather than assumed: with a low-volume author the same query
+   plans as a Bitmap Index Scan and returns in 3.1 ms with the correct
+   count, so the index path itself is sound.
+
+6. **CI actions now target Node 24.** `setup-go` v5.5.0, `setup-node`
+   v4.4.0, `upload-artifact` v4.6.2 and `pnpm/action-setup` v4.0.0 all
+   declared `using: node20` and were being force-run on Node 24 with a
+   deprecation warning on every job. Bumped to `setup-go` v7.0.0,
+   `setup-node` v7.0.0, `upload-artifact` v7.0.1 and `pnpm/action-setup`
+   v6.1.0, each verified to declare `node24` in its `action.yml` at the
+   pinned SHA *before* the pin was written down -- a tag name is not
+   evidence of what an action does. `actions/checkout` v5.0.0 was already
+   `node24`. Still SHA-pinned; still 5 jobs.
 
 ## Limits that were written but never applied
 
