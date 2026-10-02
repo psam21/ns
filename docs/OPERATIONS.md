@@ -140,6 +140,67 @@ Leaving it off is the safer default. If the relay is genuinely broken (bad
 deploy, disk full, corrupt database), restarting every 5 minutes hides the
 real fault and destroys the evidence.
 
+## Where the logs actually are
+
+**The relay does not log to the journal.** `LOGGING.FILE` in
+`/opt/relay/config.yaml` is `/var/log/relay/relay.log`, and the systemd unit
+captures only the startup banner.
+
+```bash
+sudo tail -n 50 /var/log/relay/relay.log          # <-- the real log
+sudo tail -f /var/log/relay/relay.log
+sudo grep '"level":"error"' /var/log/relay/relay.log | tail -20
+sudo grep 'WebSocket connection closed' /var/log/relay/relay.log | tail -20
+```
+
+`journalctl -u relay` shows the service start/stop lines and nothing else.
+Reading only the journal is why a client-side broken pipe appeared to have no
+server-side explanation at all — this cost real time during the rate-limiter
+work in `fc4b994`, where three attempts to diagnose a dropped connection came
+back empty because the answer was in a file nobody had opened.
+
+`sudo` is required: the log is not world-readable.
+
+Log format is zap JSON, one object per line, so it parses directly:
+
+```bash
+sudo grep 'WebSocket connection closed' /var/log/relay/relay.log \
+  | python3 -c 'import sys,json
+for l in sys.stdin:
+    d=json.loads(l)
+    print(d["reason"], d["real_client_ip"], round(d["connection_duration"]))'
+```
+
+The `reason` field exists as of `e07eded` — with a caveat worth recording.
+That commit raised the close log from Debug to Info specifically so close
+reasons would be visible, and in the same edit dropped the
+`zap.String("reason", ...)` argument from the call. The comment claimed the
+reason was logged; the deployed binary emitted a line saying a connection
+closed and nothing about why. On the live host: 12 closes, 0 attributable.
+
+The lesson generalises. A change whose entire purpose is "make X observable"
+must assert that X is actually *emitted*. Asserting the log level is not
+enough, because the field carrying the information is a separate argument that
+an edit can silently remove.
+`TestCloseReasonIsAlwaysLoggable` now covers it, and `Close()` logs
+`reason: "unspecified"` rather than staying silent when no path set one.
+
+### Metrics and pprof
+
+Bound to `127.0.0.1:2112` only — pprof exposes heap contents, so it must not be
+public. Reach it over SSH:
+
+```bash
+curl -s --max-time 20 http://localhost:2112/metrics | grep '^nostr_relay_'
+curl -s --max-time 20 'http://localhost:2112/debug/pprof/goroutine?debug=1' \
+  | head -1
+```
+
+`nostr_relay_rate_limited_total{type="REQ"}` is the signal that
+`MAX_REQUESTS_PER_SECOND` is engaging. Before `fc4b994` that metric did not
+exist, so there was no way to tell "nobody is exceeding the limit" from "the
+limit does not exist".
+
 ## Memory: what is actually allocated
 
 Answered with a live heap profile on 2026-10-02, after the metrics/pprof

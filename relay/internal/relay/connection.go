@@ -979,26 +979,35 @@ func (c *WsConnection) Close() {
 	c.closeMu.Do(func() {
 		c.isClosed.Store(true)
 
-		if c.closeReason != "" {
-			// Info, not Debug.
-			//
-			// This logged at Debug, and production runs at Info, so *every* close
-			// reason was invisible on the live host. That is why diagnosing a
-			// client-side broken pipe produced an empty journal: the relay knew
-			// why it had closed the socket and was not writing it down anywhere
-			// the operator could see.
-			//
-			// Info is the right level because closeReason is set on the
-			// abnormal paths -- backpressure, repeated rate limiting, banned
-			// client, no pong, malformed traffic. Those are exactly the events an
-			// operator is trying to explain after the fact. Normal client
-			// disconnects set "client closed connection normally" and are also
-			// logged, which is the one acceptable cost of this level.
-			logger.Info("WebSocket connection closed",
-				zap.String("client_ip", c.RemoteAddr()),
-				zap.String("real_client_ip", c.realClientIP),
-				zap.Duration("connection_duration", time.Since(c.startTime)))
+		// Always log, and always include the reason.
+		//
+		// The level was raised from Debug to Info because production runs at
+		// Info, so every close reason was invisible on the live host. That is
+		// why diagnosing a client-side broken pipe produced an empty journal:
+		// the relay knew why it had closed the socket and was not writing it
+		// down where the operator could see it.
+		//
+		// Info is right because closeReason is set on the abnormal paths --
+		// backpressure, repeated rate limiting, banned client, no pong, read
+		// error -- which are exactly the events an operator is trying to
+		// explain after the fact. Normal client disconnects also log; that is
+		// the acceptable cost.
+		//
+		// The empty-string case still logs, as reason "unspecified". The
+		// previous version guarded on `closeReason != ""` *and* omitted the
+		// reason field from the call, so no close was ever attributable: the
+		// log said a connection closed and said nothing about why. Dropping
+		// the field in an edit is the precise failure this change exists to
+		// prevent, so the value is now unconditionally present.
+		reason := c.closeReason
+		if reason == "" {
+			reason = "unspecified"
 		}
+		logger.Info("WebSocket connection closed",
+			zap.String("reason", reason),
+			zap.String("client_ip", c.RemoteAddr()),
+			zap.String("real_client_ip", c.realClientIP),
+			zap.Duration("connection_duration", time.Since(c.startTime)))
 
 		// Stop event dispatcher processing
 		if c.eventCancel != nil {
