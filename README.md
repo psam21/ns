@@ -197,9 +197,12 @@ Build the Blossom service with:
 ```bash
 cd blossom
 pnpm install
-npx tsc
-npx vite build
+npx tsc       # server only
+pnpm build    # tsc, then postbuild -> installs and builds admin/
 ```
+
+The admin UI is a separate package with its own lockfile; `vite` is not a
+dependency of the Blossom server, so there is no `vite.config` at this level.
 
 See [`deploy/relay.service`](deploy/relay.service), [`deploy/blossom.service`](deploy/blossom.service), [`deploy/Caddyfile`](deploy/Caddyfile), and [`deploy/config.yaml`](deploy/config.yaml) for the production service definitions and configuration template.
 

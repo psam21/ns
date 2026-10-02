@@ -98,16 +98,26 @@ cannot be told apart from existing noise.
 
 ### Blossom
 
+The server and the admin UI are **separate packages with separate
+lockfiles** — there is no root `vite.config`, and `vite` is not a dependency of
+the Blossom server. `vite` lives only in `blossom/admin`.
+
 ```bash
 cd blossom
 pnpm install
-npx tsc                # must precede the build and the tests
-npx vite build
+npx tsc                # server only; must precede the tests
+pnpm build             # tsc, then postbuild -> builds admin/
 ```
 
-`build/` is gitignored, so a stale build can make a test pass. `rm -rf build`
-before verifying anything build-dependent — "verified locally" is meaningless
-otherwise.
+`pnpm build` runs `tsc` and then `postbuild`, which installs and builds the
+whole admin workspace. `build/` is gitignored, so a stale build can make a
+test pass. `rm -rf build` before verifying anything build-dependent —
+"verified locally" is meaningless otherwise.
+
+**Never run `npx vite build` at the Blossom root.** There is no vite config
+there and vite is not installed, so `npx` tries to download `vite@8.x` from
+the registry — it hangs, then fails with `missing packages and no YES option`.
+The admin build is `cd admin && pnpm build`.
 
 ### Local development and smoke test
 
