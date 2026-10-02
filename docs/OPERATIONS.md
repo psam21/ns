@@ -349,6 +349,42 @@ This is invisible without `EXPLAIN`: the query is correct, the results are
 correct, it just takes 92 seconds — and no aggregate on the dashboard moves.
 Author filters are the most common REQ shape after kind.
 
+### A third copy of the query builder
+
+After the two fixes above, `GetEventCount` and `GetEventPubkeys` -- the
+NIP-45 `COUNT` path -- were still emitting `pubkey = ANY($1)`.
+
+I had recorded that code as dead, "not reached by `GetEvents`", and
+deferred it. **That was wrong.** Both are called from
+`internal/relay/nips/nip45.go:107` and `:127` on every `COUNT` against a
+HyperLogLog-eligible filter. "Not reached by the function I fixed" is not
+"not reached".
+
+I also assumed the bound-parameter form was safe, reasoning that
+`= ANY($1)` passes an array rather than a literal. Measured with `PREPARE`,
+so the SQL is byte-identical to what pgx sends:
+
+```
+pubkey = $1                      Index Only Scan
+  using events_pubkey_created_at            1.3 ms
+pubkey = ANY(ARRAY[$1]::text[])  Parallel Seq Scan
+  Rows Removed by Filter: 399,687        5,528 ms
+```
+
+A membership test against a parameter is still a membership test. Two
+verifiable claims were wrong: that the code was dead, and that the syntax
+was safe. `EXPLAIN` settled both.
+
+The two functions were near-duplicates of each other, which is the real
+defect -- the second was written because the first was not reusable, and it
+drifted silently. They now share one `buildFilterWhere`.
+
+The `id = ANY($1)` in the NIP-09 deletion path is **deliberately left
+alone**: `pubkey = $2` is a scalar equality that drives the index and the id
+list is a cheap recheck over the small set it returns (Bitmap Index Scan,
+1.3 ms). Not every `ANY` is a bug, and a comment now says so, so nobody
+"fixes" it on the strength of a grep.
+
 ### The scripts that never ran
 
 `run_all.sh` selects scripts by `$3 == "integration"` in `coverage.tsv`, so it
