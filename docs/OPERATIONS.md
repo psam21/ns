@@ -192,8 +192,8 @@ accepted.
 
 1. **No alerting on the watcher.** `relay-watch.timer` records every 5
    minutes to `/var/log/relay/watch.jsonl`, but nothing notifies. The script
-   exits 2 on a critical reading and that exit code currently goes
-   nowhere. Needs a notifier (email or webhook) to be useful.
+   exits 2 on a critical reading and that exit code currently goes nowhere.
+   Needs a notifier (email or webhook) to be useful.
 
 2. **Autorecovery is installed but off.** `relay-recover.service` performs
    the SIGKILL-then-start sequence that recovered the relay on 2026-10-02,
@@ -206,6 +206,32 @@ accepted.
    `deploy/config.yaml`, and never read — see `knownUnused` in
    `relay/internal/config/dead_config_test.go`. An operator who tunes them
    gets no behaviour change and no warning. Either implement or remove.
+
+4. **`golang.org/x/crypto` still carries GO-2026-5932**, which has no fix
+   upstream: the `x/crypto/openpgp` package is unmaintained and unsafe by
+   design. The relay has **no direct `x/crypto` import** — it is pulled in
+   only as an indirect dependency of `go-playground/validator/v10` for
+   `sha3`. Upgrading v0.52.0 → v0.56.0 cleared the other three advisories;
+   this one cannot be cleared without dropping the validator dependency.
+   `govulncheck` reports the relay's own code as unaffected.
+
+## Dependency security state
+
+| Scope | Result |
+|---|---|
+| `gh api .../dependabot/alerts` open | 0 |
+| `blossom` `pnpm audit` | No known vulnerabilities |
+| `blossom/admin` `pnpm audit` | No known vulnerabilities |
+| `govulncheck ./...` — relay's own code | 0 |
+| `govulncheck ./...` — indirect modules | 1 (GO-2026-5932, no fix available, unused) |
+
+Re-check with:
+
+```bash
+gh api repos/psam21/ns/dependabot/alerts --jq '[.[]|select(.state=="open")]|length'
+(cd blossom && pnpm audit)
+(cd relay && ~/go/bin/govulncheck ./...)
+```
 
 ## Rules learned the hard way
 
