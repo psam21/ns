@@ -267,6 +267,24 @@ for f in relay-memory-watch.sh relay-alert.sh relay-watch.service relay-watch.ti
     fi
 done
 
+# Fail loudly rather than letting a missing asset degrade into a quiet no-op.
+#
+# The staging loop warns and continues, which is right for a missing optional
+# asset -- but it is exactly what hid the first attempt at this: all five files
+# staged cleanly and logged "Copied ... to staging", while the transfer step
+# simply never sent them. Nothing in the deploy output said "this will not be
+# installed".
+#
+# The check that matters is end-to-end, so it belongs here where the staging
+# result is still in hand: if a file we have cannot be staged, that is a bug in
+# this script or a corrupt checkout, and continuing would ship a release whose
+# monitoring silently did not update.
+for f in relay-memory-watch.sh relay-alert.sh relay-watch.service relay-watch.timer relay-recover.service; do
+    if [ -f "$NS_DIR/deploy/$f" ] && [ ! -s "$STAGING/$f" ]; then
+        log_error "deploy/$f exists but did not stage to $STAGING/$f - refusing to continue"
+    fi
+done
+
 log_info "All files prepared in $STAGING"
 echo ""
 
@@ -420,6 +438,30 @@ scp -i "$AWS_KEY" "$STAGING/blossom.service" "$AWS_HOST:$REMOTE_STAGE/blossom.se
 if [ -f "$STAGING/blossom-rules-defaults.sh" ]; then
     scp -i "$AWS_KEY" "$STAGING/blossom-rules-defaults.sh" "$AWS_HOST:$REMOTE_STAGE/blossom-rules-defaults.sh"
 fi
+
+# Ship the health-watcher assets to the remote stage.
+#
+# The list here must match the list staged in Step 6. They did not match on
+# the first attempt: Step 6 staged all five monitoring files and logged
+# "Copied deploy/relay-alert.sh to staging", but this step transfers an
+# explicit per-file list that did not include them. Every asset therefore
+# reached the remote as absent, the install loops printed "not staged", and
+# the deploy reported success.
+#
+# The failure was quiet in the worst way: the staging step's success message
+# made it look like the assets were on their way. /usr/local/bin kept the
+# hand-installed copy, so relay-memory-watch.sh on the host was a stale build
+# with none of the fixes, and relay-alert.sh did not exist at all.
+#
+# Derived from the same filename list as Step 6 so the two cannot drift.
+# Anything staged but not transferred is a silent no-op, so both the copy and
+# the install iterate this one list.
+for f in relay-memory-watch.sh relay-alert.sh relay-watch.service relay-watch.timer relay-recover.service; do
+    if [ -f "$STAGING/$f" ]; then
+        scp -i "$AWS_KEY" "$STAGING/$f" "$AWS_HOST:$REMOTE_STAGE/$f"
+    fi
+done
+log_info "Copied health-watcher assets to $REMOTE_STAGE"
 
 log_info "All files copied to $AWS_HOST:$REMOTE_STAGE"
 echo ""
