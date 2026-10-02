@@ -89,6 +89,38 @@ for test_file in "${tests[@]}"; do
     fi
 done
 
+# Report every script that exists on disk but is not selected by the matrix.
+#
+# The selector above picks rows where $3 == "integration", so any script
+# without a matching row is skipped in total silence. On 2026-10-02 that was 10
+# of 36 scripts: the summary read "Total: 26", the exit code was 0, and nothing
+# in the output hinted that a third of the suite had never run.
+#
+# A runner that skips quietly is indistinguishable from one that passes. The
+# NIPs those scripts cover (NIP-03/04/15/16/20/28/33/72) are not in the
+# advertised registry, so skipping them is currently correct -- but "correct"
+# and "visible" are different properties, and only one of them is a property
+# of the code.
+mapfile -t unselected < <(
+    for candidate in "$SCRIPT_DIR"/test_*.sh; do
+        [[ -e "$candidate" ]] || continue
+        found=0
+        for selected in "${tests[@]}"; do
+            if [[ "$candidate" == "$selected" ]]; then
+                found=1
+                break
+            fi
+        done
+        ((found == 0)) && printf '%s\n' "$(basename "$candidate")"
+    done
+)
+if ((${#unselected[@]} > 0)); then
+    printf '\nNOTE: %d script(s) present but not selected by coverage.tsv:\n' "${#unselected[@]}"
+    printf '  %s\n' "${unselected[@]}"
+    printf 'These are skipped silently by design (their NIPs are not advertised).\n'
+    printf 'Run one directly if you need it: bash tests/nips/%s\n' "${unselected[0]}"
+fi
+
 passed=0
 failed=0
 bridge_pid=""
@@ -168,6 +200,9 @@ printf '\n=== SUMMARY ===\n'
 printf 'Total:  %d\n' "${#tests[@]}"
 printf 'Passed: %d\n' "$passed"
 printf 'Failed: %d\n' "$failed"
+if ((${#unselected[@]} > 0)); then
+    printf 'Skipped: %d (present on disk, absent from coverage.tsv)\n' "${#unselected[@]}"
+fi
 
 if ((failed > 0)); then
     exit 1
