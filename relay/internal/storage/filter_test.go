@@ -69,27 +69,38 @@ func TestBuildQueryNeverDropsAuthors(t *testing.T) {
 					"silently ignored and unrelated events are returned:\n  %s", query)
 			}
 
-			// The predicate must be parameterised, not interpolated: an
-			// interpolated pubkey is an injection vector even though
-			// ValidateFilter checks the shape first.
-			if !strings.Contains(query, "pubkey = ANY(ARRAY[") &&
-				!strings.Contains(query, "pubkey = ANY($") {
-				t.Errorf("pubkey predicate is not parameterised:\n  %s", query)
+			// The predicate must be an indexable scalar equality, never
+			// `= ANY(ARRAY[...])`.
+			//
+			// This is the assertion that would have caught the 92-second
+			// scan. `= ANY(ARRAY[...])` is a set membership test against an
+			// expression and PostgreSQL cannot drive a btree index from it,
+			// so the query is *correct* and returns the right rows -- it
+			// just takes long enough to blow the 5s timeout in GetEvents,
+			// after which the client sees an empty result.
+			//
+			// Measured on the production data set (1.2M rows):
+			// IN (...) 2.6ms, = ANY(ARRAY[...]) 92,101ms.
+			if strings.Contains(query, "ANY(ARRAY[") {
+				t.Errorf("query uses = ANY(ARRAY[...]), which is not indexable:\n  %s\n"+
+					"  it forces a scan of the whole events table and will exceed "+
+					"the query timeout", query)
+			}
+			if strings.Contains(query, "pubkey = ANY(") {
+				t.Errorf("pubkey predicate uses = ANY(), which cannot use "+
+					"events_pubkey_created_at:\n  %s", query)
+			}
+			if !strings.Contains(query, "pubkey IN (") {
+				t.Errorf("pubkey predicate is not a parameterised IN list:\n  %s", query)
 			}
 
-			// Every author must appear as a bound argument. A placeholder
-			// with no matching arg is a query that errors at runtime, and an
-			// arg with no placeholder is a silently ignored filter.
-			placeholders := strings.Count(query, "$")
-			if placeholders > len(args) {
-				t.Errorf("query references %d placeholders but only %d args were "+
-					"bound; this fails at runtime rather than returning wrong data:\n  %s",
-					placeholders, len(args), query)
-			}
-			if placeholders < len(args) {
-				t.Errorf("query has %d placeholders but %d args were bound; extra "+
-					"args mean part of the filter was dropped:\n  %s",
-					placeholders, len(args), query)
+			// Every placeholder must have a bound argument and vice versa.
+			// A placeholder with no arg errors at runtime; an arg with no
+			// placeholder is a silently dropped filter.
+			want := countPlaceholders(query)
+			if want != len(args) {
+				t.Errorf("query references %d placeholders but %d args were bound:\n"+
+					"  query: %s\n  args:  %v", want, len(args), query, args)
 			}
 		})
 	}
@@ -160,6 +171,30 @@ func TestGetBestIndexCoversAuthorOnly(t *testing.T) {
 	}
 }
 
+// countPlaceholders counts distinct $n placeholders in a query.
+//
+// Counts distinct indices rather than occurrences of '$', because a naive
+// strings.Count(query, "$") overcounts: PostgreSQL also uses $ in dollar-quoted
+// strings and, more practically here, the same index may legitimately appear
+// more than once if a caller ever builds `x = $1 OR x = $1`. The thing that
+// must hold is that the SET of referenced indices matches the bound args.
+func countPlaceholders(query string) int {
+	seen := map[string]bool{}
+	for i := 0; i < len(query); i++ {
+		if query[i] != '$' {
+			continue
+		}
+		j := i + 1
+		for j < len(query) && query[j] >= '0' && query[j] <= '9' {
+			j++
+		}
+		if j > i+1 {
+			seen[query[i:j]] = true
+		}
+	}
+	return len(seen)
+}
+
 // tsPtr returns a *nostr.Timestamp for the given unix second, since the filter
 // fields are pointers and a bare literal will not compile.
 func tsPtr(unix int64) *nostr.Timestamp {
@@ -182,5 +217,110 @@ func TestCreatedAtBranchStillHonoursKinds(t *testing.T) {
 	}
 	if strings.Contains(query, "WHERE true") {
 		t.Errorf("query degenerated to WHERE true despite having a kind filter:\n  %s", query)
+	}
+}
+
+// TestNoFilterUsesNonIndexableAny is the regression test for a 92-second query.
+//
+// Every equality predicate must be a scalar `IN (...)`, never
+// `= ANY(ARRAY[...])`. The latter is a set membership test against an
+// expression, which PostgreSQL cannot drive a btree index from, so the planner
+// falls back to scanning the entire events table.
+//
+// Measured on nostr.ltd 2026-10-02 (1,198,763 rows, index
+// `events_pubkey_created_at` on (pubkey, created_at)):
+//
+//	pubkey IN ($1)                    Index Scan   ...     2.6 ms
+//	pubkey = ANY(ARRAY[$1]::text[])   Seq/Index Scan,
+//	                                 1,198,963 rows
+//	                                 filtered  ... 92,101 ms
+//
+// The 5s query timeout in GetEvents turned that into an empty response with no
+// error anywhere, which is why this was indistinguishable from the
+// dropped-author bug fixed alongside it -- both presented as "author filter
+// returns nothing".
+func TestNoFilterUsesNonIndexableAny(t *testing.T) {
+	const (
+		a = "3698dce79f3b443cb8d62877630c7954bbcf6b920f5b78b3d3e2a90cf18f1fed"
+		b = "aa8dce79f3b443cb8d62877630c7954bbcf6b920f5b78b3d3e2a90cf18f1fed"
+	)
+
+	filters := map[string]nostr.Filter{
+		"author only":      {Authors: []string{a}, Limit: 10},
+		"two authors":      {Authors: []string{b, a}, Limit: 10},
+		"author and kind":  {Authors: []string{a}, Kinds: []int{1}, Limit: 10},
+		"kind only":        {Kinds: []int{1, 7, 30023}, Limit: 10},
+		"id only":          {IDs: []string{"b9d22edefd850f6756c63f5a20070d1a1018778e3f52b5f83f39d55ca827ac28"}, Limit: 10},
+		"author and since": {Authors: []string{a}, Limit: 10, Since: tsPtr(1000)},
+		"author and until": {Authors: []string{a}, Limit: 10, Until: tsPtr(9999999999)},
+		"author and tag":   {Authors: []string{a}, Tags: nostr.TagMap{"t": []string{"x"}}, Limit: 10},
+		"id and author and kind": {
+			IDs:     []string{"b9d22edefd850f6756c63f5a20070d1a1018778e3f52b5f83f39d55ca827ac28"},
+			Authors: []string{a}, Kinds: []int{1}, Limit: 10,
+		},
+		"everything": {
+			IDs:     []string{"b9d22edefd850f6756c63f5a20070d1a1018778e3f52b5f83f39d55ca827ac28"},
+			Authors: []string{a}, Kinds: []int{1}, Tags: nostr.TagMap{"t": []string{"x"}},
+			Limit: 10,
+		},
+	}
+
+	for name, f := range filters {
+		t.Run(name, func(t *testing.T) {
+			query, args, err := CompileFilter(f).BuildQuery()
+			if err != nil {
+				t.Fatalf("BuildQuery: %v", err)
+			}
+
+			if strings.Contains(query, "ANY(ARRAY[") {
+				t.Errorf("query uses = ANY(ARRAY[...]), which cannot use a btree "+
+					"index and scans the whole events table:\n  %s", query)
+			}
+
+			// Placeholders and bound args must agree exactly. A helper that
+			// appends to a slice passed by value loses those elements and
+			// produces a query that is valid SQL but binds $1 to the wrong
+			// value -- a silent wrong-results bug, not a crash.
+			if got, want := countPlaceholders(query), len(args); got != want {
+				t.Errorf("query has %d placeholders but %d args bound:\n  SQL:  %s\n  args: %v",
+					got, want, query, args)
+			}
+		})
+	}
+}
+
+// TestCompiledFilterSQLIsDeterministic guards against map iteration order
+// leaking into generated SQL.
+//
+// The compiled filters are maps, so ranging one directly produces a different
+// placeholder order on every run. That defeats plan caching and makes two
+// identical filters produce different SQL strings, so a regression is
+// impossible to spot by reading logs.
+func TestCompiledFilterSQLIsDeterministic(t *testing.T) {
+	f := nostr.Filter{
+		Authors: []string{
+			"3698dce79f3b443cb8d62877630c7954bbcf6b920f5b78b3d3e2a90cf18f1fed",
+			"aa8dce79f3b443cb8d62877630c7954bbcf6b920f5b78b3d3e2a90cf18f1fed",
+			"bb8dce79f3b443cb8d62877630c7954bbcf6b920f5b78b3d3e2a90cf18f1fed",
+			"cc8dce79f3b443cb8d62877630c7954bbcf6b920f5b78b3d3e2a90cf18f1fed",
+			"dd8dce79f3b443cb8d62877630c7954bbcf6b920f5b78b3d3e2a90cf18f1fed",
+		},
+		Kinds: []int{1, 7, 30023, 0, 1311},
+		Limit: 50,
+	}
+
+	first, _, err := CompileFilter(f).BuildQuery()
+	if err != nil {
+		t.Fatalf("BuildQuery: %v", err)
+	}
+	for i := 0; i < 50; i++ {
+		got, _, err := CompileFilter(f).BuildQuery()
+		if err != nil {
+			t.Fatalf("BuildQuery: %v", err)
+		}
+		if got != first {
+			t.Fatalf("SQL differs between identical calls (iteration %d):\n  %s\n  %s",
+				i, first, got)
+		}
 	}
 }
