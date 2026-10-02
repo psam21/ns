@@ -1,0 +1,13 @@
+[Unit]
+Description=Run the nostr.ltd relay health watcher every 5 minutes
+Documentation=file:///usr/local/bin/relay-memory-watch.sh
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+# Catch up after the host was suspended or the timer was missed.
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

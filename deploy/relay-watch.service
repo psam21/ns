@@ -1,0 +1,41 @@
+[Unit]
+Description=nostr.ltd relay health watcher
+Documentation=file:///usr/local/bin/relay-memory-watch.sh
+
+[Service]
+Type=oneshot
+# Runs as the relay user so the script reads /proc/<pid>/status for the
+# relay process without needing root. The watcher itself never uses sudo.
+User=relay
+Group=relay
+ExecStart=/usr/local/bin/relay-memory-watch.sh --json
+
+# StateDirectory (not RuntimeDirectory) is required here: systemd creates it
+# owned by User= and it PERSISTS across runs. RuntimeDirectory would be removed
+# each time this oneshot exits, deleting the RSS-trend state file every 5
+# minutes so the trend could never populate.
+#
+# The default WATCH_STATE of /var/tmp/relay-memory-watch.state does not work
+# either: /var/tmp is sticky, so a root-owned state file left there by a manual
+# test run is permanently unwritable by the relay user, and the watcher logs
+# "Permission denied" on every run while reporting rss_trend=unknown forever.
+#
+# Pin it to the systemd-managed directory so the path is unambiguous.
+Environment=WATCH_STATE=/var/lib/relay-watch/state
+StateDirectory=relay-watch
+StateDirectoryMode=0750
+
+# Append to a JSONL file so the RSS trend has history to compare against.
+# The script keeps its own state file for the trend; this log is for
+# post-hoc analysis of an incident.
+StandardOutput=append:/var/log/relay/watch.jsonl
+StandardError=journal
+
+# The watcher must never be the thing that takes the host down.
+TimeoutStartSec=30
+Nice=10
+IOSchedulingClass=idle
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target

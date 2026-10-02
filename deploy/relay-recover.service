@@ -1,0 +1,34 @@
+[Unit]
+Description=Recover the nostr.ltd relay when it is wedged
+Documentation=file:///usr/local/bin/relay-memory-watch.sh
+
+[Service]
+Type=oneshot
+
+# Fired when relay-watch.timer detects the exact signature of the
+# 2026-10-02 outage: systemd reports the unit as active, but HTTP returns
+# nothing and the accept backlog is not draining.
+#
+# Restarting such a process does NOT work — that is what wedged it. The
+# process is blocked in uninterruptible sleep on swap, so it cannot drain
+# connections and `systemctl stop` hangs until it is killed outright.
+# SIGKILL first, unconditionally, is therefore the correct sequence and not
+# a destructive shortcut.
+ExecStart=/bin/bash -c '\
+  logger -t relay-recover "watcher fired: relay not serving, forcing recovery"; \
+  systemctl kill -s SIGKILL relay.service || true; \
+  sleep 3; \
+  systemctl start relay.service; \
+  for i in $(seq 1 30); do \
+    code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:8080/ || echo 000); \
+    case "$code" in 200|202) logger -t relay-recover "relay serving again (${code}) after ${i}0s"; exit 0 ;; esac; \
+    sleep 10; \
+  done; \
+  logger -t relay-recover "CRITICAL: relay did not recover within 300s"; \
+  exit 1'
+
+# Recovery is urgent, so do not queue it behind the watcher.
+TimeoutStartSec=420
+
+[Install]
+WantedBy=multi-user.target

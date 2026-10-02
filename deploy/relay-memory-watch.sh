@@ -54,7 +54,24 @@
 set -uo pipefail
 
 RELAY_URL="${RELAY_URL:-http://localhost:8080/}"
-STATE_FILE="${WATCH_STATE:-/var/tmp/relay-memory-watch.state}"
+
+# State file location, with a fallback that works for the unprivileged
+# `relay` user the systemd unit runs as.
+#
+# /var/tmp is world-writable with the sticky bit, so an existing root-owned
+# state file there is NOT writable by relay: creating one as root first (as a
+# manual test run did) permanently breaks the trend for the timer, which then
+# logs "Permission denied" every 5 minutes and reports rss_trend=unknown
+# forever. Prefer a directory the service user definitely owns.
+if [ -z "${WATCH_STATE:-}" ]; then
+    for candidate in /run/relay-watch /var/lib/relay-watch /tmp; do
+        if [ -d "$candidate" ] && [ -w "$candidate" ]; then
+            WATCH_STATE="$candidate/relay-memory-watch.state"
+            break
+        fi
+    done
+    WATCH_STATE="${WATCH_STATE:-/tmp/relay-memory-watch.state}"
+fi
 CURL_MAX_TIME="${CURL_MAX_TIME:-8}"
 JSON_OUTPUT=0
 
@@ -100,9 +117,9 @@ rss_kb=$(awk '/^VmRSS/{print $2; exit}' "/proc/$(pgrep -f 'relay-arm64' | head -
 # --- RSS trend ---------------------------------------------------------------
 
 rss_trend="unknown"
-if [ "$rss_kb" != "unknown" ] && [ -f "$STATE_FILE" ]; then
-    prev_rss=$(cat "$STATE_FILE" 2>/dev/null || echo "")
-    prev_ts=$(awk '{print $1}' "$STATE_FILE" 2>/dev/null || echo 0)
+if [ "$rss_kb" != "unknown" ] && [ -f "$WATCH_STATE" ]; then
+    prev_rss=$(cat "$WATCH_STATE" 2>/dev/null || echo "")
+    prev_ts=$(awk '{print $1}' "$WATCH_STATE" 2>/dev/null || echo 0)
     now_ts=$(date +%s)
     if [ -n "$prev_rss" ] && [ "$now_ts" -gt "$prev_ts" ] && [ "$prev_ts" -gt 0 ]; then
         elapsed_h=$(( (now_ts - prev_ts) / 3600 ))
@@ -113,7 +130,7 @@ if [ "$rss_kb" != "unknown" ] && [ -f "$STATE_FILE" ]; then
     fi
 fi
 if [ "$rss_kb" != "unknown" ]; then
-    printf '%s %s\n' "$(date +%s)" "$rss_kb" > "$STATE_FILE" 2>/dev/null || true
+    printf '%s %s\n' "$(date +%s)" "$rss_kb" > "$WATCH_STATE" 2>/dev/null || true
 fi
 
 # --- evaluate ----------------------------------------------------------------
@@ -154,6 +171,32 @@ fi
 
 status="ok"
 if [ "$critical" -ne 0 ]; then status="critical"; elif [ "${#warnings[@]}" -gt 0 ]; then status="degraded"; fi
+
+# --- optional autonomous recovery -------------------------------------------
+#
+# Off by default. Set WATCH_RECOVER=1 to let the watcher trigger
+# relay-recover.service when it sees the wedge signature.
+#
+# Deliberately NOT triggered by a plain "degraded" result. Only the
+# not-serving / backlogged / swap-exhausted conditions qualify, and a
+# cooldown prevents a recovery loop: if the relay is genuinely broken
+# (bad deploy, disk full, corrupt database) restarting it every five
+# minutes hides the real fault and buries the evidence.
+if [ "$critical" -ne 0 ] && [ "${WATCH_RECOVER:-0}" = "1" ]; then
+    RECOVER_STAMP="${WATCH_RECOVER_STAMP:-/var/tmp/relay-recover.stamp}"
+    RECOVER_COOLDOWN="${WATCH_RECOVER_COOLDOWN:-1800}"   # 30 minutes
+    now=$(date +%s)
+    last=$(cat "$RECOVER_STAMP" 2>/dev/null || echo 0)
+    if [ $(( now - last )) -ge "$RECOVER_COOLDOWN" ]; then
+        printf '%s\n' "$now" > "$RECOVER_STAMP" 2>/dev/null || true
+        if command -v systemctl >/dev/null 2>&1; then
+            echo "  firing relay-recover.service (cooldown ${RECOVER_COOLDOWN}s)"
+            systemctl start relay-recover.service >/dev/null 2>&1 || true
+        fi
+    else
+        echo "  recovery suppressed by cooldown ($(( RECOVER_COOLDOWN - (now - last) ))s remaining)"
+    fi
+fi
 
 if [ "$JSON_OUTPUT" -eq 1 ]; then
     printf '{"ts":"%s","status":"%s","http_code":"%s","recv_q":"%s","rss_kb":"%s","rss_mb_per_hour":"%s","pressure_full":"%s","pressure_some":"%s","swap_free_mb":%s,"swap_total_mb":%s,"mem_available_mb":%s,"warnings":[%s]}\n' \
