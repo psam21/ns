@@ -299,6 +299,82 @@ during bursts. Not changed: 10 MB against a 768 MB ceiling is not the
 outage's cause, and shrinking it risks dropping events that are currently
 accepted.
 
+## NIP integration tests
+
+The 36 mutating scripts under `relay/tests/nips/` had **never been run against
+a live relay** before 2026-10-02. They are now part of the release check, and
+they immediately found two production bugs that every other check had missed.
+
+```bash
+cd relay
+RELAY_URL=wss://nostr.ltd HTTP_URL=https://nostr.ltd \
+  NIP_AUTH_RELAY_URL=wss://nostr.ltd ./tests/nips/run_all.sh
+```
+
+**Use the public URL, not a tunnel.** NIP-42 AUTH requires the `relay` tag to
+match the URL the relay advertises (`wss://nostr.ltd`). Connecting over an SSH
+tunnel at `ws://localhost:18080` sends a `relay` tag the relay correctly
+rejects, and nip17/nip42/nip59 fail for that reason alone. That is correct
+behaviour by the relay, not a bug — but it looks identical to one.
+
+### What the live run found
+
+| Commit | Defect | Symptom |
+|---|---|---|
+| `9bb9b68` | Author-only REQ built `WHERE true` — the author predicate was never emitted | Client got other people's events |
+| `249efd5` | `= ANY(ARRAY[...])` is not indexable; author REQ scanned 1.2M rows for **92 seconds** | Query exceeded the 5s timeout → empty response |
+
+Both presented as the same symptom — "an author filter returns nothing" —
+which is why the first fix looked like it had failed. The first dropped the
+predicate; the second had the predicate and could not run it. **When one
+symptom has two causes, fixing one produces a fix that does not work**, and
+the natural conclusion is that the diagnosis was wrong.
+
+The measured difference, on 1,198,763 rows with
+`events_pubkey_created_at` on `(pubkey, created_at)`:
+
+```
+pubkey = $1                       Index Scan   ...      2.5 ms
+pubkey IN ($1)                    Index Scan   ...      2.6 ms
+pubkey = ANY(ARRAY[$1]::text[])   different index,
+                                  1,198,963 rows filtered
+                                             ... 92,101 ms
+```
+
+`= ANY(ARRAY[...])` is set membership against an expression; PostgreSQL cannot
+drive a btree index from it. `IN (...)` expands to scalar equalities, which
+the index serves. **The planner does not rewrite one into the other.**
+
+This is invisible without `EXPLAIN`: the query is correct, the results are
+correct, it just takes 92 seconds — and no aggregate on the dashboard moves.
+Author filters are the most common REQ shape after kind.
+
+### The scripts that never ran
+
+`run_all.sh` selects scripts by `$3 == "integration"` in `coverage.tsv`, so it
+runs **26 of the 36**. The other ten (`nip03`, `nip04`, `nip15`, `nip16`,
+`nip20`, `nip28`, `nip33`, `nip72`, `nostr_web`, `time_capsules`) have no row
+in the matrix and are skipped without a message.
+
+This is consistent: the NIPs those scripts cover (NIP-03/04/15/16/20/28/33/72)
+are **not** in the advertised registry, so the scripts test behaviour the relay
+does not claim. They are stale and should be either brought up to date with
+current behaviour or deleted. Until then, "the suite passes" means 26 scripts,
+not 36, and the distinction is not visible from the output.
+
+### Safety
+
+The scripts publish events to production and every kind-5 deletion targets an
+event the same script created moments earlier — no third-party data is at
+risk. They add roughly 150–200 events per run. Reverting is a matter of
+ignoring them: they are ordinary signed events, not deletions of anything
+real.
+
+```bash
+# Baseline before a run
+curl -s --max-time 20 https://nostr.ltd/api/stats | jq '.stats.events_stored'
+```
+
 ## Open items
 
 1. ~~**No alerting on the watcher.**~~ **Done.** `deploy/relay-alert.sh`
@@ -503,3 +579,17 @@ gh api repos/psam21/ns/dependabot/alerts --jq '[.[]|select(.state=="open")]|leng
   units existed in `deploy/` but were installed by hand, so edits lived only
   on one machine and a fresh host would come up unmonitored. Assets that are
   not deployed are not deployed.
+- **One symptom can have two causes, and fixing one looks like a total
+  failure.** "Author filter returns nothing" was a dropped predicate *and* a
+  92-second non-indexable scan. Fixing the first produced a change that was
+  correct, reviewed, deployed, tested — and still failed. The conclusion that
+  "my diagnosis was wrong" is wrong; the diagnosis was incomplete.
+  **Enumerate the full chain that must work before declaring the first break
+  sufficient.**
+- **`= ANY(ARRAY[...])` cannot use a btree index.** `IN (...)` can, and the
+  planner will not rewrite one into the other. Measured here: 92,101 ms vs
+  2.6 ms on 1.2M rows. Never write `= ANY` for an equality filter.
+- **Run the integration suite against production.** 36 mutating NIP scripts
+  had never run against a live relay, and the first execution found two
+  production bugs that unit tests, the dashboard, and every manual check had
+  missed. The suite is the only thing that exercises the real query path.
