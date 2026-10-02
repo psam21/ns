@@ -626,11 +626,71 @@ if ! command -v make >/dev/null 2>&1 || ! command -v g++ >/dev/null 2>&1 || ! co
     fi
 fi
 sudo chown -R www-data:www-data "$BLOSSOM_NEW"
-sudo -u www-data env HOME=/tmp bash -c 'cd "$1" && pnpm install --prod --frozen-lockfile' bash "$BLOSSOM_NEW"
+
+# better-sqlite3 is a native addon, so its postinstall runs `node-gyp rebuild`.
+# pnpm bundles node-gyp at dist/node-gyp-bin/node-gyp but does NOT put it on
+# PATH for lifecycle scripts, and the install below runs as www-data, which
+# does not inherit root's PATH. The result is:
+#
+#   .../better-sqlite3 install: sh: 1: node-gyp: not found
+#   ELIFECYCLE  Command failed.
+#
+# which aborts the whole deploy. Observed 2026-10-02; the transaction rollback
+# correctly restored both services, so this cost a deploy and not an outage,
+# but it blocks every future deploy of this script until fixed.
+#
+# node-gyp is verified present and executable by www-data at the path below
+# (v11.5.0 on the production host), so prepending it to PATH is sufficient.
+NODE_GYP_BIN="/usr/lib/node_modules/pnpm/dist/node-gyp-bin"
+if [ ! -x "$NODE_GYP_BIN/node-gyp" ]; then
+    # Fall back to wherever node-gyp actually lives on this host rather than
+    # assuming the pnpm layout.
+    NODE_GYP_BIN=$(dirname "$(find /usr/lib/node_modules /usr/local/lib/node_modules \
+        -maxdepth 4 -name node-gyp -type f 2>/dev/null | head -1)")
+fi
+if [ ! -x "$NODE_GYP_BIN/node-gyp" ]; then
+    echo "ERROR: node-gyp not found; better-sqlite3 cannot build"
+    echo "       Install it with: sudo npm install -g node-gyp"
+    exit 1
+fi
+echo "Using node-gyp from $NODE_GYP_BIN"
+
+sudo -u www-data env \
+    HOME=/tmp \
+    PATH="$NODE_GYP_BIN:$PATH" \
+    npm_config_nodedir=/usr \
+    bash -c 'cd "$1" && pnpm install --prod --frozen-lockfile' bash "$BLOSSOM_NEW"
 if [ ! -d "$BLOSSOM_NEW/node_modules" ]; then
     echo "ERROR: Blossom production dependency installation did not create node_modules"
     exit 1
 fi
+
+# The install above can succeed while leaving the native addon unbuilt if the
+# lifecycle script was skipped (pnpm's build-approval can disable it). Verify
+# the compiled artifact exists, and rebuild explicitly if it does not. Failing
+# here is much cheaper than discovering a broken Blossom after the swap.
+SQLITE_ADDON=$(find "$BLOSSOM_NEW/node_modules/.pnpm" -name 'better_sqlite3.node' \
+    -path '*linux-arm64*' -print -quit 2>/dev/null)
+if [ -z "$SQLITE_ADDON" ]; then
+    SQLITE_ADDON=$(find "$BLOSSOM_NEW/node_modules" -name 'better_sqlite3.node' \
+        -print -quit 2>/dev/null)
+fi
+if [ -z "$SQLITE_ADDON" ]; then
+    echo "Native addon better_sqlite3.node is missing; building it explicitly..."
+    sudo -u www-data env \
+        HOME=/tmp \
+        PATH="$NODE_GYP_BIN:$PATH" \
+        npm_config_nodedir=/usr \
+        bash -c 'cd "$1" && pnpm rebuild better-sqlite3' bash "$BLOSSOM_NEW" || true
+    SQLITE_ADDON=$(find "$BLOSSOM_NEW/node_modules" -name 'better_sqlite3.node' \
+        -print -quit 2>/dev/null)
+fi
+if [ -z "$SQLITE_ADDON" ]; then
+    echo "ERROR: better_sqlite3.node was not built; Blossom would fail at runtime"
+    echo "       Check: sudo -u www-data env PATH=$NODE_GYP_BIN:\$PATH pnpm rebuild better-sqlite3"
+    exit 1
+fi
+echo "Native addon present: $SQLITE_ADDON"
 
 # pnpm 9 records these patched packages in the virtual-store name but can
 # leave the case-compatibility patch files unapplied on a clean host. Apply
