@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	nostr "github.com/nbd-wtf/go-nostr"
 	"github.com/Shugur-Network/relay/internal/logger"
+	nostr "github.com/nbd-wtf/go-nostr"
 	"go.uber.org/zap"
 )
 
@@ -783,7 +783,7 @@ func validateCalendarEventReferenceTag(tag nostr.Tag) error {
 	aTagValue := tag[1]
 	parts := strings.Split(aTagValue, ",")
 	actualRef := parts[0] // The actual reference is before any comma
-	
+
 	if err := validateCalendarEventReference(actualRef); err != nil {
 		return fmt.Errorf("invalid calendar event reference: %w", err)
 	}
@@ -815,7 +815,7 @@ func validateRSVPATag(tag nostr.Tag) error {
 	aTagValue := tag[1]
 	parts := strings.Split(aTagValue, ",")
 	actualRef := parts[0] // The actual reference is before any comma
-	
+
 	if err := validateCalendarEventReference(actualRef); err != nil {
 		return fmt.Errorf("invalid calendar event reference: %w", err)
 	}
@@ -847,7 +847,7 @@ func validateRSVPETag(tag nostr.Tag) error {
 	eTagValue := tag[1]
 	parts := strings.Split(eTagValue, ",")
 	eventID := parts[0] // The actual event ID is before any comma
-	
+
 	if len(eventID) != 64 {
 		return fmt.Errorf("event ID must be 64 hex characters, got %d", len(eventID))
 	}

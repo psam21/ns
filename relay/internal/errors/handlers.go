@@ -40,10 +40,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	requestID := generateRequestID()
 	ctx := context.WithValue(r.Context(), requestIDKey, requestID)
 	r = r.WithContext(ctx)
-	
+
 	// Add request ID header to response
 	w.Header().Set("X-Request-ID", requestID)
-	
+
 	// Call the handler function and handle any errors
 	if err := h.handlerFunc(w, r); err != nil {
 		h.errorMiddleware.HandleError(w, r, err)
@@ -75,10 +75,10 @@ func (wh *WebSocketHandler) HandleWebSocketError(conn interface{}, operation str
 	if err == nil {
 		return
 	}
-	
+
 	// Convert to WebSocket error
 	wsErr := WebSocketError(operation, err)
-	
+
 	// Log the WebSocket error
 	wh.logger.Error("WebSocket error occurred",
 		zap.String("operation", operation),
@@ -86,7 +86,7 @@ func (wh *WebSocketHandler) HandleWebSocketError(conn interface{}, operation str
 		zap.String("error_code", wsErr.Code),
 		zap.String("severity", string(wsErr.Severity)),
 		zap.Error(err))
-	
+
 	// Note: For WebSocket connections, we can't send HTTP error responses
 	// The error handling here is primarily for logging and metrics
 }
@@ -108,10 +108,10 @@ func (dh *DatabaseHandler) HandleDatabaseError(operation string, err error) erro
 	if err == nil {
 		return nil
 	}
-	
+
 	// Classify database errors
 	var appErr *AppError
-	
+
 	// Check for connection errors
 	if isConnectionError(err) {
 		appErr = DatabaseConnectionError(err)
@@ -121,7 +121,7 @@ func (dh *DatabaseHandler) HandleDatabaseError(operation string, err error) erro
 		// Generic database error
 		appErr = DatabaseError(operation, err)
 	}
-	
+
 	// Log the database error
 	dh.logger.Error("Database operation failed",
 		zap.String("operation", operation),
@@ -129,7 +129,7 @@ func (dh *DatabaseHandler) HandleDatabaseError(operation string, err error) erro
 		zap.String("error_code", appErr.Code),
 		zap.String("severity", string(appErr.Severity)),
 		zap.Error(err))
-	
+
 	return appErr
 }
 
@@ -150,9 +150,9 @@ func (rh *RelayHandler) HandleEventError(eventID, operation string, err error) e
 	if err == nil {
 		return nil
 	}
-	
+
 	var appErr *AppError
-	
+
 	// Classify event errors based on the original error
 	switch {
 	case isValidationError(err):
@@ -164,7 +164,7 @@ func (rh *RelayHandler) HandleEventError(eventID, operation string, err error) e
 	default:
 		appErr = InternalError(fmt.Sprintf("Event %s failed", operation), err)
 	}
-	
+
 	// Log the event error
 	rh.logger.Error("Event operation failed",
 		zap.String("event_id", eventID),
@@ -172,7 +172,7 @@ func (rh *RelayHandler) HandleEventError(eventID, operation string, err error) e
 		zap.String("error_type", string(appErr.Type)),
 		zap.String("error_code", appErr.Code),
 		zap.Error(err))
-	
+
 	return appErr
 }
 
@@ -181,9 +181,9 @@ func (rh *RelayHandler) HandleSubscriptionError(subID, operation string, err err
 	if err == nil {
 		return nil
 	}
-	
+
 	var appErr *AppError
-	
+
 	if isValidationError(err) {
 		appErr = SubscriptionError(subID, err.Error())
 	} else if isRateLimitError(err) {
@@ -191,7 +191,7 @@ func (rh *RelayHandler) HandleSubscriptionError(subID, operation string, err err
 	} else {
 		appErr = InternalError(fmt.Sprintf("Subscription %s failed", operation), err)
 	}
-	
+
 	// Log the subscription error
 	rh.logger.Error("Subscription operation failed",
 		zap.String("subscription_id", subID),
@@ -199,7 +199,7 @@ func (rh *RelayHandler) HandleSubscriptionError(subID, operation string, err err
 		zap.String("error_type", string(appErr.Type)),
 		zap.String("error_code", appErr.Code),
 		zap.Error(err))
-	
+
 	return appErr
 }
 

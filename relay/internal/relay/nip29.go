@@ -23,27 +23,27 @@ import (
 
 // Group represents a NIP-29 relay-managed group.
 type Group struct {
-	ID         string            // random group identifier (a-z0-9-_)
-	Name       string            // display name
-	Picture    string            // group picture URL
-	About      string            // group description
-	Members    map[string]bool   // pubkey -> is member
-	Admins     map[string][]string // pubkey -> list of roles
-	Roles      map[string]string // role name -> description
-	Private    bool              // only members can read
-	Restricted bool              // only members can write (previously called "closed" for writing)
-	Hidden     bool              // hide metadata from non-members
-	Closed     bool              // join requests not honored
-	InviteCodes map[string]bool  // valid invite codes
-	CreatedAt  time.Time
+	ID          string              // random group identifier (a-z0-9-_)
+	Name        string              // display name
+	Picture     string              // group picture URL
+	About       string              // group description
+	Members     map[string]bool     // pubkey -> is member
+	Admins      map[string][]string // pubkey -> list of roles
+	Roles       map[string]string   // role name -> description
+	Private     bool                // only members can read
+	Restricted  bool                // only members can write (previously called "closed" for writing)
+	Hidden      bool                // hide metadata from non-members
+	Closed      bool                // join requests not honored
+	InviteCodes map[string]bool     // valid invite codes
+	CreatedAt   time.Time
 }
 
 // GroupStore manages all NIP-29 groups in memory.
 type GroupStore struct {
-	mu     sync.RWMutex
-	groups map[string]*Group // group ID -> Group
-	relayPrivateKey string  // hex-encoded secp256k1 private key for signing
-	relayPubkey     string  // hex-encoded public key
+	mu              sync.RWMutex
+	groups          map[string]*Group // group ID -> Group
+	relayPrivateKey string            // hex-encoded secp256k1 private key for signing
+	relayPubkey     string            // hex-encoded public key
 	cfg             *config.Config
 }
 

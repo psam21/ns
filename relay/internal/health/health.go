@@ -34,11 +34,11 @@ type ComponentStatus struct {
 
 // HealthResponse represents the complete health check response
 type HealthResponse struct {
-	Status     HealthStatus       `json:"status"`
-	Timestamp  time.Time          `json:"timestamp"`
-	Version    string             `json:"version"`
-	Uptime     string             `json:"uptime"`
-	Components []*ComponentStatus `json:"components"`
+	Status     HealthStatus           `json:"status"`
+	Timestamp  time.Time              `json:"timestamp"`
+	Version    string                 `json:"version"`
+	Uptime     string                 `json:"uptime"`
+	Components []*ComponentStatus     `json:"components"`
 	Summary    map[string]interface{} `json:"summary"`
 }
 
@@ -58,21 +58,21 @@ type NodeInterface interface {
 // DatabaseStats represents database connection pool statistics (matches storage.DatabaseStats)
 type DatabaseStats struct {
 	OpenConnections    int
-	InUse             int  
-	Idle              int
+	InUse              int
+	Idle               int
 	MaxOpenConnections int
 	MaxIdleConnections int
 }
 
 // HealthChecker performs comprehensive health checks
 type HealthChecker struct {
-	db       DatabaseInterface
-	node     NodeInterface
-	cfg      *config.Config
-	logger   *zap.Logger
+	db        DatabaseInterface
+	node      NodeInterface
+	cfg       *config.Config
+	logger    *zap.Logger
 	startTime time.Time
 	version   string
-	mu       sync.RWMutex
+	mu        sync.RWMutex
 }
 
 // NewHealthChecker creates a new health checker
@@ -94,7 +94,7 @@ func (h *HealthChecker) CheckHealth(ctx context.Context) *HealthResponse {
 
 	startTime := time.Now()
 	components := make([]*ComponentStatus, 0)
-	
+
 	// Check database health
 	dbStatus := h.checkDatabase(ctx)
 	components = append(components, dbStatus)
@@ -232,7 +232,7 @@ func (h *HealthChecker) checkConnections() *ComponentStatus {
 
 	connectionCount := h.node.GetConnectionCount()
 	status.Details["active_connections"] = connectionCount
-	
+
 	// Get connection limits from config
 	maxConnections := h.cfg.Relay.ThrottlingConfig.MaxConnections
 	if maxConnections == 0 {
@@ -246,15 +246,15 @@ func (h *HealthChecker) checkConnections() *ComponentStatus {
 	// Determine connection status
 	if connectionUtilization > 90 {
 		status.Status = StatusDegraded
-		status.Message = fmt.Sprintf("High connection utilization: %d/%d (%.1f%%)", 
+		status.Message = fmt.Sprintf("High connection utilization: %d/%d (%.1f%%)",
 			connectionCount, maxConnections, connectionUtilization)
 	} else if connectionUtilization > 95 {
 		status.Status = StatusUnhealthy
-		status.Message = fmt.Sprintf("Critical connection utilization: %d/%d (%.1f%%)", 
+		status.Message = fmt.Sprintf("Critical connection utilization: %d/%d (%.1f%%)",
 			connectionCount, maxConnections, connectionUtilization)
 	} else {
 		status.Status = StatusHealthy
-		status.Message = fmt.Sprintf("Connection count normal: %d/%d (%.1f%%)", 
+		status.Message = fmt.Sprintf("Connection count normal: %d/%d (%.1f%%)",
 			connectionCount, maxConnections, connectionUtilization)
 	}
 
@@ -270,9 +270,9 @@ func (h *HealthChecker) checkSystemResources() *ComponentStatus {
 
 	status.Details["goroutines"] = runtime.NumGoroutine()
 	status.Details["cpus"] = runtime.NumCPU()
-	
+
 	goroutineCount := runtime.NumGoroutine()
-	
+
 	// Goroutine thresholds
 	const (
 		goroutineWarning  = 1000
@@ -283,7 +283,7 @@ func (h *HealthChecker) checkSystemResources() *ComponentStatus {
 		status.Status = StatusUnhealthy
 		status.Message = fmt.Sprintf("High goroutine count: %d", goroutineCount)
 	} else if goroutineCount > goroutineWarning {
-		status.Status = StatusDegraded  
+		status.Status = StatusDegraded
 		status.Message = fmt.Sprintf("Elevated goroutine count: %d", goroutineCount)
 	} else {
 		status.Status = StatusHealthy
@@ -360,7 +360,7 @@ func (h *HealthChecker) HandleHealth(w http.ResponseWriter, r *http.Request) {
 
 	// Check for ready parameter for readiness probes
 	ready := r.URL.Query().Get("ready")
-	
+
 	healthResponse := h.CheckHealth(ctx)
 
 	// Set appropriate HTTP status code

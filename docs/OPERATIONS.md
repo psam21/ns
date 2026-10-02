@@ -427,3 +427,27 @@ gh api repos/psam21/ns/dependabot/alerts --jq '[.[]|select(.state=="open")]|leng
 - **Measure, don't assume.** A covering index "should" have fixed the slow
   refresh; measured, it was 2x *worse* (heap fetches). A `last_autovacuum`
   47 days stale looked like bloat; measured, dead tuples were under threshold.
+- **A limit that validates is not a limit that works.** Three settings in
+  `deploy/config.yaml` were read nowhere. `MAX_REQUESTS_PER_SECOND: 60` left
+  `REQ` unmetered, and each `REQ` spawns a database-query goroutine — a
+  one-socket DoS. Grep for the shape, not the instance: a `WithTimeout`
+  assigned to `_`, a per-connection ctx swapped for a server-wide one.
+- **Negative controls are not optional.** Three times this session a test
+  passed against broken code: a race test whose stop-channel fired before the
+  goroutines ever overlapped, a goroutine-count assertion that matched nothing,
+  and a format gate verified in both directions before being trusted. If you
+  have not seen the test fail, you have not tested it.
+- **A change that makes X observable must assert X is emitted.** `e07eded`
+  raised a log line to Info so close reasons would be visible, and dropped the
+  `zap.String("reason", ...)` argument in the same edit. Asserting the level is
+  not enough — the field carrying the information is a separate argument.
+- **Check where logs go before concluding there are none.** The relay logs to
+  `/var/log/relay/relay.log`; `journalctl -u relay` shows only the startup
+  banner. Three diagnostic attempts came back empty because of this.
+- **Distrust a hand-rolled protocol probe that a real client contradicts.** A
+  raw-socket WebSocket probe reported broken pipes; `nak` did the same REQ
+  fine. The probe was not reading its socket.
+- **Gate what you would otherwise only catch by chance.** 25 Go files had
+  drifted out of `gofmt` compliance invisibly. Harmless in isolation, but it
+  means a real formatting error in a new change cannot be told apart from the
+  existing noise. The `fmt` CI job now fails on it.

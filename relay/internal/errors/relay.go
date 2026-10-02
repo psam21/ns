@@ -5,7 +5,7 @@ import (
 	"net"
 	"strings"
 	"syscall"
-	
+
 	"github.com/gorilla/websocket"
 )
 
@@ -17,7 +17,7 @@ func WebSocketError(operation string, cause error) *AppError {
 	var code string
 	var severity ErrorSeverity
 	var userMessage string
-	
+
 	if websocket.IsCloseError(cause, websocket.CloseNormalClosure) {
 		code = "WS_NORMAL_CLOSURE"
 		severity = SeverityLow
@@ -35,7 +35,7 @@ func WebSocketError(operation string, cause error) *AppError {
 		severity = SeverityMedium
 		userMessage = "WebSocket connection error occurred."
 	}
-	
+
 	return Wrap(cause, ErrorTypeNetwork, code, fmt.Sprintf("WebSocket %s failed", operation)).
 		WithSeverity(severity).
 		WithUserMessage(userMessage)
@@ -66,7 +66,7 @@ func FilterError(reason string) *AppError {
 
 // ConnectionLimitError creates an error when connection limits are exceeded
 func ConnectionLimitError(currentCount, maxCount int) *AppError {
-	return New(ErrorTypeRateLimit, "CONNECTION_LIMIT_EXCEEDED", 
+	return New(ErrorTypeRateLimit, "CONNECTION_LIMIT_EXCEEDED",
 		fmt.Sprintf("Connection limit exceeded: %d/%d", currentCount, maxCount)).
 		WithSeverity(SeverityMedium).
 		WithUserMessage("Too many active connections. Please try again later.")
@@ -128,7 +128,7 @@ func NetworkError(operation string, cause error) *AppError {
 	var code string
 	severity := SeverityMedium
 	userMessage := "Network error occurred. Please check your connection."
-	
+
 	// Classify network errors
 	if netErr, ok := cause.(net.Error); ok {
 		if netErr.Timeout() {
@@ -178,7 +178,7 @@ func NetworkError(operation string, cause error) *AppError {
 	} else {
 		code = "NETWORK_UNKNOWN"
 	}
-	
+
 	return Wrap(cause, ErrorTypeNetwork, code, fmt.Sprintf("Network %s failed", operation)).
 		WithSeverity(severity).
 		WithUserMessage(userMessage)
@@ -207,7 +207,7 @@ func AuthorizationError(operation, reason string) *AppError {
 
 // ExternalServiceError creates an error for external service failures
 func ExternalServiceError(service, operation string, cause error) *AppError {
-	return Wrap(cause, ErrorTypeExternal, "EXTERNAL_SERVICE_ERROR", 
+	return Wrap(cause, ErrorTypeExternal, "EXTERNAL_SERVICE_ERROR",
 		fmt.Sprintf("External service %s failed during %s", service, operation)).
 		WithSeverity(SeverityMedium).
 		WithUserMessage("An external service is temporarily unavailable. Please try again later.")
@@ -242,7 +242,7 @@ func ShouldRetry(err error, attemptCount int, maxAttempts int) bool {
 	if attemptCount >= maxAttempts {
 		return false
 	}
-	
+
 	return IsRecoverable(err)
 }
 
@@ -253,23 +253,23 @@ func isTemporaryNetError(err error) bool {
 	if err == nil {
 		return false
 	}
-	
+
 	errStr := err.Error()
 	// Common temporary network error patterns
 	temporaryPatterns := []string{
 		"connection refused",
 		"no route to host",
-		"network is unreachable", 
+		"network is unreachable",
 		"connection reset by peer",
 		"broken pipe",
 		"i/o timeout",
 	}
-	
+
 	for _, pattern := range temporaryPatterns {
 		if strings.Contains(strings.ToLower(errStr), pattern) {
 			return true
 		}
 	}
-	
+
 	return false
 }

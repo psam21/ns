@@ -19,6 +19,47 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Format gate.
+  #
+  # Separate from the relay job on purpose: a format failure should be
+  # unambiguous in the CI UI rather than buried in a test job that also
+  # builds, vets, and runs the suite.
+  #
+  # This exists because 25 files had drifted out of gofmt compliance with no
+  # gate to catch it, and the drift was invisible for as long as nobody
+  # happened to run `gofmt -l`. Whitespace-only drift is harmless in
+  # isolation, but it means a genuine formatting mistake in a *new* change
+  # cannot be distinguished from the existing background noise -- which is
+  # exactly the condition under which reviewers stop looking.
+  fmt:
+    name: Go formatting
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: relay
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: relay/go.mod
+          cache: true
+
+      - name: Check gofmt compliance
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::The following files are not gofmt-compliant:"
+            echo "$unformatted"
+            echo ""
+            echo "Run 'gofmt -w .' from relay/ to fix."
+            gofmt -d .
+            exit 1
+          fi
+          echo "All Go files are gofmt-compliant."
+
   relay:
     name: Relay tests and coverage
     runs-on: ubuntu-latest

@@ -46,12 +46,12 @@ func createPoolBasedOnLoad(ctx context.Context, dbURI string, maxWSConnections i
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse database URI: %w", err)
 	}
-	
+
 	// Determine appropriate pool size based on WebSocket connection limits
 	// This provides a reliable scaling mechanism based on actual configuration
 	var maxConns, minConns int32
 	var scaleType string
-	
+
 	if maxWSConnections <= 200 {
 		// Small scale: development, testing, small deployments
 		maxConns = int32(constants.DBPoolSmallMaxConns)
@@ -68,7 +68,7 @@ func createPoolBasedOnLoad(ctx context.Context, dbURI string, maxWSConnections i
 		minConns = int32(constants.DBPoolLargeMinConns)
 		scaleType = "large"
 	}
-	
+
 	// Configure pool with production-optimized settings
 	config.MaxConns = maxConns
 	config.MinConns = minConns
@@ -76,7 +76,7 @@ func createPoolBasedOnLoad(ctx context.Context, dbURI string, maxWSConnections i
 	config.MaxConnIdleTime = constants.DBConnMaxIdleTime
 	config.ConnConfig.ConnectTimeout = constants.DBConnAcquireTimeout
 	config.HealthCheckPeriod = 30 * time.Second // Regular health checks
-	
+
 	logger.Info("Database connection pool configured based on load",
 		zap.String("scale_type", scaleType),
 		zap.Int("max_ws_connections", maxWSConnections),
@@ -84,7 +84,7 @@ func createPoolBasedOnLoad(ctx context.Context, dbURI string, maxWSConnections i
 		zap.Int32("db_min_conns", minConns),
 		zap.Duration("max_lifetime", constants.DBConnMaxLifetime),
 		zap.Duration("max_idle_time", constants.DBConnMaxIdleTime))
-	
+
 	return pgxpool.NewWithConfig(ctx, config)
 }
 
@@ -365,10 +365,10 @@ func (db *DB) Ping() error {
 	if db.Pool == nil {
 		return fmt.Errorf("database pool is not initialized")
 	}
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	return db.Pool.Ping(ctx)
 }
 
@@ -377,22 +377,22 @@ func (db *DB) Stats() DatabaseStats {
 	if db.Pool == nil {
 		return DatabaseStats{}
 	}
-	
+
 	stat := db.Pool.Stat()
 	return DatabaseStats{
-		OpenConnections:     int(stat.TotalConns()),
-		InUse:               int(stat.AcquiredConns()),
-		Idle:                int(stat.IdleConns()),
-		MaxOpenConnections:  int(stat.MaxConns()),
-		MaxIdleConnections:  int(stat.MaxConns()), // pgxpool doesn't separate max idle
+		OpenConnections:    int(stat.TotalConns()),
+		InUse:              int(stat.AcquiredConns()),
+		Idle:               int(stat.IdleConns()),
+		MaxOpenConnections: int(stat.MaxConns()),
+		MaxIdleConnections: int(stat.MaxConns()), // pgxpool doesn't separate max idle
 	}
 }
 
 // DatabaseStats represents database connection pool statistics
 type DatabaseStats struct {
 	OpenConnections    int
-	InUse             int  
-	Idle              int
+	InUse              int
+	Idle               int
 	MaxOpenConnections int
 	MaxIdleConnections int
 }

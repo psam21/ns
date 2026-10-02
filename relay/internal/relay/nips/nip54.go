@@ -74,7 +74,7 @@ func ValidateWikiRedirect(event *nostr.Event) error {
 // validateWikiArticleTags validates tags for wiki article events
 func validateWikiArticleTags(event *nostr.Event) error {
 	var hasDTag bool
-	
+
 	for _, tag := range event.Tags {
 		switch tag[0] {
 		case "d":
@@ -123,7 +123,7 @@ func validateWikiArticleTags(event *nostr.Event) error {
 func validateMergeRequestTags(event *nostr.Event) error {
 	var hasATag, hasPTag, hasSourceETag bool
 	var eTagCount int
-	
+
 	for _, tag := range event.Tags {
 		switch tag[0] {
 		case "a":
@@ -154,11 +154,11 @@ func validateMergeRequestTags(event *nostr.Event) error {
 	if !hasATag {
 		return fmt.Errorf("merge request must have an 'a' tag referencing the target article")
 	}
-	
+
 	if !hasPTag {
 		return fmt.Errorf("merge request must have a 'p' tag referencing the destination pubkey")
 	}
-	
+
 	if !hasSourceETag {
 		return fmt.Errorf("merge request must have an 'e' tag with 'source' marker")
 	}
@@ -173,7 +173,7 @@ func validateMergeRequestTags(event *nostr.Event) error {
 // validateWikiRedirectTags validates tags for wiki redirect events
 func validateWikiRedirectTags(event *nostr.Event) error {
 	var hasDTag, hasRedirectTag bool
-	
+
 	for _, tag := range event.Tags {
 		switch tag[0] {
 		case "d":
@@ -203,7 +203,7 @@ func validateWikiRedirectTags(event *nostr.Event) error {
 	if !hasDTag {
 		return fmt.Errorf("wiki redirect must have a 'd' tag")
 	}
-	
+
 	if !hasRedirectTag {
 		return fmt.Errorf("wiki redirect must have a 'redirect' tag")
 	}
@@ -313,7 +313,7 @@ func validateMergeRequestATag(tag nostr.Tag) error {
 	if err != nil {
 		return fmt.Errorf("invalid kind in target address: %s", parts[0])
 	}
-	
+
 	if kind != 30818 {
 		return fmt.Errorf("merge request target must be a wiki article (kind 30818), got %d", kind)
 	}
@@ -364,7 +364,7 @@ func validateMergeRequestETag(tag nostr.Tag) error {
 			"fork":   true,
 			"defer":  true,
 		}
-		
+
 		if !validMarkers[tag[3]] {
 			return fmt.Errorf("invalid e tag marker '%s', allowed: source, fork, defer", tag[3])
 		}
@@ -455,7 +455,7 @@ func validateEventAddressTag(tag nostr.Tag) error {
 			"fork":  true,
 			"defer": true,
 		}
-		
+
 		if !validMarkers[tag[3]] {
 			return fmt.Errorf("invalid a tag marker '%s', allowed: fork, defer", tag[3])
 		}
@@ -488,7 +488,7 @@ func validateEventIDTag(tag nostr.Tag) error {
 			"fork":  true,
 			"defer": true,
 		}
-		
+
 		if !validMarkers[tag[3]] {
 			return fmt.Errorf("invalid e tag marker '%s', allowed: fork, defer", tag[3])
 		}
@@ -555,21 +555,21 @@ func validateWikilinks(content string) error {
 		}
 
 		linkContent := match[1]
-		
+
 		// Check for pipe syntax: [[target|display]]
 		if strings.Contains(linkContent, "|") {
 			parts := strings.SplitN(linkContent, "|", 2)
 			if len(parts) != 2 {
 				return fmt.Errorf("invalid wikilink syntax: %s", match[0])
 			}
-			
+
 			target := strings.TrimSpace(parts[0])
 			display := strings.TrimSpace(parts[1])
-			
+
 			if target == "" {
 				return fmt.Errorf("wikilink target cannot be empty: %s", match[0])
 			}
-			
+
 			if display == "" {
 				return fmt.Errorf("wikilink display text cannot be empty: %s", match[0])
 			}
@@ -597,7 +597,7 @@ func validateNostrLinks(content string) error {
 		}
 
 		identifier := match[1]
-		
+
 		// Basic validation - should be bech32-like format
 		if len(identifier) < 10 {
 			return fmt.Errorf("invalid nostr identifier too short: %s", match[0])
@@ -615,13 +615,13 @@ func validateNostrLinks(content string) error {
 // validateAsciidocSyntax performs basic Asciidoc syntax validation
 func validateAsciidocSyntax(content string) error {
 	lines := strings.Split(content, "\n")
-	
+
 	for i, line := range lines {
 		// Check for unbalanced brackets in links
 		if strings.Count(line, "[") != strings.Count(line, "]") {
 			// Allow wikilinks which use double brackets
 			wikilinkCount := strings.Count(line, "[[") * 2
-			if strings.Count(line, "[") - wikilinkCount != strings.Count(line, "]") - wikilinkCount {
+			if strings.Count(line, "[")-wikilinkCount != strings.Count(line, "]")-wikilinkCount {
 				return fmt.Errorf("unbalanced brackets on line %d: %s", i+1, line)
 			}
 		}
@@ -639,24 +639,24 @@ func validateAsciidocSyntax(content string) error {
 func normalizeDTag(value string) string {
 	// Convert to lowercase
 	normalized := strings.ToLower(value)
-	
+
 	// Replace any non-letter character with dash
 	result := make([]rune, 0, len(normalized))
-	
+
 	for _, r := range normalized {
-		if (r >= 'a' && r <= 'z') {
+		if r >= 'a' && r <= 'z' {
 			result = append(result, r)
 		} else {
 			result = append(result, '-')
 		}
 	}
-	
+
 	// Convert consecutive dashes to single dash
 	normalizedStr := regexp.MustCompile(`-+`).ReplaceAllString(string(result), "-")
-	
+
 	// Remove leading and trailing dashes
 	normalizedStr = strings.Trim(normalizedStr, "-")
-	
+
 	return normalizedStr
 }
 

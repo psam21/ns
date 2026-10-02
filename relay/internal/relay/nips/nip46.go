@@ -31,23 +31,23 @@ const (
 type NIP46Method string
 
 const (
-	NIP46MethodConnect        NIP46Method = "connect"
-	NIP46MethodSignEvent      NIP46Method = "sign_event"
-	NIP46MethodPing           NIP46Method = "ping"
-	NIP46MethodGetPublicKey   NIP46Method = "get_public_key"
-	NIP46MethodNIP04Encrypt   NIP46Method = "nip04_encrypt"
-	NIP46MethodNIP04Decrypt   NIP46Method = "nip04_decrypt"
-	NIP46MethodNIP44Encrypt   NIP46Method = "nip44_encrypt"
-	NIP46MethodNIP44Decrypt   NIP46Method = "nip44_decrypt"
-	NIP46MethodSwitchRelays   NIP46Method = "switch_relays"
-	NIP46MethodLogout         NIP46Method = "logout"
+	NIP46MethodConnect      NIP46Method = "connect"
+	NIP46MethodSignEvent    NIP46Method = "sign_event"
+	NIP46MethodPing         NIP46Method = "ping"
+	NIP46MethodGetPublicKey NIP46Method = "get_public_key"
+	NIP46MethodNIP04Encrypt NIP46Method = "nip04_encrypt"
+	NIP46MethodNIP04Decrypt NIP46Method = "nip04_decrypt"
+	NIP46MethodNIP44Encrypt NIP46Method = "nip44_encrypt"
+	NIP46MethodNIP44Decrypt NIP46Method = "nip44_decrypt"
+	NIP46MethodSwitchRelays NIP46Method = "switch_relays"
+	NIP46MethodLogout       NIP46Method = "logout"
 )
 
 // NIP46Request represents a parsed NIP-46 request
 type NIP46Request struct {
-	ID     string        `json:"id"`
-	Method NIP46Method   `json:"method"`
-	Params []string      `json:"params"`
+	ID     string      `json:"id"`
+	Method NIP46Method `json:"method"`
+	Params []string    `json:"params"`
 }
 
 // NIP46Response represents a NIP-46 response
@@ -187,4 +187,3 @@ func IsNIP46Request(evt *nostr.Event) bool {
 func IsNIP46AuthChallenge(evt *nostr.Event) bool {
 	return evt.Kind == 24242
 }
-

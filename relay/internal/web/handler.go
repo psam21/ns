@@ -45,8 +45,8 @@ type DashboardData struct {
 	EventCacheUpdatedAt string                `json:"event_cache_updated_at,omitempty"`
 	EventCacheMessage   string                `json:"event_cache_message,omitempty"`
 	LiveSince           string                `json:"live_since"`
-	LastCommit         string                `json:"last_commit"`
-	RepoLink           string                `json:"repo_link"`
+	LastCommit          string                `json:"last_commit"`
+	RepoLink            string                `json:"repo_link"`
 	Cluster             *storage.DatabaseInfo `json:"cluster"`
 }
 
@@ -125,9 +125,9 @@ type Handler struct {
 	// event kinds" panels. It is populated by a background goroutine that
 	// runs REFRESH MATERIALIZED VIEW CONCURRENTLY every 30s, so reads never
 	// hit the live events table. See https://github.com/psam21/ns/issues/100.
-	eventKindStatsMu        sync.RWMutex
-	eventKindStats          []storage.EventKindStat
-	eventKindStatsUpdatedAt time.Time
+	eventKindStatsMu         sync.RWMutex
+	eventKindStats           []storage.EventKindStat
+	eventKindStatsUpdatedAt  time.Time
 	eventKindStatsRefreshing bool
 }
 
@@ -569,8 +569,8 @@ func (h *Handler) getDashboardData(requestHost string) *DashboardData {
 		EventCacheUpdatedAt: formatEventCacheTime(eventSnapshot.updatedAt),
 		EventCacheMessage:   eventMessage,
 		LiveSince:           h.liveSince.Format("Jan 2, 2006"),
-		LastCommit:         loadLastCommit(),
-		RepoLink:           "https://github.com/psam21/ns",
+		LastCommit:          loadLastCommit(),
+		RepoLink:            "https://github.com/psam21/ns",
 		Cluster:             clusterInfo,
 	}
 }

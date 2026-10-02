@@ -47,7 +47,7 @@ type InviteCode struct {
 
 var (
 	membershipStoreInstance *MembershipStore
-	membershipOnce         sync.Once
+	membershipOnce          sync.Once
 )
 
 // GetMembershipStore returns the singleton membership store.
@@ -448,10 +448,10 @@ func (ms *MembershipStore) createRelayRolesEvent(gs *GroupStore) *nostr.Event {
 
 	// Define standard relay roles
 	roles := map[string]string{
-		"admin":      "Full relay administration access",
-		"moderator":  "Can moderate content and manage users",
-		"member":     "Standard relay member",
-		"writer":     "Can publish events to the relay",
+		"admin":     "Full relay administration access",
+		"moderator": "Can moderate content and manage users",
+		"member":    "Standard relay member",
+		"writer":    "Can publish events to the relay",
 	}
 
 	tags := nostr.Tags{{"-"}}

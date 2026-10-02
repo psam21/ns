@@ -10,7 +10,7 @@ import (
 var (
 	// Global error middleware instance
 	globalErrorMiddleware *ErrorMiddleware
-	
+
 	// Global specialized handlers
 	globalWebSocketHandler *WebSocketHandler
 	globalDatabaseHandler  *DatabaseHandler
@@ -23,7 +23,7 @@ func InitErrorHandling() {
 	globalWebSocketHandler = NewWebSocketHandler()
 	globalDatabaseHandler = NewDatabaseHandler()
 	globalRelayHandler = NewRelayHandler()
-	
+
 	logger.Info("Error handling system initialized",
 		zap.String("component", "error_middleware"))
 }

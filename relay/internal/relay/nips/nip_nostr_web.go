@@ -15,9 +15,9 @@ import (
 func ValidateAsset(event *nostr.Event) error {
 	return common.ValidateEventWithCallback(
 		event,
-		"Nostr Web",  // NIP number
-		1125,         // Expected event kind
-		"web asset",  // Event name for logging
+		"Nostr Web", // NIP number
+		1125,        // Expected event kind
+		"web asset", // Event name for logging
 		func(helper *common.ValidationHelper, evt *nostr.Event) error {
 			return validateAssetTags(helper, evt)
 		},
@@ -59,8 +59,8 @@ func ValidateSiteIndex(event *nostr.Event) error {
 func ValidateEntrypoint(event *nostr.Event) error {
 	return common.ValidateEventWithCallback(
 		event,
-		"Nostr Web", // NIP number
-		11126,       // Expected event kind
+		"Nostr Web",  // NIP number
+		11126,        // Expected event kind
 		"entrypoint", // Event name for logging
 		func(helper *common.ValidationHelper, evt *nostr.Event) error {
 			// Entrypoint should have empty content
@@ -228,10 +228,10 @@ func validateSiteIndexTags(helper *common.ValidationHelper, event *nostr.Event) 
 
 	// Parse and validate JSON structure
 	var siteIndex struct {
-		Routes         map[string]string `json:"routes"`
-		Version        string            `json:"version,omitempty"`
-		DefaultRoute   string            `json:"defaultRoute,omitempty"`
-		NotFoundRoute  *string           `json:"notFoundRoute,omitempty"`
+		Routes        map[string]string `json:"routes"`
+		Version       string            `json:"version,omitempty"`
+		DefaultRoute  string            `json:"defaultRoute,omitempty"`
+		NotFoundRoute *string           `json:"notFoundRoute,omitempty"`
 	}
 
 	if err := json.Unmarshal([]byte(event.Content), &siteIndex); err != nil {

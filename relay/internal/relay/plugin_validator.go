@@ -149,7 +149,7 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			5128:  true, // Manifest snapshot
 			// NIP-52 Calendar Events
 			31922: true, // Date-based Calendar Event
-			31923: true, // Time-based Calendar Event  
+			31923: true, // Time-based Calendar Event
 			31924: true, // Calendar
 			31925: true, // Calendar Event RSVP
 			// NIP-53 Live Activities
@@ -168,14 +168,14 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			7376:  true, // Spending History Event
 			7374:  true, // Quote Event
 			// NIP-61 Nutzaps
-			9321:  true, // Nutzap event  
+			9321:  true, // Nutzap event
 			10019: true, // Nutzap info event
 			// NIP-34 Git Stuff
-			1617:  true, // Patches
-			1618:  true, // Pull Requests
-			1619:  true, // Issues
-			1621:  true, // Comments on Git
-			1630:  true, 1631: true, 1632: true, 1633: true, // Patch status
+			1617: true,                                     // Patches
+			1618: true,                                     // Pull Requests
+			1619: true,                                     // Issues
+			1621: true,                                     // Comments on Git
+			1630: true, 1631: true, 1632: true, 1633: true, // Patch status
 			10317: true, // Repository state
 			30617: true, // Repository
 			30618: true, // Repository announcements
@@ -262,33 +262,33 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			31924: {"d", "title"},          // Calendar requires "d" and "title" tags
 			31925: {"d", "a", "status"},    // Calendar Event RSVP requires "d", "a", and "status" tags
 			// NIP-53 Live Activities
-			30311: {"d"},                    // Live Streaming Event requires "d" tag
-			1311:  {"a"},                    // Live Chat Message requires "a" tag
-			30312: {"d", "room", "status", "service"}, // Meeting Space requires "d", "room", "status", and "service" tags
+			30311: {"d"},                                   // Live Streaming Event requires "d" tag
+			1311:  {"a"},                                   // Live Chat Message requires "a" tag
+			30312: {"d", "room", "status", "service"},      // Meeting Space requires "d", "room", "status", and "service" tags
 			30313: {"d", "a", "title", "starts", "status"}, // Meeting Room Event requires "d", "a", "title", "starts", and "status" tags
-			10312: {"a"},                    // Room Presence requires "a" tag
+			10312: {"a"},                                   // Room Presence requires "a" tag
 			// NIP-54 Wiki
-			30818: {"d"},                    // Wiki Article requires "d" tag
-			818:   {"a", "p"},               // Merge Request requires "a" and "p" tags
-			30819: {"d", "redirect"},        // Wiki Redirect requires "d" and "redirect" tags
+			30818: {"d"},             // Wiki Article requires "d" tag
+			818:   {"a", "p"},        // Merge Request requires "a" and "p" tags
+			30819: {"d", "redirect"}, // Wiki Redirect requires "d" and "redirect" tags
 			// NIP-60 Cashu Wallets - Note: Most tags are encrypted in content, minimal required public tags
-			7374:  {"expiration", "mint"},   // Quote Event requires "expiration" and "mint" tags
+			7374: {"expiration", "mint"}, // Quote Event requires "expiration" and "mint" tags
 			// NIP-72 Moderated Communities
 			34550: {"d"},           // Community Definition requires "d" tag
 			4550:  {"a", "p", "k"}, // Moderation Approval requires community, author, and kind tags (e tag only for non-replaceable events)
 			// NIP-EE MLS E2EE Messaging
 			443:   {"mls_protocol_version", "mls_ciphersuite"}, // KeyPackage requires protocol version and ciphersuite
-			445:   {"h"},            // Group Event requires "h" tag (group ID)
-			10051: {"relay"},        // KeyPackage Relays List requires at least one "relay" tag
+			445:   {"h"},                                       // Group Event requires "h" tag (group ID)
+			10051: {"relay"},                                   // KeyPackage Relays List requires at least one "relay" tag
 			// NIP-YY Nostr Web Pages
-			1125:  {"m", "x"},  // Asset requires "m" (MIME type) and "x" (SHA-256 hash) tags
-			1126:  {"e"},       // Page Manifest requires "e" (asset references) tags
-			31126: {"d", "x"},  // Site Index requires "d" (truncated hash) and "x" (full SHA-256 hash) tags
-			11126: {"a"},       // Entrypoint requires "a" (address to site index) tag
+			1125:  {"m", "x"}, // Asset requires "m" (MIME type) and "x" (SHA-256 hash) tags
+			1126:  {"e"},      // Page Manifest requires "e" (asset references) tags
+			31126: {"d", "x"}, // Site Index requires "d" (truncated hash) and "x" (full SHA-256 hash) tags
+			11126: {"a"},      // Entrypoint requires "a" (address to site index) tag
 			// NIP-43 Relay Access Metadata
-			28934: {"claim"},   // Join request requires "claim" tag with invite code
+			28934: {"claim"}, // Join request requires "claim" tag with invite code
 			// NIP-66 Relay Discovery
-			30166: {"d"},       // Relay Discovery requires "d" tag (relay URL)
+			30166: {"d"}, // Relay Discovery requires "d" tag (relay URL)
 		},
 		MaxCreatedAt: time.Now().Unix() + 300,    // 5 minutes in future
 		MinCreatedAt: time.Now().Unix() - 172800, // 2 days in past

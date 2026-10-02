@@ -200,7 +200,7 @@ func (n *Node) shutdownWebSocketConnections(ctx context.Context) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		
+
 		// Close all connections - the connection.Close() method handles graceful closure
 		for _, conn := range connections {
 			conn.Close()
@@ -241,7 +241,7 @@ func (n *Node) shutdownDatabase(ctx context.Context) error {
 				zap.Int("attempt", i+1),
 				zap.Int("max_attempts", constants.MaxDBRetries),
 				zap.Error(err))
-			
+
 			// Wait with context timeout awareness
 			select {
 			case <-time.After(constants.DBRetryDelay * time.Second):

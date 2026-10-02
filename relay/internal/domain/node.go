@@ -2,7 +2,7 @@ package domain
 
 import (
 	"time"
-	
+
 	"github.com/Shugur-Network/relay/internal/config"
 	"github.com/Shugur-Network/relay/internal/storage"
 	nostr "github.com/nbd-wtf/go-nostr"
@@ -24,8 +24,8 @@ type NodeInterface interface {
 	RegisterConn(conn WebSocketConnection)
 	UnregisterConn(conn WebSocketConnection)
 	GetActiveConnectionCount() int64
-	GetConnectionCount() int        // For health checks
-	GetStartTime() time.Time        // For health checks
+	GetConnectionCount() int // For health checks
+	GetStartTime() time.Time // For health checks
 
 	// Validation
 	GetValidator() EventValidator

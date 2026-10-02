@@ -4,25 +4,25 @@ import "time"
 
 // RelayConfig holds relay-specific settings.
 type RelayConfig struct {
-	Name             string           `mapstructure:"NAME"              json:"name"              validate:"required,min=1,max=30"`
-	Description      string           `mapstructure:"DESCRIPTION"       json:"description"       validate:"omitempty,max=200"`
-	Contact          string           `mapstructure:"CONTACT"           json:"contact"           validate:"omitempty,email"`
-	PublicKey        string           `mapstructure:"PUBLIC_KEY"        json:"public_key"        validate:"omitempty,pubkey"`
-	PrivateKey       string           `mapstructure:"PRIVATE_KEY"       json:"-"`
-	AdminPubkeys     []string         `mapstructure:"ADMIN_PUBKEYS"     json:"admin_pubkeys"`
-	Icon             string           `mapstructure:"ICON"              json:"icon"              validate:"omitempty,url"`
-	Banner           string           `mapstructure:"BANNER"            json:"banner"            validate:"omitempty,url"`
-	PostingPolicy    string           `mapstructure:"POSTING_POLICY"    json:"posting_policy"    validate:"omitempty,url"`
-	RelayCountries   []string         `mapstructure:"RELAY_COUNTRIES"   json:"relay_countries"`
-	WSAddr           string           `mapstructure:"WS_ADDR"           json:"ws_addr"           validate:"required,wsaddr"`
-	PublicURL        string           `mapstructure:"PUBLIC_URL"        json:"public_url"        validate:"omitempty,url"`
-	IdleTimeout      time.Duration    `mapstructure:"IDLE_TIMEOUT"      json:"idle_timeout"      validate:"required,reasonable_duration"`
-	WriteTimeout     time.Duration    `mapstructure:"WRITE_TIMEOUT"     json:"write_timeout"     validate:"required,timeout_duration"`
-	SendBufferSize   int              `mapstructure:"SEND_BUFFER_SIZE"  json:"send_buffer_size"  validate:"required,buffer_size"`
-	EventCacheSize   int              `mapstructure:"EVENT_CACHE_SIZE"   json:"event_cache_size"  validate:"required,min=100,max=1000000"`
-	MinPowDifficulty int              `mapstructure:"MIN_POW_DIFFICULTY" json:"min_pow_difficulty" validate:"min=0,max=64"`
-	ThrottlingConfig ThrottlingConfig `mapstructure:"THROTTLING"        json:"throttling"        validate:"required"`
-	Roles            map[string]string `mapstructure:"ROLES"            json:"roles"`
+	Name             string              `mapstructure:"NAME"              json:"name"              validate:"required,min=1,max=30"`
+	Description      string              `mapstructure:"DESCRIPTION"       json:"description"       validate:"omitempty,max=200"`
+	Contact          string              `mapstructure:"CONTACT"           json:"contact"           validate:"omitempty,email"`
+	PublicKey        string              `mapstructure:"PUBLIC_KEY"        json:"public_key"        validate:"omitempty,pubkey"`
+	PrivateKey       string              `mapstructure:"PRIVATE_KEY"       json:"-"`
+	AdminPubkeys     []string            `mapstructure:"ADMIN_PUBKEYS"     json:"admin_pubkeys"`
+	Icon             string              `mapstructure:"ICON"              json:"icon"              validate:"omitempty,url"`
+	Banner           string              `mapstructure:"BANNER"            json:"banner"            validate:"omitempty,url"`
+	PostingPolicy    string              `mapstructure:"POSTING_POLICY"    json:"posting_policy"    validate:"omitempty,url"`
+	RelayCountries   []string            `mapstructure:"RELAY_COUNTRIES"   json:"relay_countries"`
+	WSAddr           string              `mapstructure:"WS_ADDR"           json:"ws_addr"           validate:"required,wsaddr"`
+	PublicURL        string              `mapstructure:"PUBLIC_URL"        json:"public_url"        validate:"omitempty,url"`
+	IdleTimeout      time.Duration       `mapstructure:"IDLE_TIMEOUT"      json:"idle_timeout"      validate:"required,reasonable_duration"`
+	WriteTimeout     time.Duration       `mapstructure:"WRITE_TIMEOUT"     json:"write_timeout"     validate:"required,timeout_duration"`
+	SendBufferSize   int                 `mapstructure:"SEND_BUFFER_SIZE"  json:"send_buffer_size"  validate:"required,buffer_size"`
+	EventCacheSize   int                 `mapstructure:"EVENT_CACHE_SIZE"   json:"event_cache_size"  validate:"required,min=100,max=1000000"`
+	MinPowDifficulty int                 `mapstructure:"MIN_POW_DIFFICULTY" json:"min_pow_difficulty" validate:"min=0,max=64"`
+	ThrottlingConfig ThrottlingConfig    `mapstructure:"THROTTLING"        json:"throttling"        validate:"required"`
+	Roles            map[string]string   `mapstructure:"ROLES"            json:"roles"`
 	UserRoles        map[string][]string `mapstructure:"USER_ROLES"     json:"user_roles"`
 	// TrustedProxies is the list of CIDRs that may supply X-Real-IP /
 	// X-Forwarded-For. Requests whose RemoteAddr is not in this list are

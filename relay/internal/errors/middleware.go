@@ -18,7 +18,7 @@ type ErrorType string
 const (
 	ErrorTypeValidation     ErrorType = "validation"
 	ErrorTypeAuthentication ErrorType = "authentication"
-	ErrorTypeAuthorization  ErrorType = "authorization" 
+	ErrorTypeAuthorization  ErrorType = "authorization"
 	ErrorTypeNotFound       ErrorType = "not_found"
 	ErrorTypeRateLimit      ErrorType = "rate_limit"
 	ErrorTypeDatabase       ErrorType = "database"
@@ -68,11 +68,11 @@ func (e *AppError) Unwrap() error {
 // ErrorResponse represents the JSON response format for errors
 type ErrorResponse struct {
 	Error struct {
-		Type        ErrorType `json:"type"`
-		Code        string    `json:"code"`
-		Message     string    `json:"message"`
-		Timestamp   time.Time `json:"timestamp"`
-		RequestID   string    `json:"request_id,omitempty"`
+		Type      ErrorType `json:"type"`
+		Code      string    `json:"code"`
+		Message   string    `json:"message"`
+		Timestamp time.Time `json:"timestamp"`
+		RequestID string    `json:"request_id,omitempty"`
 	} `json:"error"`
 }
 
@@ -111,12 +111,12 @@ func Wrap(err error, errorType ErrorType, code string, message string) *AppError
 		Cause:      err,
 		StackTrace: captureStackTrace(),
 	}
-	
+
 	// If the original error has details, include them
 	if err != nil {
 		appErr.Details = err.Error()
 	}
-	
+
 	return appErr
 }
 
@@ -147,7 +147,7 @@ func (e *AppError) WithRequestID(requestID string) *AppError {
 // HandleError processes an error and sends appropriate HTTP response
 func (em *ErrorMiddleware) HandleError(w http.ResponseWriter, r *http.Request, err error) {
 	var appErr *AppError
-	
+
 	// Convert to AppError if it isn't already
 	if ae, ok := err.(*AppError); ok {
 		appErr = ae
@@ -156,18 +156,18 @@ func (em *ErrorMiddleware) HandleError(w http.ResponseWriter, r *http.Request, e
 		appErr = Wrap(err, ErrorTypeInternal, "INTERNAL_ERROR", "An internal error occurred")
 		appErr.Severity = SeverityHigh
 	}
-	
+
 	// Add request ID if available
 	if requestID := getRequestID(r); requestID != "" {
 		appErr.RequestID = requestID
 	}
-	
+
 	// Log the error with appropriate level based on severity
 	em.logError(appErr, r)
-	
+
 	// Increment error metrics
 	metrics.IncrementErrorCount()
-	
+
 	// Send HTTP response
 	em.sendErrorResponse(w, appErr)
 }
@@ -184,24 +184,24 @@ func (em *ErrorMiddleware) logError(err *AppError, r *http.Request) {
 		zap.String("user_agent", r.UserAgent()),
 		zap.String("remote_addr", r.RemoteAddr),
 	}
-	
+
 	if err.RequestID != "" {
 		fields = append(fields, zap.String("request_id", err.RequestID))
 	}
-	
+
 	if err.Details != "" {
 		fields = append(fields, zap.String("details", err.Details))
 	}
-	
+
 	if err.Cause != nil {
 		fields = append(fields, zap.Error(err.Cause))
 	}
-	
+
 	// Log stack trace for high severity errors
 	if err.Severity == SeverityHigh || err.Severity == SeverityCritical {
 		fields = append(fields, zap.String("stack_trace", err.StackTrace))
 	}
-	
+
 	// Choose log level based on severity
 	switch err.Severity {
 	case SeverityLow:
@@ -220,14 +220,14 @@ func (em *ErrorMiddleware) logError(err *AppError, r *http.Request) {
 // sendErrorResponse sends a structured JSON error response
 func (em *ErrorMiddleware) sendErrorResponse(w http.ResponseWriter, err *AppError) {
 	statusCode := getHTTPStatusCode(err.Type)
-	
+
 	response := ErrorResponse{
 		Error: struct {
-			Type        ErrorType `json:"type"`
-			Code        string    `json:"code"`
-			Message     string    `json:"message"`
-			Timestamp   time.Time `json:"timestamp"`
-			RequestID   string    `json:"request_id,omitempty"`
+			Type      ErrorType `json:"type"`
+			Code      string    `json:"code"`
+			Message   string    `json:"message"`
+			Timestamp time.Time `json:"timestamp"`
+			RequestID string    `json:"request_id,omitempty"`
 		}{
 			Type:      err.Type,
 			Code:      err.Code,
@@ -236,10 +236,10 @@ func (em *ErrorMiddleware) sendErrorResponse(w http.ResponseWriter, err *AppErro
 			RequestID: err.RequestID,
 		},
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	
+
 	if encodeErr := json.NewEncoder(w).Encode(response); encodeErr != nil {
 		em.logger.Error("Failed to encode error response", zap.Error(encodeErr))
 		// Fallback to plain text response
@@ -278,7 +278,7 @@ func getUserFriendlyMessage(err *AppError) string {
 	if err.UserMessage != "" {
 		return err.UserMessage
 	}
-	
+
 	// Provide default user-friendly messages based on error type
 	switch err.Type {
 	case ErrorTypeValidation:
@@ -319,7 +319,7 @@ func getRequestID(r *http.Request) string {
 			return id
 		}
 	}
-	
+
 	// Fallback to headers
 	return r.Header.Get("X-Request-ID")
 }
@@ -335,14 +335,14 @@ func (em *ErrorMiddleware) RecoveryMiddleware(next http.Handler) http.Handler {
 				} else {
 					err = fmt.Errorf("panic: %v", recovered)
 				}
-				
+
 				panicErr := Wrap(err, ErrorTypeInternal, "PANIC_RECOVERED", "An unexpected error occurred")
 				panicErr.Severity = SeverityCritical
-				
+
 				em.HandleError(w, r, panicErr)
 			}
 		}()
-		
+
 		next.ServeHTTP(w, r)
 	})
 }

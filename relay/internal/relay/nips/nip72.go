@@ -339,12 +339,12 @@ func validateCommunityImageTag72(tag []string) error {
 	if len(tag) < 2 {
 		return fmt.Errorf("image tag must have URL")
 	}
-	
+
 	// Basic URL validation
 	if !strings.HasPrefix(tag[1], "http://") && !strings.HasPrefix(tag[1], "https://") {
 		return fmt.Errorf("image URL must start with http:// or https://")
 	}
-	
+
 	// Check for dimensions parameter if present
 	if len(tag) >= 3 && tag[2] != "" {
 		// Validate dimensions format (e.g., "200x200")
@@ -352,7 +352,7 @@ func validateCommunityImageTag72(tag []string) error {
 			return fmt.Errorf("invalid dimensions format: %s (expected format: WxH like 200x200)", tag[2])
 		}
 	}
-	
+
 	return nil
 }
 
@@ -360,12 +360,12 @@ func validateCommunityRelay72(tag []string) error {
 	if len(tag) < 2 {
 		return fmt.Errorf("relay tag must have URL")
 	}
-	
+
 	// Basic relay URL validation
 	if !strings.HasPrefix(tag[1], "ws://") && !strings.HasPrefix(tag[1], "wss://") {
 		return fmt.Errorf("relay URL must start with ws:// or wss://")
 	}
-	
+
 	// Check for marker parameter if present
 	if len(tag) >= 3 && tag[2] != "" {
 		// Define allowed markers for NIP-72
@@ -376,12 +376,12 @@ func validateCommunityRelay72(tag []string) error {
 			"requests":  true,
 			"approvals": true,
 		}
-		
+
 		if !allowedMarkers[tag[2]] {
 			return fmt.Errorf("invalid relay marker: %s (allowed: read, write, author, requests, approvals)", tag[2])
 		}
 	}
-	
+
 	return nil
 }
 
@@ -389,18 +389,18 @@ func validateCommunityReference72(ref string, expectedKind string) error {
 	if ref == "" {
 		return fmt.Errorf("community reference cannot be empty")
 	}
-	
+
 	// Format should be: kind:pubkey:identifier
 	parts := strings.Split(ref, ":")
 	if len(parts) != 3 {
 		return fmt.Errorf("community reference must have format 'kind:pubkey:identifier', got %d parts", len(parts))
 	}
-	
+
 	// Validate kind
 	if parts[0] != expectedKind {
 		return fmt.Errorf("expected kind %s, got %s", expectedKind, parts[0])
 	}
-	
+
 	// Validate pubkey format
 	pubkey := parts[1]
 	if len(pubkey) == 64 {
@@ -414,12 +414,12 @@ func validateCommunityReference72(ref string, expectedKind string) error {
 	} else {
 		return fmt.Errorf("invalid pubkey format in community reference: must be 64 or 66 characters, got %d", len(pubkey))
 	}
-	
+
 	// Validate identifier
 	if err := validateCommunityIdentifier72(parts[2]); err != nil {
 		return fmt.Errorf("invalid community identifier in reference: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -439,14 +439,14 @@ func isValidDimensions(dims string) bool {
 	if len(parts) != 2 {
 		return false
 	}
-	
+
 	// Both parts should be positive integers
 	for _, part := range parts {
 		if _, err := strconv.Atoi(part); err != nil {
 			return false
 		}
 	}
-	
+
 	return true
 }
 

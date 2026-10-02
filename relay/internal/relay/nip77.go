@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	maxNegSessions       = 5              // Max concurrent negentropy sessions per connection
-	maxNegRecords        = 500000         // Max records to process per session
-	negSessionTimeout    = 2 * time.Minute // Session idle timeout
-	negFrameSizeLimit    = 128 * 1024      // 128KB frame size limit
+	maxNegSessions    = 5               // Max concurrent negentropy sessions per connection
+	maxNegRecords     = 500000          // Max records to process per session
+	negSessionTimeout = 2 * time.Minute // Session idle timeout
+	negFrameSizeLimit = 128 * 1024      // 128KB frame size limit
 )
 
 // negSession holds state for an active negentropy sync session

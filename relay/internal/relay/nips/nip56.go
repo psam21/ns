@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/nbd-wtf/go-nostr"
 	"github.com/Shugur-Network/relay/internal/logger"
+	"github.com/nbd-wtf/go-nostr"
 	"go.uber.org/zap"
 )
 
@@ -324,7 +324,7 @@ func isValidURLForReporting(urlStr string) bool {
 func GetValidReportTypes() []string {
 	return []string{
 		"nudity",
-		"malware", 
+		"malware",
 		"profanity",
 		"illegal",
 		"spam",

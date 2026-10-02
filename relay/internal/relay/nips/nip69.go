@@ -177,9 +177,9 @@ func ValidateP2POrder(evt *nostr.Event) error {
 	for _, tag := range evt.Tags {
 		if len(tag) >= 2 && tag[0] == "layer" {
 			validLayers := map[string]bool{
-				"onchain":  true,
+				"onchain":   true,
 				"lightning": true,
-				"liquid":   true,
+				"liquid":    true,
 			}
 			if !validLayers[tag[1]] {
 				return fmt.Errorf("invalid layer in 'layer' tag: %s", tag[1])

@@ -31,9 +31,9 @@ const NIP49Version byte = 0x02
 
 // KeySecurityByte values per NIP-49.
 const (
-	KeySecurityInsecure     byte = 0x00
-	KeySecuritySecure       byte = 0x01
-	KeySecurityUntracked    byte = 0x02
+	KeySecurityInsecure  byte = 0x00
+	KeySecuritySecure    byte = 0x01
+	KeySecurityUntracked byte = 0x02
 )
 
 // RecommendedLogN is the recommended scrypt log_n value (2^16 = 64MiB).

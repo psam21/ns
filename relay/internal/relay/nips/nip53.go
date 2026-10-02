@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	nostr "github.com/nbd-wtf/go-nostr"
 	"github.com/Shugur-Network/relay/internal/logger"
+	nostr "github.com/nbd-wtf/go-nostr"
 	"go.uber.org/zap"
 )
 
@@ -210,7 +210,7 @@ func validateLiveStreamingEventTags(event *nostr.Event) error {
 				// Separate elements format
 				role = tag[3]
 			}
-			
+
 			if strings.ToLower(role) == "host" {
 				hasHostParticipant = true
 			}
@@ -347,7 +347,7 @@ func validateMeetingSpaceTags(event *nostr.Event) error {
 				// Separate elements format
 				role = tag[3]
 			}
-			
+
 			if strings.ToLower(role) == "host" || strings.ToLower(role) == "owner" {
 				hasHostParticipant = true
 			}
@@ -752,7 +752,7 @@ func validateLiveStreamingParticipantTag(tag nostr.Tag) error {
 	// Handle comma-separated format from nak tool: "pubkey,relay,role,proof"
 	// or separate elements: ["p", "pubkey", "relay", "role", "proof"]
 	var pubkey, relay, role, proof string
-	
+
 	if len(tag) == 2 && strings.Contains(tag[1], ",") {
 		// Comma-separated format
 		parts := strings.Split(tag[1], ",")
@@ -811,7 +811,7 @@ func validateLiveStreamingParticipantTag(tag nostr.Tag) error {
 			"Moderator":   true,
 			"Owner":       true,
 		}
-		
+
 		if !validRoles[role] {
 			// Allow custom roles but warn
 			if len(role) > 50 {
@@ -825,7 +825,7 @@ func validateLiveStreamingParticipantTag(tag nostr.Tag) error {
 		if len(proof) != 128 {
 			return fmt.Errorf("participant proof must be 128 hex characters, got %d", len(proof))
 		}
-		
+
 		if !regexp.MustCompile(`^[a-fA-F0-9]{128}$`).MatchString(proof) {
 			return fmt.Errorf("participant proof must be valid hex")
 		}
@@ -843,7 +843,7 @@ func validateMeetingSpaceParticipantTag(tag nostr.Tag) error {
 	// Handle comma-separated format from nak tool: "pubkey,relay,role,proof"
 	// or separate elements: ["p", "pubkey", "relay", "role", "proof"]
 	var pubkey, relay, role, proof string
-	
+
 	if len(tag) == 2 && strings.Contains(tag[1], ",") {
 		// Comma-separated format
 		parts := strings.Split(tag[1], ",")
@@ -901,7 +901,7 @@ func validateMeetingSpaceParticipantTag(tag nostr.Tag) error {
 			"Moderator": true,
 			"Speaker":   true,
 		}
-		
+
 		if !validRoles[role] {
 			// Allow custom roles but validate length
 			if len(role) > 50 {
@@ -915,7 +915,7 @@ func validateMeetingSpaceParticipantTag(tag nostr.Tag) error {
 		if len(proof) != 128 {
 			return fmt.Errorf("participant proof must be 128 hex characters, got %d", len(proof))
 		}
-		
+
 		if !regexp.MustCompile(`^[a-fA-F0-9]{128}$`).MatchString(proof) {
 			return fmt.Errorf("participant proof must be valid hex")
 		}
@@ -933,7 +933,7 @@ func validateMeetingRoomParticipantTag(tag nostr.Tag) error {
 	// Handle comma-separated format from nak tool: "pubkey,relay,role"
 	// or separate elements: ["p", "pubkey", "relay", "role"]
 	var pubkey, relay, role string
-	
+
 	if len(tag) == 2 && strings.Contains(tag[1], ",") {
 		// Comma-separated format
 		parts := strings.Split(tag[1], ",")
@@ -984,7 +984,7 @@ func validateMeetingRoomParticipantTag(tag nostr.Tag) error {
 			"Participant": true,
 			"Moderator":   true,
 		}
-		
+
 		if !validRoles[role] {
 			// Allow custom roles but validate length
 			if len(role) > 50 {
@@ -1028,9 +1028,9 @@ func validateRelaysTagNIP53(tag nostr.Tag) error {
 	// Handle both formats:
 	// 1. Comma-separated in single element: ["relays", "wss://relay1.com,wss://relay2.com"]
 	// 2. Multiple elements: ["relays", "wss://relay1.com", "wss://relay2.com"]
-	
+
 	var relayURLs []string
-	
+
 	if len(tag) == 2 && strings.Contains(tag[1], ",") {
 		// Comma-separated format
 		relayURLs = strings.Split(tag[1], ",")
@@ -1047,7 +1047,7 @@ func validateRelaysTagNIP53(tag nostr.Tag) error {
 		if relayURL == "" {
 			return fmt.Errorf("relay URL %d cannot be empty", i+1)
 		}
-		
+
 		if err := validateRelayURL(relayURL); err != nil {
 			return fmt.Errorf("invalid relay URL %d: %w", i+1, err)
 		}
@@ -1197,23 +1197,23 @@ func validateQuoteTag(tag nostr.Tag) error {
 		} else {
 			addressPart = eventIDOrAddr
 		}
-		
+
 		// Validate basic format: kind:pubkey:dtag
 		addressParts := strings.Split(addressPart, ":")
 		if len(addressParts) != 3 {
 			return fmt.Errorf("quoted event address must be in format 'kind:pubkey:d_tag_value'")
 		}
-		
+
 		// Validate kind is numeric
 		if _, err := strconv.Atoi(addressParts[0]); err != nil {
 			return fmt.Errorf("invalid kind in quoted event address: %s", addressParts[0])
 		}
-		
+
 		// Validate pubkey format
 		if len(addressParts[1]) != 64 || !isHexChar64(addressParts[1]) {
 			return fmt.Errorf("invalid pubkey in quoted event address")
 		}
-		
+
 		// Validate relay if provided in comma-separated format
 		if relayPart != "" {
 			if err := validateRelayURL(relayPart); err != nil {
