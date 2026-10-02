@@ -26,10 +26,10 @@ import (
 )
 
 var (
-	clientBanList = make(map[string]time.Time)
-	banListMutex  sync.Mutex
-	// Track rate-limit violations by IP
-	clientExceededCount = make(map[string]int)
+	// bans tracks banned clients and their violation history. Violations are
+	// retained across connections so PROGRESSIVE_BAN can escalate; see ban.go
+	// for why the previous per-connection reset defeated the ladder entirely.
+	bans = newBanRegistry()
 )
 
 // extractRealClientIP extracts the real client IP. Forwarded headers
@@ -152,34 +152,14 @@ func cleanExpiredBans() {
 	for {
 		time.Sleep(10 * time.Minute)
 
-		banListMutex.Lock()
-		now := time.Now()
-		var unbanCount int
-		for ip, expiry := range clientBanList {
-			if now.After(expiry) {
-				logger.Debug("Removing expired ban",
-					zap.String("client_ip", ip),
-					zap.Time("ban_expired", expiry))
-				delete(clientBanList, ip)
-				unbanCount++
-			}
-		}
-		banListMutex.Unlock()
+		unbanned := bans.sweepExpired()
+		active, tracked := bans.stats()
 
-		if unbanCount > 0 || len(clientBanList) > 0 {
+		if unbanned > 0 || active > 0 {
 			logger.Debug("Ban list cleanup completed",
-				zap.Int("unbanned_count", unbanCount),
-				zap.Int("remaining_bans", len(clientBanList)))
-
-			// Log current active bans for debugging
-			if len(clientBanList) > 0 {
-				for ip, expiry := range clientBanList {
-					logger.Debug("Active ban",
-						zap.String("client_ip", ip),
-						zap.Time("expires", expiry),
-						zap.Duration("remaining", time.Until(expiry)))
-				}
-			}
+				zap.Int("unbanned_count", unbanned),
+				zap.Int("active_bans", active),
+				zap.Int("tracked_clients", tracked))
 		}
 	}
 }
@@ -194,11 +174,9 @@ func handleWebSocketConnection(ctx context.Context, w http.ResponseWriter, r *ht
 		zap.String("origin", r.Header.Get("Origin")))
 
 	// Check if client is banned
-	banListMutex.Lock()
-	banExpiry, banned := clientBanList[clientIP]
-	banListMutex.Unlock()
+	banExpiry, banned := bans.isBanned(clientIP)
 
-	if banned && time.Now().Before(banExpiry) {
+	if banned {
 		// Use new error handling system
 		banErr := errors.ClientBannedError("excessive messages", time.Until(banExpiry).String()).
 			WithSeverity(errors.SeverityMedium)
@@ -206,10 +184,14 @@ func handleWebSocketConnection(ctx context.Context, w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Reset exceeded count on new allowed connection
-	banListMutex.Lock()
-	delete(clientExceededCount, clientIP)
-	banListMutex.Unlock()
+	// NOTE: the violation count is deliberately NOT reset here.
+	//
+	// This used to delete clientExceededCount[clientIP] on every accepted
+	// connection. That made the ban ladder unescapable-but-useless: a client
+	// tripped the limiter, disconnected, reconnected with the count back at
+	// zero, and could only ever be punished as a first offender. The count is
+	// now cleared only by bans.resetViolations, and a well-behaved client's
+	// history decays rather than being wiped by a reconnect.
 
 	// Check global connection limit using metrics counter
 	if metrics.GetActiveConnectionsCount() >= int64(relayConfig.ThrottlingConfig.MaxConnections) {
@@ -290,11 +272,15 @@ type WsConnection struct {
 	subMu         sync.RWMutex
 	subscriptions map[string][]nostr.Filter
 
-	writeMu            sync.Mutex
-	closeMu            sync.Once
-	limiter            *rate.Limiter
-	isClosed           atomic.Bool
-	metricsDecremented atomic.Bool // Flag to prevent double-decrementing metrics
+	writeMu        sync.Mutex
+	closeMu        sync.Once
+	limiter        *rate.Limiter
+	requestLimiter *rate.Limiter
+	isClosed       atomic.Bool
+	// metricsDecremented guards the one-shot metrics teardown in Close so a
+	// double Close cannot decrement the connection and subscription gauges
+	// twice.
+	metricsDecremented atomic.Bool
 	closeReason        string
 
 	exceededLimitCount int
@@ -342,6 +328,41 @@ func NewWsConnection(
 		cfg.ThrottlingConfig.RateLimit.BurstSize,
 	)
 
+	// Separate limiter for the read-side commands.
+	//
+	// Deliberately NOT the same limiter as `limiter`. That one is sized for
+	// events (MAX_EVENTS_PER_SECOND, default 30) and a client legitimately
+	// publishing 30 events/second would then have no budget left to read
+	// with, so sharing the bucket would rate-limit honest publishers on their
+	// own writes. Two buckets also stop a REQ flood from starving EVENT
+	// delivery, and vice versa.
+	//
+	// This exists because MAX_REQUESTS_PER_SECOND was configured (60 in
+	// deploy/config.yaml) and validated but never read anywhere in the
+	// codebase, so an operator tuning it saw no behaviour change and no
+	// warning. Same class of defect as the goroutine leak fixed in 68b5b7a: a
+	// limit that is written but not threaded through to the operation it is
+	// meant to bound.
+	//
+	// Without it a single socket could send unlimited REQ commands. Each one
+	// spawns processSubscription -- a goroutine running a database query --
+	// and MaxSubscriptions only caps *concurrently registered* subs per
+	// connection, not the rate of new ones and not the goroutines already
+	// querying. That is a one-connection DoS against both the relay and
+	// PostgreSQL.
+	//
+	// rate.Limit of 0 means "unlimited" to x/time/rate, which is the correct
+	// reading of MAX_REQUESTS_PER_SECOND: 0 disables the limit. The burst is
+	// floored at 1, because a 0 burst with an empty bucket rejects everything.
+	reqBurst := cfg.ThrottlingConfig.RateLimit.BurstSize
+	if reqBurst < 1 {
+		reqBurst = 1
+	}
+	requestLimiter := rate.NewLimiter(
+		rate.Limit(cfg.ThrottlingConfig.RateLimit.MaxRequestsPerSecond),
+		reqBurst,
+	)
+
 	// Create context for event handling
 	eventCtx, eventCancel := context.WithCancel(ctx)
 
@@ -356,6 +377,7 @@ func NewWsConnection(
 		subscriptions:    make(map[string][]nostr.Filter),
 		pingTicker:       time.NewTicker(15 * time.Second),
 		limiter:          limiter,
+		requestLimiter:   requestLimiter,
 		backpressureChan: make(chan struct{}, 100), // Buffer for backpressure
 		// Event dispatcher integration
 		clientID:    generateClientID(),
@@ -442,6 +464,32 @@ func (c *WsConnection) RemoteAddr() string {
 // SendMessage handles backpressure and rate limiting
 func (c *WsConnection) SendMessage(msg []byte) {
 	c.sendMessageInternal(msg, true)
+}
+
+// requestLimiterApplies reports whether an inbound command should be charged
+// against the read-side request limiter (MAX_REQUESTS_PER_SECOND).
+//
+// The split is by cost, not by verb:
+//
+//   - REQ, COUNT, NEG-OPEN, NEG-MSG each spawn a goroutine, a database query,
+//     or negentropy reconciliation. They are the abuse vector and are limited.
+//   - CLOSE, AUTH and NEG-CLOSE are not. Rejecting CLOSE would strand a
+//     subscription; rejecting AUTH would stop a client from ever becoming
+//     authenticated; rejecting NEG-CLOSE would leak a negentropy session. All
+//     three are cheap, and denying them does more harm than permitting them.
+//   - EVENT is excluded here because it is charged to c.limiter, which is sized
+//     by MAX_EVENTS_PER_SECOND and escalates to a ban. Charging it twice would
+//     make an honest publisher's reads fail because of its own writes.
+//
+// Kept as a named function rather than an inline switch so the policy is
+// testable and so a newly added command does not silently default to unlimited.
+func requestLimiterApplies(cmdType string) bool {
+	switch cmdType {
+	case "REQ", "COUNT", "NEG-OPEN", "NEG-MSG":
+		return true
+	default:
+		return false
+	}
 }
 
 // SendMessageNoRateLimit sends a message without rate limiting (for subscription responses)
@@ -579,12 +627,14 @@ func (c *WsConnection) HandleMessages(ctx context.Context, cfg config.RelayConfi
 			zap.String("challenge", c.authChallenge[:16]+"..."))
 	}
 
-	// Check if client is banned
-	banListMutex.Lock()
-	banExpiry, banned := clientBanList[clientIP]
-	banListMutex.Unlock()
+	// Check if client is banned.
+	//
+	// Re-checked here, not only at handshake time: a client can be banned by
+	// traffic on a *different* connection while this socket is already open,
+	// and without this a banned client keeps its established connection.
+	banExpiry, banned := bans.isBanned(clientIP)
 
-	if banned && time.Now().Before(banExpiry) {
+	if banned {
 		logger.Warn("Banned client attempted to send messages",
 			zap.String("client_ip", clientIP),
 			zap.Time("ban_expires", banExpiry))
@@ -674,10 +724,7 @@ func (c *WsConnection) HandleMessages(ctx context.Context, cfg config.RelayConfi
 		if cmdType == "EVENT" {
 			if !c.limiter.Allow() {
 				// Track repeated violations
-				banListMutex.Lock()
-				clientExceededCount[clientIP]++
-				count := clientExceededCount[clientIP]
-				banListMutex.Unlock()
+				count := bans.recordViolation(clientIP)
 
 				logger.Debug("Client rate limit violation",
 					zap.String("client_ip", clientIP),
@@ -689,18 +736,31 @@ func (c *WsConnection) HandleMessages(ctx context.Context, cfg config.RelayConfi
 				c.sendNotice("Rate limit exceeded: too many messages")
 
 				if count >= cfg.ThrottlingConfig.BanThreshold {
-					banDuration := time.Duration(cfg.ThrottlingConfig.BanDuration) * time.Second
+					// Progressive banning: each threshold crossing doubles the
+					// duration, capped at MAX_BAN_DURATION. This used to be a
+					// flat ThrottlingConfig.BanDuration, so PROGRESSIVE_BAN and
+					// MAX_BAN_DURATION were configured in deploy/config.yaml and
+					// read nowhere in the codebase.
+					//
+					// The violation count is deliberately NOT cleared on ban.
+					// Clearing it here would make every ban a first offence, so
+					// the escalation could never reach its second rung. It decays
+					// via bans.resetViolations once a client behaves.
+					banDuration := banDurationFor(
+						count,
+						time.Duration(cfg.ThrottlingConfig.BanDuration)*time.Second,
+						cfg.ThrottlingConfig.RateLimit.MaxBanDuration,
+						cfg.ThrottlingConfig.RateLimit.ProgressiveBan,
+					)
+					banExpires := bans.ban(clientIP, banDuration)
+
 					logger.Warn("BANNING CLIENT due to repeated rate limit violations",
 						zap.String("client_ip", clientIP),
 						zap.Int("violation_count", count),
+						zap.Bool("progressive", cfg.ThrottlingConfig.RateLimit.ProgressiveBan),
 						zap.Duration("ban_duration", banDuration),
 						zap.String("real_client_ip", c.realClientIP),
-						zap.Time("ban_expires", time.Now().Add(banDuration)))
-
-					banListMutex.Lock()
-					clientBanList[clientIP] = time.Now().Add(banDuration)
-					delete(clientExceededCount, clientIP)
-					banListMutex.Unlock()
+						zap.Time("ban_expires", banExpires))
 
 					c.sendNotice("You have been temporarily banned.")
 					c.Close()
@@ -714,6 +774,27 @@ func (c *WsConnection) HandleMessages(ctx context.Context, cfg config.RelayConfi
 
 		// Update command metrics
 		metrics.CommandsReceived.WithLabelValues(cmdType).Inc()
+
+		// Rate-limit the read-side commands. See requestLimiterApplies for
+		// which commands and why.
+		//
+		// Rejection uses `continue` rather than closing the connection: NIP-01
+		// defines no notice type for "too fast", and a client syncing a large
+		// backlog will legitimately burst past a per-second limit. Dropping the
+		// frame and letting the token bucket refill is the standard answer. The
+		// EVENT path escalates to a ban instead, because publishing is the
+		// expensive, abusable direction.
+		if requestLimiterApplies(cmdType) && c.requestLimiter != nil {
+			if !c.requestLimiter.Allow() {
+				metrics.RateLimited.WithLabelValues(cmdType).Inc()
+				logger.Debug("Client request rate limit exceeded",
+					zap.String("client_ip", clientIP),
+					zap.String("command", cmdType),
+					zap.Int("limit_per_sec", cfg.ThrottlingConfig.RateLimit.MaxRequestsPerSecond),
+					zap.String("real_client_ip", c.realClientIP))
+				continue
+			}
+		}
 
 		// Process the command
 		start := time.Now()

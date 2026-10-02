@@ -45,21 +45,18 @@ func TestNoDeadConfiguration(t *testing.T) {
 		// refresh interval and MaxSubscriptions instead.
 		"EventCacheSize": "validation-only; does not size any runtime structure",
 
-		// MAX_REQUESTS_PER_SECOND, MAX_BAN_DURATION and PROGRESSIVE_BAN are
-		// accepted and validated but never read at runtime. Rate limiting is
-		// keyed on events (MaxEventsPerSecond) and bans use a fixed
-		// BanDuration, so an operator who sets these gets no behaviour change
-		// and no warning.
+		// MAX_BAN_DURATION and PROGRESSIVE_BAN were in this list until they
+		// were implemented, alongside MAX_REQUESTS_PER_SECOND. All three were
+		// accepted and validated but read nowhere, so an operator who set
+		// them got no behaviour change and no warning -- production config
+		// sets MAX_REQUESTS_PER_SECOND: 60, PROGRESSIVE_BAN: true and
+		// MAX_BAN_DURATION.
 		//
-		// Unlike the two entries above these are not "cannot be wired up", they
-		// are unimplemented. They are documented here rather than removed so
-		// that removing them is a deliberate, reviewable act — production
-		// config sets MAX_REQUESTS_PER_SECOND: 60, PROGRESSIVE_BAN: true and
-		// MAX_BAN_DURATION, so a silent removal would break the config file
-		// with a validation error on the next deploy.
-		"MaxRequestsPerSecond": "UNIMPLEMENTED - accepted and validated but never read",
-		"MaxBanDuration":       "UNIMPLEMENTED - bans use the fixed BanDuration",
-		"ProgressiveBan":       "UNIMPLEMENTED - bans are not progressive",
+		// They are now read by internal/relay: MAX_REQUESTS_PER_SECOND sizes a
+		// dedicated inbound request limiter, and PROGRESSIVE_BAN +
+		// MAX_BAN_DURATION drive the banDurationFor escalation ladder. The
+		// comment is kept because the failure mode -- a setting that validates
+		// and then does nothing -- is the reason this test exists.
 	}
 
 	fields := relayConfigFields(t)

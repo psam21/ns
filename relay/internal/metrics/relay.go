@@ -328,6 +328,17 @@ var (
 		Help: "The total number of commands received by type",
 	}, []string{"type"}) // "EVENT", "REQ", "CLOSE", etc.
 
+	// RateLimited counts commands dropped by a rate limiter, by command type.
+	//
+	// A non-zero value here is the only externally visible signal that the
+	// limiters are actually engaging. When MAX_REQUESTS_PER_SECOND was
+	// configured but unread, this metric did not exist and there was no way to
+	// tell "no one is exceeding the limit" from "the limit does not exist".
+	RateLimited = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "nostr_relay_rate_limited_total",
+		Help: "Commands dropped because the client exceeded a rate limit",
+	}, []string{"type"})
+
 	CommandProcessingDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "nostr_relay_command_processing_duration_seconds",
 		Help:    "Time to process different command types",

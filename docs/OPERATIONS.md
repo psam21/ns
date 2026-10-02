@@ -251,11 +251,10 @@ accepted.
    default because restarting every 5 minutes over a genuinely broken relay
    hides the real fault.
 
-3. **`MaxRequestsPerSecond`, `MaxBanDuration` and `ProgressiveBan` are
-   unimplemented.** They are accepted and validated, set in
-   `deploy/config.yaml`, and never read — see `knownUnused` in
-   `relay/internal/config/dead_config_test.go`. An operator who tunes them
-   gets no behaviour change and no warning. Either implement or remove.
+3. ~~**`MaxRequestsPerSecond`, `MaxBanDuration` and `ProgressiveBan` are
+   unimplemented.**~~ **Fixed.** All three were configured in
+   `deploy/config.yaml` and read nowhere in the codebase. See "Limits that were
+   written but never applied" below.
 
 4. **`golang.org/x/crypto` still carries GO-2026-5932**, which has no fix
    upstream: the `x/crypto/openpgp` package is unmaintained and unsafe by
@@ -264,6 +263,75 @@ accepted.
    `sha3`. Upgrading v0.52.0 → v0.56.0 cleared the other three advisories;
    this one cannot be cleared without dropping the validator dependency.
    `govulncheck` reports the relay's own code as unaffected.
+
+## Limits that were written but never applied
+
+Three settings in `deploy/config.yaml` were validated at startup and read
+nowhere in the codebase. An operator tuning them got no behaviour change and
+no warning, because a setting that validates is indistinguishable from one that
+works.
+
+Found by `relay/internal/config/dead_config_test.go`, which reflects over
+`RelayConfig` and fails on any field referenced nowhere outside
+`internal/config`. The two entries still exempted are genuinely
+unimplementable (`WriteTimeout` cannot apply to a hijacked WebSocket;
+`EventCacheSize` sizes no runtime structure).
+
+### `MAX_REQUESTS_PER_SECOND` — a single-connection DoS
+
+The inbound limiter guarded **only** `EVENT`. `REQ` was unmetered, and each
+`REQ` spawns `processSubscription` — a goroutine running a database query.
+`MaxSubscriptions` caps *concurrently registered* subscriptions, not the rate
+of new ones, and does nothing about goroutines already querying. One socket
+could therefore saturate both the relay and PostgreSQL.
+
+Fixed with a **second** token bucket, `requestLimiter`, charged against
+`MAX_REQUESTS_PER_SECOND`. It is deliberately not the same bucket as the event
+limiter: sharing one would mean a client legitimately publishing 30 events/second
+has no budget left to read with, so its own writes would throttle its reads.
+Two buckets also stop a `REQ` flood from starving `EVENT` delivery.
+
+`requestLimiterApplies` encodes the policy by **cost, not verb** — `REQ`,
+`COUNT`, `NEG-OPEN` and `NEG-MSG` are limited; `CLOSE`, `AUTH` and `NEG-CLOSE`
+are not, because rejecting those would strand a subscription, leave a client
+permanently unable to authenticate, or leak a negentropy session. Each of those
+is a way to turn a rate limiter into an outage.
+
+Rejection drops the frame and lets the bucket refill rather than closing the
+socket. NIP-01 defines no "too fast" notice, and a client syncing a large
+backlog will legitimately burst past a per-second limit. A new metric,
+`nostr_relay_rate_limited_total{type}`, makes it visible when the limit is
+actually engaging — previously there was no way to distinguish "nobody is
+exceeding the limit" from "the limit does not exist".
+
+### `PROGRESSIVE_BAN` / `MAX_BAN_DURATION` — an unusable ladder
+
+Bans used a single fixed `ThrottlingConfig.BanDuration`. Worse, the violation
+count was **deleted on every accepted connection** ("Reset exceeded count on new
+allowed connection"), so a client could trip the limiter, disconnect,
+reconnect, and be treated as a first offender forever. No code path could
+produce a second-rung ban, so "progressive" was not merely unimplemented — the
+counting it would have depended on was actively reset.
+
+Fixed by `relay/internal/ban.go`. A `banRegistry` owns the ban map and the
+violation history, and violations now **survive reconnects**. `banDurationFor`
+escalates by doubling, capped at `MAX_BAN_DURATION`:
+
+```
+1st -> 5m   2nd -> 10m   3rd -> 20m   ...  capped at MAX_BAN_DURATION
+```
+
+The cap is checked **before** each doubling, not after. `time.Duration` is
+int64 nanoseconds, ~292 years; without the guard the ladder wraps negative, and
+`time.Now().Add(negative)` is an already-expired ban. The negative control
+confirms it: removing the guard makes `banDurationFor(26, ...)` return
+**−2327892h**, meaning a chronic abuser would receive *no* ban at all after ~26
+violations. That is the exact failure `MAX_BAN_DURATION` exists to prevent, and
+it is invisible unless the tests are run against the unguarded version.
+
+`PROGRESSIVE_BAN: false` reproduces the old flat behaviour exactly. NIP-86
+management blocks bypass the ladder deliberately — an operator decision should
+not scale with an automated violation count.
 
 ## Dependency security state
 

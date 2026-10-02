@@ -613,10 +613,14 @@ func (s *Server) mgmtBlockIP(params []string) (interface{}, string) {
 	mgmtState.recordInsert(ip)
 	mgmtState.mu.Unlock()
 
-	// Also add to the relay's client ban list with permanent expiry
-	banListMutex.Lock()
-	clientBanList[ip] = time.Now().Add(100 * 365 * 24 * time.Hour) // ~100 years = permanent
-	banListMutex.Unlock()
+	// Also add to the relay's client ban list with permanent expiry.
+	//
+	// Deliberately not routed through banDurationFor: a management block is an
+	// explicit operator decision, not an automated escalation, so it does not
+	// scale with violation count. ~100 years is the existing "permanent"
+	// encoding and is preserved rather than switched to a sentinel, because
+	// isBanned compares against time.Now().
+	bans.ban(ip, 100*365*24*time.Hour)
 
 	logger.New("nip86").Info("IP blocked via management API",
 		zap.String("ip", ip))
@@ -635,10 +639,10 @@ func (s *Server) mgmtUnblockIP(params []string) (interface{}, string) {
 	delete(mgmtState.blockedIPs, ip)
 	mgmtState.mu.Unlock()
 
-	// Also remove from relay's client ban list
-	banListMutex.Lock()
-	delete(clientBanList, ip)
-	banListMutex.Unlock()
+	// Also remove from the relay's client ban list, along with the violation
+	// history so an unblocked operator decision does not leave the client on a
+	// stale escalation rung.
+	bans.unban(ip)
 
 	logger.New("nip86").Info("IP unblocked via management API",
 		zap.String("ip", ip))
