@@ -69,8 +69,13 @@ it was killed outright.
 | `ddf136a` | dashboard aggregation, startup, shutdown (the outage fix) |
 | `3254d0f` | deploy verifies the relay serves; preflight; GOMEMLIMIT |
 | `75065d3` | 5-minute health timer + recovery unit |
+| `e64e181` | node-gyp PATH fix so Blossom native addon builds |
 
 ## Deploy
+
+**Standing rule: every commit gets deployed.** After a commit is verified and
+pushed, run the deploy script before considering the work done. Do not hand-copy
+binaries — that bypasses the health gate, the preflight and the rollback.
 
 ```bash
 cd /home/jack/Documents/ns
@@ -79,7 +84,30 @@ AWS_HOST=ubuntu@13.201.250.44 AWS_KEY=~/.ssh/nostr-relay-key.pem \
 ```
 
 `AWS_HOST` and `AWS_KEY` must be exported — the script defaults both to empty
-and there is no fallback.
+and there is no fallback. The script requires a clean worktree and does
+`git pull --ff-only`, so commit before deploying.
+
+A successful run ends with `DEPLOY_EXIT=0` and this block:
+
+```
+1. Relay process:        ACTIVE
+2. Blossom process:      ACTIVE
+3. Direct event totals:  READY
+4. Grouped telemetry:    READY
+5. Upload functionality: PASS
+```
+
+**Verify independently afterwards.** The script checking its own work is not
+proof, so confirm from outside:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' --max-time 15 https://nostr.ltd/
+curl -s -o /dev/null -w '%{http_code}\n' --max-time 15 https://nostr.ltd/api/events
+curl -s -o /dev/null -w '%{http_code}\n' --max-time 15 https://blossom.nostr.ltd/
+ssh -i ~/.ssh/nostr-relay-key.pem ubuntu@13.201.250.44 cat /opt/relay/.last-commit
+```
+
+The last one must equal the commit you just pushed.
 
 Useful switches:
 
