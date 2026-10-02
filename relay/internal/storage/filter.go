@@ -84,6 +84,25 @@ func (cf *CompiledFilter) GetBestIndex() string {
 		return "pubkey_kind_created"
 	}
 
+	// Author-only filters get their own branch.
+	//
+	// These previously fell through to "created_at", whose query body is
+	// `WHERE true` -- so the author predicate was never emitted and the relay
+	// answered with recent events by *any* author. A client requesting its own
+	// events received other people's, with correct status, valid frames, and
+	// plausible-looking data.
+	//
+	// Author-only is not an edge case: profile fetches and author-scoped
+	// timelines are among the most common REQ shapes there are, and this is
+	// the shape every NIP-01 client uses to check whether an event landed.
+	//
+	// It cannot reuse "pubkey_kind_created", because that branch emits both a
+	// pubkey and a kind predicate and would produce `kind = ANY(ARRAY[])` --
+	// matching nothing.
+	if len(cf.Authors) > 0 {
+		return "pubkey"
+	}
+
 	// If we only have kinds, use the kind index
 	if len(cf.Kinds) > 0 {
 		return "kind_created"
@@ -137,6 +156,25 @@ func (cf *CompiledFilter) BuildQuery() (string, []interface{}, error) {
 		query.WriteString(fmt.Sprintf(" WHERE pubkey = ANY(ARRAY[%s]::text[]) AND kind = ANY(ARRAY[%s]::integer[])",
 			strings.Join(authorPlaceholders, ","), strings.Join(kindPlaceholders, ",")))
 
+	case "pubkey":
+		// Author filter with no kind constraint.
+		//
+		// Emits only the pubkey predicate. Deliberately not folded into
+		// "pubkey_kind_created": with an empty kind set that branch would
+		// build `kind = ANY(ARRAY[]::integer[])`, which matches nothing, so a
+		// correct fix for the drop would otherwise become a filter that
+		// returns nothing at all.
+		authorPlaceholders := make([]string, len(cf.Authors))
+		i := 0
+		for author := range cf.Authors {
+			authorPlaceholders[i] = fmt.Sprintf("$%d", argIndex)
+			args = append(args, author)
+			argIndex++
+			i++
+		}
+		query.WriteString(fmt.Sprintf(" WHERE pubkey = ANY(ARRAY[%s]::text[])",
+			strings.Join(authorPlaceholders, ",")))
+
 	case "kind_created":
 		// Use kind index
 		kindPlaceholders := make([]string, len(cf.Kinds))
@@ -151,6 +189,22 @@ func (cf *CompiledFilter) BuildQuery() (string, []interface{}, error) {
 
 	default:
 		// Use created_at index
+		//
+		// Reached only when the filter has no selective dimension at all --
+		// no ids, authors, or kinds. Time, tag and search predicates are
+		// appended below and still apply.
+		//
+		// This branch is the reason the author bug was invisible: it is a
+		// valid query, so nothing errored. Any new filter dimension must get
+		// its own case above, or it will be dropped here exactly as authors
+		// were. The assertion below makes that failure mode loud in
+		// development rather than silent in production.
+		if len(cf.IDs) > 0 || len(cf.Authors) > 0 || len(cf.Kinds) > 0 {
+			return "", nil, fmt.Errorf(
+				"filter has selective fields but matched no index case "+
+					"(ids=%d authors=%d kinds=%d); this would silently drop them",
+				len(cf.IDs), len(cf.Authors), len(cf.Kinds))
+		}
 		query.WriteString(" WHERE true")
 	}
 
