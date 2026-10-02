@@ -247,6 +247,92 @@ fi
 GIT_COMMIT_SHORT="$(git -C "$NS_DIR" rev-parse --short=7 HEAD 2>/dev/null || echo unknown)"
 log_info "Deploying commit: $GIT_COMMIT_SHORT"
 
+# Preflight: refuse to deploy onto a host that is already in trouble.
+#
+# Restarting the relay is the single most disruptive thing this script does.
+# Doing that while the host is already thrashing on swap is how you turn a
+# degraded relay into an unreachable one — on 2026-10-02 `systemctl restart`
+# hung in `deactivating (stop-sigterm)` because the wedged process could not
+# drain connections, and only a manual SIGKILL recovered it.
+#
+# These are warnings, not hard failures: the operator may be deploying
+# precisely because the host is sick. Set RELAY_PREFLIGHT_STRICT=1 to make
+# them fatal.
+log_info "Checking host health before restart..."
+PREFLIGHT=$(ssh -i "$AWS_KEY" "$AWS_HOST" "bash -s" <<'PREFLIGHT_EOF' 2>/dev/null || true
+set -u
+# /proc/pressure/memory lines look like:
+#   full avg10=0.00 avg60=0.00 avg300=0.00 total=...
+# so avg10 is field 3 ($3), not $2. Taking $2 yields the literal "avg10="
+# and every numeric comparison downstream silently passes.
+full_avg10=$(awk '/^full/{split($3,a,"="); print a[2]; exit}' /proc/pressure/memory 2>/dev/null)
+some_avg10=$(awk '/^some/{split($2,a,"="); print a[2]; exit}' /proc/pressure/memory 2>/dev/null)
+swap_free_kb=$(awk '/^SwapFree/{print $2; exit}' /proc/meminfo 2>/dev/null)
+swap_total_kb=$(awk '/^SwapTotal/{print $2; exit}' /proc/meminfo 2>/dev/null)
+# ss -H prints a stats preamble before the socket table, so grep the LISTEN
+# line rather than taking head -1, and Recv-Q is the first field on it.
+# (Taking head -1 of the raw output previously read the Send-Q of an
+# unrelated row and reported a healthy 0 backlog as 259.)
+recv_q=$(ss -sntlH "sport = :8080" 2>/dev/null | awk '$1=="LISTEN"{print $2; exit}')
+[ -z "$recv_q" ] && recv_q="unknown"
+relay_state=$(systemctl is-active relay.service 2>/dev/null || echo unknown)
+relay_http=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://localhost:8080/ 2>/dev/null || echo 000)
+echo "full_avg10=${full_avg10:-unknown}"
+echo "some_avg10=${some_avg10:-unknown}"
+echo "swap_free_kb=${swap_free_kb:-0}"
+echo "swap_total_kb=${swap_total_kb:-0}"
+echo "recv_q=${recv_q}"
+echo "relay_state=${relay_state}"
+echo "relay_http=${relay_http}"
+PREFLIGHT_EOF
+)
+
+if [ -n "$PREFLIGHT" ]; then
+    p_full=$(printf '%s\n' "$PREFLIGHT" | awk -F= '/^full_avg10/{print $2}')
+    p_swap_free=$(printf '%s\n' "$PREFLIGHT" | awk -F= '/^swap_free_kb/{print $2}')
+    p_swap_total=$(printf '%s\n' "$PREFLIGHT" | awk -F= '/^swap_total_kb/{print $2}')
+    p_recvq=$(printf '%s\n' "$PREFLIGHT" | awk -F= '/^recv_q/{print $2}')
+    p_http=$(printf '%s\n' "$PREFLIGHT" | awk -F= '/^relay_http/{print $2}')
+    p_state=$(printf '%s\n' "$PREFLIGHT" | awk -F= '/^relay_state/{print $2}')
+
+    log_info "  memory pressure (full avg10): ${p_full}"
+    log_info "  swap free:                   $((p_swap_free / 1024))MB of $((p_swap_total / 1024))MB"
+    log_info "  port 8080 Recv-Q:            ${p_recvq}"
+    log_info "  relay systemd state:         ${p_state}"
+    log_info "  relay HTTP response:         ${p_http}"
+
+    PREFLIGHT_PROBLEMS=0
+    if [ "$p_http" != "200" ] && [ "$p_http" != "202" ]; then
+        log_warn "  relay is not serving HTTP right now (got ${p_http}); it is already degraded"
+        PREFLIGHT_PROBLEMS=$((PREFLIGHT_PROBLEMS + 1))
+    fi
+    if [ -n "$p_full" ] && [ "$p_full" != "unknown" ] && awk "BEGIN{exit !($p_full > 40)}"; then
+        log_warn "  host is under heavy memory pressure (full avg10=${p_full}); a restart may hang"
+        PREFLIGHT_PROBLEMS=$((PREFLIGHT_PROBLEMS + 1))
+    fi
+    if [ "${p_swap_total:-0}" -gt 0 ] && [ "${p_swap_free:-0}" -eq 0 ]; then
+        log_warn "  swap is fully exhausted; expect a slow restart"
+        PREFLIGHT_PROBLEMS=$((PREFLIGHT_PROBLEMS + 1))
+    fi
+    if [ "$p_recvq" != "unknown" ] && [ "${p_recvq:-0}" -gt 0 ]; then
+        log_warn "  port 8080 has a non-zero accept backlog (Recv-Q=${p_recvq}); the relay is not accepting"
+        PREFLIGHT_PROBLEMS=$((PREFLIGHT_PROBLEMS + 1))
+    fi
+
+    if [ "$PREFLIGHT_PROBLEMS" -gt 0 ]; then
+        if [ "${RELAY_PREFLIGHT_STRICT:-0}" = "1" ]; then
+            log_error "Preflight found ${PREFLIGHT_PROBLEMS} problem(s) and RELAY_PREFLIGHT_STRICT=1; aborting."
+            exit 1
+        fi
+        log_warn "Preflight found ${PREFLIGHT_PROBLEMS} issue(s). Continuing, but the restart may hang."
+        log_warn "If it does: 'sudo systemctl kill -s SIGKILL relay' then 'sudo systemctl start relay'."
+    else
+        log_info "  host looks healthy; proceeding."
+    fi
+else
+    log_warn "Could not run host preflight (SSH or tooling issue); proceeding without it."
+fi
+
 # Use a unique remote staging directory to avoid collisions with concurrent
 # or interrupted runs that may have left files in /tmp.
 REMOTE_STAGE="/tmp/ns-deploy-$(date +%s)-$RANDOM"
@@ -675,9 +761,56 @@ if ! sudo systemctl restart relay.service; then
     sudo systemctl --no-pager --full status relay.service || true
     exit 1
 fi
-sleep 2
 
-# 5. Verify the unit is active.
+# 5a. Wait for the relay to actually accept requests, not merely for systemd
+#     to report the unit as active.
+#
+#     `systemctl is-active` is not a health check. During the 2026-10-02
+#     outage the relay reported `active (running)` for five days while serving
+#     zero bytes on every request: threads were wedged in D state on swap, the
+#     accept backlog was saturated (Recv-Q 2624), and the port was bound but
+#     nothing was accepted. A deploy that only asserts is-active would have
+#     reported success throughout that entire outage.
+#
+#     So poll the local HTTP surface until it answers. On the production host
+#     this went from 56s+ (bloom rebuild blocking before ListenAndServe) to
+#     ~1s once that was moved off the startup path.
+RELAY_READY_TIMEOUT="${RELAY_READY_TIMEOUT:-120}"
+RELAY_READY_INTERVAL="${RELAY_READY_INTERVAL:-2}"
+RELAY_READY_URL="http://localhost:8080/"
+RELAY_WAITED=0
+RELAY_READY=0
+while [ "$RELAY_WAITED" -lt "$RELAY_READY_TIMEOUT" ]; do
+    # HTTP 200 or 202 both mean the handler ran. A wedged relay returns 000,
+    # because curl is giving up on a connection that never delivers a byte.
+    relay_code=$(curl -s -o /dev/null --write-out '%{http_code}' \
+        --max-time 5 "$RELAY_READY_URL" 2>/dev/null || true)
+    case "$relay_code" in
+        200|202)
+            RELAY_READY=1
+            break
+            ;;
+    esac
+    sleep "$RELAY_READY_INTERVAL"
+    RELAY_WAITED=$((RELAY_WAITED + RELAY_READY_INTERVAL))
+done
+
+if [ "$RELAY_READY" -ne 1 ]; then
+    echo "ERROR: relay did not serve HTTP within ${RELAY_READY_TIMEOUT}s after restart"
+    echo "       (systemd may report 'active' while the process is wedged; this is the check that catches it)"
+    sudo systemctl --no-pager --full status relay.service || true
+    echo "--- listener state (Recv-Q should be 0 on a healthy relay) ---"
+    sudo ss -sntl "sport = :8080" || true
+    echo "--- memory pressure ---"
+    cat /proc/pressure/memory || true
+    echo "--- recent relay journal ---"
+    sudo journalctl -u relay.service -n 40 --no-pager || true
+    echo "ERROR: rolling back via the transaction handler"
+    exit 1
+fi
+echo "relay is serving HTTP after ${RELAY_WAITED}s"
+
+# 5b. Verify the unit is active.
 if sudo systemctl is-active --quiet relay.service; then
     echo "relay.service is ACTIVE"
 else

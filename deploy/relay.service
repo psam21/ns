@@ -22,6 +22,25 @@ KillSignal=SIGTERM
 FinalKillSignal=SIGKILL
 SendSIGKILL=yes
 
+# Go GC tuning. Without GOMEMLIMIT the Go 1.19+ runtime has no awareness of
+# cgroup limits and sizes its heap purely from live heap via GOGC=100, so on a
+# 1.8GB host it will happily grow toward MemoryHigh and start swapping — which
+# is how the relay reached MemoryHigh=768M with 928M of swap and wedged on
+# 2026-10-02 (threads in D state, accept backlog at Recv-Q 2624, zero bytes
+# served, systemd still reporting "active (running)").
+#
+# Set a soft limit comfortably below MemoryHigh so the GC becomes aggressive
+# well before the cgroup starts reclaiming, giving the process a chance to
+# shed garbage instead of blocking on page-in. 512M against MemoryHigh=768M
+# leaves headroom for non-heap allocations (stacks, the 11.4MB bloom filter,
+# cgo/pg buffers) that are not counted against GOMEMLIMIT.
+#
+# This is a guardrail, not the fix. The per-connection cost was cut 256x in
+# 4da537e (1MB -> 4KB buffers) and measured at ~20KB/connection under a
+# 300-connection test on 2026-10-02, so the primary fix remains bounded
+# buffers and non-blocking dashboard queries.
+Environment=GOMEMLIMIT=512MiB
+
 # Memory guardrails. The relay has been OOM-killed by the system OOM
 # killer during heavy dashboard refresh windows (observed 2026-09-02).
 # MemoryMax triggers a clean systemd restart before the system OOM
