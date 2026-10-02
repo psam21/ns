@@ -60,6 +60,17 @@ jobs:
 
       - name: Set up pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.0.0
+        with:
+          # Must be explicit. Without this the action cannot determine a
+          # version and fails with "Error: No pnpm version is specified",
+          # even though blossom/package.json declares
+          # `packageManager: pnpm@9.12.0`. The action's inference relies on
+          # packageManager being at the repository root, and this is a
+          # monorepo where the manifest lives in blossom/.
+          #
+          # 9.12.0 is the version in that field and the one the lockfile
+          # (lockfileVersion 9.0) and the deploy host both use.
+          version: 9.12.0
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
