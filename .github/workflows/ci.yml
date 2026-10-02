@@ -123,8 +123,49 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run Blossom rules tests
-        run: node --test src/rules/index.test.mjs
+      # Compile before testing, not after.
+      #
+      # Every Blossom test imports compiled output from build/ -- e.g.
+      # src/rules/index.test.mjs imports ../../build/rules/index.js -- and
+      # build/ is gitignored, so a fresh checkout has no build/ at all. This
+      # job ran the tests first and `pnpm build` second, so the tests always
+      # failed with ERR_MODULE_NOT_FOUND. Every CI run on this workflow has
+      # been red for that reason.
+      #
+      # It was masked locally because a stale build/ left over from a previous
+      # local build satisfied the import. "Verified locally" was true and
+      # meaningless: the local tree had an artifact CI could not have.
+      #
+      # `tsc` alone, not `pnpm build`: the tests need the compiled server
+      # modules only. `pnpm build` also runs postbuild, which installs and
+      # builds the entire admin workspace -- a large amount of work needed
+      # only to produce dist/ that no test reads.
+      #
+      # If a test ever needs admin output, build it in the later step rather
+      # than slowing every test run.
+      - name: Compile TypeScript
+        run: npx tsc
+
+      # The unit suites, not just the rules suite.
+      #
+      # CI ran only src/rules/index.test.mjs while three other suites existed
+      # and passed: helpers/security (5 tests) and api/upload (11). Those cover
+      # SSRF address blocking, URL construction and upload validation -- the
+      # security-relevant paths in this service. src/api/e2e.test.mjs is
+      # deliberately excluded: it boots the app against a live database and
+      # storage backend, so it belongs in an integration job with services
+      # configured, not in the unit step.
+      #
+      # Naming the files explicitly rather than globbing: a glob would
+      # silently pull in e2e.test.mjs the first time someone adds a test that
+      # needs live services, and the failure would look like a broken build
+      # rather than a mis-scoped test.
+      - name: Run Blossom unit tests
+        run: |
+          node --test \
+            src/rules/index.test.mjs \
+            src/helpers/security.test.mjs \
+            src/api/upload.test.mjs
 
       - name: Build Blossom and admin application
         run: pnpm build
