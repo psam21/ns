@@ -326,98 +326,119 @@ func (db *DB) StartExpiredEventsCleaner(ctx context.Context, interval time.Durat
 	}()
 }
 
-// GetEventCount returns the count of events matching the given filter
-func (db *DB) GetEventCount(ctx context.Context, filter nostr.Filter) (int64, error) {
-	// PERFORMANCE: Create a query builder with reasonable capacity
-	query := strings.Builder{}
-	query.Grow(256) // Pre-allocate string builder capacity
+// buildFilterWhere renders the WHERE clause shared by GetEventCount and
+// GetEventPubkeys. It returns an empty string when the filter constrains
+// nothing, in which case no ` WHERE ` prefix should be emitted.
+//
+// Both callers previously carried their own copy of this logic, which meant
+// the `= ANY` non-indexable bug had to be found and fixed twice -- and the two
+// copies could drift. One builder, one set of tests.
+//
+// The return value is deliberately built without the `WHERE` keyword: callers
+// prepend ` WHERE `, ` AND `, or nothing depending on what they have already
+// written.
+func buildFilterWhere(filter nostr.Filter) (string, []interface{}) {
+	var clauses []string
 	args := make([]interface{}, 0, 10)
 	argIndex := 1
 
-	// Start with base SELECT COUNT
-	query.WriteString(`SELECT COUNT(*) FROM events`)
-
-	// Track if we need to add WHERE
-	needsWhere := false
-	addWhere := func() {
-		if !needsWhere {
-			query.WriteString(` WHERE `)
-			needsWhere = true
-		} else {
-			query.WriteString(` AND `)
-		}
+	add := func(frag string, vals ...interface{}) {
+		clauses = append(clauses, frag)
+		args = append(args, vals...)
 	}
 
-	// Add filters in order of index selectivity
-	hasIDFilter := len(filter.IDs) > 0
-	hasAuthorFilter := len(filter.Authors) > 0
-	hasKindFilter := len(filter.Kinds) > 0
-	hasSinceFilter := filter.Since != nil
-	hasUntilFilter := filter.Until != nil
+	// Filters are applied in order of index selectivity.
+	//
+	// These use `IN ($n, $n+1, ...)` rather than `= ANY($n)`. The latter is a
+	// set-membership test that PostgreSQL cannot drive a btree index from, even
+	// when the array is a bound parameter: measured on this table,
+	// `pubkey = ANY($1)` planned as a Parallel Seq Scan over 1.2M rows (5,528 ms)
+	// while `pubkey = $1` used events_pubkey_created_at (1.3 ms). A bound parameter
+	// does not help -- the planner still cannot turn the membership test into an
+	// index condition. See the note at the top of filter.go.
+	if len(filter.IDs) > 0 {
+		var frag string
+		frag, args = appendEquality("id", filter.IDs, argIndex, args)
+		add(frag)
+		argIndex += len(filter.IDs)
+	}
 
-	// Apply filters based on most efficient index usage
-	if hasIDFilter {
-		// IDs are primary keys - most selective
-		addWhere()
-		query.WriteString(fmt.Sprintf("id = ANY($%d)", argIndex))
-		args = append(args, filter.IDs)
+	if len(filter.Authors) > 0 {
+		var frag string
+		frag, args = appendEquality("pubkey", filter.Authors, argIndex, args)
+		add(frag)
+		argIndex += len(filter.Authors)
+	}
+
+	if len(filter.Kinds) > 0 {
+		var frag string
+		frag, args = appendEqualityInts("kind", filter.Kinds, argIndex, args)
+		add(frag)
+		argIndex += len(filter.Kinds)
+	}
+
+	// Time bounds come after the key/author predicates so the planner has the
+	// selective index condition available first.
+	if filter.Since != nil {
+		add(fmt.Sprintf("created_at >= $%d", argIndex), filter.Since.Time().Unix())
 		argIndex++
 	}
 
-	if hasAuthorFilter {
-		addWhere()
-		query.WriteString(fmt.Sprintf("pubkey = ANY($%d)", argIndex))
-		args = append(args, filter.Authors)
+	if filter.Until != nil {
+		add(fmt.Sprintf("created_at <= $%d", argIndex), filter.Until.Time().Unix())
 		argIndex++
 	}
 
-	if hasKindFilter {
-		addWhere()
-		query.WriteString(fmt.Sprintf("kind = ANY($%d)", argIndex))
-		args = append(args, filter.Kinds)
-		argIndex++
-	}
-
-	// Always apply time filters after key/author filters
-	if hasSinceFilter {
-		addWhere()
-		query.WriteString(fmt.Sprintf("created_at >= $%d", argIndex))
-		args = append(args, filter.Since.Time().Unix())
-		argIndex++
-	}
-
-	if hasUntilFilter {
-		addWhere()
-		query.WriteString(fmt.Sprintf("created_at <= $%d", argIndex))
-		args = append(args, filter.Until.Time().Unix())
-		argIndex++
-	}
-
-	// Handle tag filtering
+	// filter.Tags is a map. Iterating it directly produces a different
+	// placeholder order on every call, so two identical filters compile to
+	// different SQL -- defeating statement-level plan caching and making query
+	// logs impossible to diff. Sort the names.
 	if len(filter.Tags) > 0 {
-		for tagName, tagValues := range filter.Tags {
-			if len(tagValues) > 0 {
-				addWhere()
-				// Use the inverted index on tags
-				query.WriteString(fmt.Sprintf("tags @> $%d", argIndex))
-				tagArray := make([][]string, len(tagValues))
-				for i, val := range tagValues {
-					tagArray[i] = []string{tagName, val}
-				}
-				args = append(args, tagArray)
-				argIndex++
+		for _, tagName := range sortedKeys(mapKeys(filter.Tags)) {
+			tagValues := filter.Tags[tagName]
+			if len(tagValues) == 0 {
+				continue
 			}
+			// `tags @> $n` uses the GIN index on tags.
+			tagArray := make([][]string, len(tagValues))
+			for i, val := range tagValues {
+				tagArray[i] = []string{tagName, val}
+			}
+			add(fmt.Sprintf("tags @> $%d", argIndex), tagArray)
+			argIndex++
 		}
+	}
+
+	return strings.Join(clauses, " AND "), args
+}
+
+// mapKeys converts a TagMap to the set shape sortedKeys expects. nostr.TagMap
+// is map[string][]string, so there is no bool-valued set to pass directly.
+func mapKeys(m nostr.TagMap) map[string]bool {
+	out := make(map[string]bool, len(m))
+	for k := range m {
+		out[k] = true
+	}
+	return out
+}
+
+// GetEventCount returns the count of events matching the given filter
+func (db *DB) GetEventCount(ctx context.Context, filter nostr.Filter) (int64, error) {
+	where, args := buildFilterWhere(filter)
+
+	query := `SELECT COUNT(*) FROM events`
+	if where != "" {
+		query += " WHERE " + where
 	}
 
 	// Log the query for debugging
 	logger.Debug("Executing count query",
-		zap.String("query", query.String()),
+		zap.String("query", query),
 		zap.Int("arg_count", len(args)))
 
 	// Execute query with timeout
 	var count int64
-	err := db.Pool.QueryRow(ctx, query.String(), args...).Scan(&count)
+	err := db.Pool.QueryRow(ctx, query, args...).Scan(&count)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return 0, fmt.Errorf("count operation timed out")
@@ -431,69 +452,14 @@ func (db *DB) GetEventCount(ctx context.Context, filter nostr.Filter) (int64, er
 // GetEventPubkeys returns pubkeys of events matching the given filter.
 // Used for NIP-45 HyperLogLog computation.
 func (db *DB) GetEventPubkeys(ctx context.Context, filter nostr.Filter) ([]string, error) {
-	query := strings.Builder{}
-	query.Grow(256)
-	args := make([]interface{}, 0, 10)
-	argIndex := 1
+	where, args := buildFilterWhere(filter)
 
-	query.WriteString(`SELECT pubkey FROM events`)
-
-	needsWhere := false
-	addWhere := func() {
-		if !needsWhere {
-			query.WriteString(` WHERE `)
-			needsWhere = true
-		} else {
-			query.WriteString(` AND `)
-		}
+	query := `SELECT pubkey FROM events`
+	if where != "" {
+		query += " WHERE " + where
 	}
 
-	if len(filter.IDs) > 0 {
-		addWhere()
-		query.WriteString(fmt.Sprintf("id = ANY($%d)", argIndex))
-		args = append(args, filter.IDs)
-		argIndex++
-	}
-	if len(filter.Authors) > 0 {
-		addWhere()
-		query.WriteString(fmt.Sprintf("pubkey = ANY($%d)", argIndex))
-		args = append(args, filter.Authors)
-		argIndex++
-	}
-	if len(filter.Kinds) > 0 {
-		addWhere()
-		query.WriteString(fmt.Sprintf("kind = ANY($%d)", argIndex))
-		args = append(args, filter.Kinds)
-		argIndex++
-	}
-	if filter.Since != nil {
-		addWhere()
-		query.WriteString(fmt.Sprintf("created_at >= $%d", argIndex))
-		args = append(args, filter.Since.Time().Unix())
-		argIndex++
-	}
-	if filter.Until != nil {
-		addWhere()
-		query.WriteString(fmt.Sprintf("created_at <= $%d", argIndex))
-		args = append(args, filter.Until.Time().Unix())
-		argIndex++
-	}
-	if len(filter.Tags) > 0 {
-		for tagName, tagValues := range filter.Tags {
-			if len(tagValues) > 0 {
-				addWhere()
-				query.WriteString(fmt.Sprintf("tags @> $%d", argIndex))
-				tagArray := make([][]string, len(tagValues))
-				for i, val := range tagValues {
-					tagArray[i] = []string{tagName, val}
-				}
-				args = append(args, tagArray)
-				argIndex++
-			}
-		}
-	}
-
-	rows, err := db.Pool.Query(ctx, query.String(), args...)
+	rows, err := db.Pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query event pubkeys: %w", err)
 	}
@@ -599,6 +565,14 @@ func (db *DB) persistDeletion(ctx context.Context, del nostr.Event) error {
 	}()
 
 	// 1) delete events by "e" tag (referenced by event ID) — only if owned by deleter
+	//
+	// The `id = ANY($1)` here is deliberate and is NOT the same bug as the
+	// equality filters elsewhere in this file. `pubkey = $2` is a scalar
+	// equality that drives events_pubkey_created_at, and the id list becomes a
+	// cheap recheck filter on the small set that index returns. Verified with
+	// EXPLAIN ANALYZE: Bitmap Index Scan on events_pubkey_created_at,
+	// 1.3 ms. Converting it to `id IN (...)` would be no faster, and the
+	// membership test is not what makes this query fast.
 	if len(eIDs) > 0 {
 		_, err = tx.Exec(ctx,
 			`DELETE FROM events WHERE id = ANY($1) AND pubkey = $2`,
