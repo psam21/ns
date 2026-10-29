@@ -71,7 +71,15 @@ else
     print_result "Create parameterized event with different kind" false "33"
 fi
 
-# Test 5: Attempt to create without parameter tag
+# Test 5: Accept the addressable MLS KeyPackage sibling (kind:30443)
+ADDRESSABLE_KP=$(nak event -k 30443 -c 'SGVsbG8=' -t d=test-key-package -t encoding=base64 -t p=79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798 $RELAY)
+if [ ! -z "$ADDRESSABLE_KP" ]; then
+    print_result "Accept addressable MLS KeyPackage kind" true "33"
+else
+    print_result "Accept addressable MLS KeyPackage kind" false "33"
+fi
+
+# Test 6: Attempt to create without parameter tag
 NO_PARAM_EVENT=$(nak event -k 30000 -c '{"name": "No Parameter", "value": "test"}' -t p=79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798 $RELAY 2>&1)
 if [[ "$NO_PARAM_EVENT" == *"missing required 'd' tag"* ]] || [[ "$NO_PARAM_EVENT" == *"failed"* ]]; then
     print_result "Reject event without parameter tag" true "33"
@@ -79,7 +87,7 @@ else
     print_result "Reject event without parameter tag" false "33"
 fi
 
-# Test 6: Attempt to create with empty parameter tag (should be allowed)
+# Test 7: Attempt to create with empty parameter tag (should be allowed)
 EMPTY_PARAM_EVENT=$(nak event -k 30000 -c '{"name": "Empty Parameter", "value": "test"}' -t d= -t p=79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798 $RELAY 2>&1)
 if [ ! -z "$EMPTY_PARAM_EVENT" ] && [[ "$EMPTY_PARAM_EVENT" != *"failed"* ]]; then
     print_result "Allow event with empty parameter tag" true "33"
@@ -87,7 +95,7 @@ else
     print_result "Allow event with empty parameter tag" false "33"
 fi
 
-# Test 7: Attempt to create with invalid kind
+# Test 8: Attempt to create with invalid kind
 INVALID_KIND_EVENT=$(nak event -k 1 -c '{"name": "Invalid Kind", "value": "test"}' -t d=invalid_kind -t p=79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798 $RELAY 2>&1)
 if [[ "$INVALID_KIND_EVENT" == *"invalid"* ]] || [[ "$INVALID_KIND_EVENT" == *"❌"* ]]; then
     print_result "Reject event with invalid kind" true "33"
@@ -95,7 +103,7 @@ else
     print_result "Reject event with invalid kind" false "33"
 fi
 
-# Test 8: Attempt to create with invalid recipient
+# Test 9: Attempt to create with invalid recipient
 INVALID_RECIPIENT_EVENT=$(nak event -k 30000 -c '{"name": "Invalid Recipient", "value": "test"}' -t d=invalid_recipient -t p=invalid_pubkey $RELAY 2>&1)
 if [[ "$INVALID_RECIPIENT_EVENT" == *"invalid"* ]] || [[ "$INVALID_RECIPIENT_EVENT" == *"❌"* ]]; then
     print_result "Reject event with invalid recipient" true "33"

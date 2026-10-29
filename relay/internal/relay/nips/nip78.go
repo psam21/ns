@@ -1,7 +1,6 @@
 package nips
 
 import (
-	"encoding/json"
 	"fmt"
 
 	nostr "github.com/nbd-wtf/go-nostr"
@@ -10,9 +9,9 @@ import (
 // NIP-78: Application-specific data
 // https://github.com/nostr-protocol/nips/blob/master/78.md
 //
-// SPEC UPDATE (3 months ago): "a normal application-specific kind"
-// This clarifies that kind 30078 is a standard addressable event kind
-// with only "d" tag required (p tag is optional).
+// Kind 30078 is an addressable event identified by its "d" tag.
+// NIP-78 explicitly leaves content and all other tags application-defined;
+// clients may store encrypted or otherwise non-JSON content here.
 
 // ValidateApplicationSpecificData validates NIP-78 application-specific data events (kind 30078)
 func ValidateApplicationSpecificData(evt *nostr.Event) error {
@@ -20,63 +19,16 @@ func ValidateApplicationSpecificData(evt *nostr.Event) error {
 		return fmt.Errorf("invalid event kind for application-specific data: %d", evt.Kind)
 	}
 
-	// Must have "d" tag for addressable events
-	hasDTag := false
-
+	// The d tag identifies the application data address.
 	for _, tag := range evt.Tags {
 		if len(tag) >= 2 {
-			switch tag[0] {
-			case "d":
-				hasDTag = true
-			case "p":
-				// "p" tag is optional per NIP-78 spec (finding #8, fixed)
-				// Validate pubkey format if present
-				if len(tag[1]) != 64 {
-					return fmt.Errorf("invalid pubkey in 'p' tag: %s", tag[1])
-				}
+			if tag[0] == "d" {
+				return nil
 			}
 		}
 	}
 
-	// Note: NIP-78 spec only requires "d" tag; "p" tag is optional (finding #8, fixed)
-	if !hasDTag {
-		return fmt.Errorf("application-specific data must have 'd' tag")
-	}
-
-	// Parse and validate JSON content
-	var appData map[string]interface{}
-	if err := json.Unmarshal([]byte(evt.Content), &appData); err != nil {
-		return fmt.Errorf("invalid JSON content: %v", err)
-	}
-
-	// Must have "name" field
-	name, hasName := appData["name"]
-	if !hasName {
-		return fmt.Errorf("application-specific data must have 'name' field")
-	}
-	nameStr, ok := name.(string)
-	if !ok {
-		return fmt.Errorf("'name' field must be a string")
-	}
-
-	// Validate name field constraints
-	if len(nameStr) > 100 {
-		return fmt.Errorf("application-specific data 'name' field too long (max 100 characters)")
-	}
-
-	// Must have "data" field
-	data, hasData := appData["data"]
-	if !hasData {
-		return fmt.Errorf("application-specific data must have 'data' field")
-	}
-
-	// "data" must be an object/map, not a string or other primitive
-	if _, ok := data.(map[string]interface{}); !ok {
-		return fmt.Errorf("'data' field must be an object")
-	}
-
-	// Content can be any application-specific data
-	return nil
+	return fmt.Errorf("application-specific data must have 'd' tag")
 }
 
 // IsApplicationSpecificData checks if an event is application-specific data

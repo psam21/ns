@@ -203,6 +203,7 @@ func NewPluginValidator(cfg *config.Config, database *storage.DB) *PluginValidat
 			444:   true, // MLS Welcome Event (inner, arrives via gift wrap)
 			445:   true, // MLS Group Event (encrypted group messages)
 			10051: true, // KeyPackage Relays List
+			30443: true, // NIP-33 addressable MLS KeyPackage Event
 			// NIP-YY Nostr Web Pages
 			1125:  true, // Asset (HTML, CSS, JavaScript, fonts, etc.)
 			1126:  true, // Page Manifest
